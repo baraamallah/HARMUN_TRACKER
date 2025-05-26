@@ -30,13 +30,15 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
+import { getParticipants, getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
 
@@ -79,7 +81,7 @@ export default function AdminDashboardPage() {
         setCurrentUser(user);
       } else {
         setCurrentUser(null);
-        router.push('/auth/login'); // Redirect to login if not authenticated
+        router.push('/auth/login'); 
       }
       setIsAuthLoading(false);
     });
@@ -87,7 +89,7 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return; // Don't fetch if not authenticated or auth is loading
+    if (!currentUser) return; 
     setIsLoadingData(true);
     try {
       const [participantsData, schoolsData, committeesData] = await Promise.all([
@@ -97,18 +99,19 @@ export default function AdminDashboardPage() {
           searchTerm: debouncedSearchTerm,
           status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
         }),
-        getSchools(),
-        getCommittees(),
+        getSystemSchools(),
+        getSystemCommittees(),
       ]);
       setParticipants(participantsData);
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
     } catch (error) {
       console.error("Failed to fetch data:", error);
+      toast({title: "Error", description: "Failed to load dashboard data.", variant: "destructive"})
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter]);
+  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
 
   React.useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -149,7 +152,6 @@ export default function AdminDashboardPage() {
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="ml-4 text-lg text-muted-foreground">Verifying authentication...</p>
           </div>
-           {/* Skeleton for dashboard structure */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <Skeleton className="h-9 w-72 mb-2" />
@@ -171,7 +173,6 @@ export default function AdminDashboardPage() {
   }
 
   if (!currentUser) {
-    // This case should ideally be handled by the redirect, but as a fallback:
     return (
        <AppLayoutClientShell>
         <div className="flex items-center justify-center h-64">
@@ -190,7 +191,7 @@ export default function AdminDashboardPage() {
             <p className="text-muted-foreground">Manage and track participant attendance.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <ImportCsvDialog />
+            <ImportCsvDialog onImportSuccess={fetchData} />
             <ExportCsvButton participants={participants} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -289,6 +290,7 @@ export default function AdminDashboardPage() {
         participantToEdit={participantToEdit}
         schools={schools.filter(s => s !== 'All Schools')}
         committees={committees.filter(c => c !== 'All Committees')}
+        onFormSubmitSuccess={fetchData}
       />
     </AppLayoutClientShell>
   );

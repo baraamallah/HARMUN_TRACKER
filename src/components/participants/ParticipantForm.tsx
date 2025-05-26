@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,8 +47,9 @@ interface ParticipantFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   participantToEdit?: Participant | null;
-  schools: string[];
-  committees: string[];
+  schools: string[]; // These are now system-managed schools
+  committees: string[]; // These are now system-managed committees
+  onFormSubmitSuccess?: () => void; // Callback to refresh data on parent page
 }
 
 export function ParticipantForm({
@@ -56,6 +58,7 @@ export function ParticipantForm({
   participantToEdit,
   schools,
   committees,
+  onFormSubmitSuccess,
 }: ParticipantFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -70,16 +73,22 @@ export function ParticipantForm({
   });
 
   useEffect(() => {
-    if (participantToEdit) {
-      form.reset({
-        name: participantToEdit.name,
-        school: participantToEdit.school,
-        committee: participantToEdit.committee,
-      });
-    } else {
-      form.reset({ name: '', school: '', committee: '' });
+    if (isOpen) { // Only reset/populate form when dialog opens
+      if (participantToEdit) {
+        form.reset({
+          name: participantToEdit.name,
+          school: participantToEdit.school,
+          committee: participantToEdit.committee,
+        });
+      } else {
+        form.reset({ 
+            name: '', 
+            school: schools.length > 0 ? schools[0] : '', // Pre-select if available
+            committee: committees.length > 0 ? committees[0] : '' // Pre-select if available
+        });
+      }
     }
-  }, [participantToEdit, form, isOpen]);
+  }, [participantToEdit, form, isOpen, schools, committees]);
 
   const onSubmit = (data: ParticipantFormData) => {
     startTransition(async () => {
@@ -93,10 +102,11 @@ export function ParticipantForm({
         }
         onOpenChange(false);
         form.reset();
-      } catch (error) {
+        onFormSubmitSuccess?.(); // Call the success callback
+      } catch (error: any) {
         toast({
           title: 'Error',
-          description: `Failed to ${participantToEdit ? 'update' : 'add'} participant.`,
+          description: error.message || `Failed to ${participantToEdit ? 'update' : 'add'} participant.`,
           variant: 'destructive',
         });
       }
@@ -105,7 +115,7 @@ export function ParticipantForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) form.reset(); // Reset form on close
+      if (!open) form.reset({ name: '', school: '', committee: '' }); 
       onOpenChange(open);
     }}>
       <DialogContent className="sm:max-w-[480px]">
@@ -124,7 +134,7 @@ export function ParticipantForm({
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Jane Doe" {...field} />
+                    <Input placeholder="e.g., Jane Doe" {...field} disabled={isPending} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -136,13 +146,19 @@ export function ParticipantForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>School</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value} 
+                    defaultValue={field.value}
+                    disabled={isPending}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a school" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {schools.length === 0 && <SelectItem value="" disabled>No schools available</SelectItem>}
                       {schools.map((school) => (
                         <SelectItem key={school} value={school}>
                           {school}
@@ -160,13 +176,19 @@ export function ParticipantForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Committee</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value} 
+                    defaultValue={field.value}
+                    disabled={isPending}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a committee" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {committees.length === 0 && <SelectItem value="" disabled>No committees available</SelectItem>}
                       {committees.map((committee) => (
                         <SelectItem key={committee} value={committee}>
                           {committee}
@@ -184,7 +206,7 @@ export function ParticipantForm({
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending || !form.formState.isDirty && !!participantToEdit}>
                 {isPending ? (participantToEdit ? 'Saving...' : 'Adding...') : (participantToEdit ? 'Save Changes' : 'Add Participant')}
               </Button>
             </DialogFooter>
