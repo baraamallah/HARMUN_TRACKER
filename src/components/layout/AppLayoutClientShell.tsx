@@ -12,6 +12,7 @@ import {
   LogIn,
   SettingsIcon, // placeholder for settings
   UserCog, // placeholder for profile
+  ShieldCheck, // Icon for Superior Admin
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -41,21 +42,31 @@ import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { auth } from '@/lib/firebase'; // Import Firebase auth
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; // Import auth functions
+import { OWNER_UID } from '@/lib/constants'; // Import OWNER_UID
 
 interface NavItem {
   href: string;
   icon: React.ElementType;
   label: string;
   tooltip: string;
+  ownerOnly?: boolean; // New property
 }
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Dashboard' },
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public View' },
   // Add more items like settings, reports etc. if needed
   // { href: '/reports', icon: FileText, label: 'Reports', tooltip: 'Reports' },
   // { href: '/settings', icon: Settings, label: 'Settings', tooltip: 'Settings' },
 ];
+
+const superiorAdminNavItem: NavItem = {
+  href: '/superior-admin',
+  icon: ShieldCheck,
+  label: 'Superior Admin',
+  tooltip: 'Superior Admin Panel',
+  ownerOnly: true,
+};
 
 export function AppLayoutClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -89,6 +100,14 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     return "U";
   }
 
+  const navItemsToRender = React.useMemo(() => {
+    let items = [...baseNavItems];
+    if (loggedInUser && loggedInUser.uid === OWNER_UID) {
+      items.push(superiorAdminNavItem);
+    }
+    return items;
+  }, [loggedInUser]);
+
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
@@ -97,7 +116,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {navItems.map((item) => (
+            {navItemsToRender.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} legacyBehavior passHref>
                   <SidebarMenuButton

@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
           school: selectedSchool === 'All Schools' ? undefined : selectedSchool, 
           committee: selectedCommittee === 'All Committees' ? undefined : selectedCommittee,
           searchTerm: debouncedSearchTerm,
-          status: quickStatusFilter,
+          status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
         }),
         getSchools(),
         getCommittees(),
@@ -207,7 +207,7 @@ export default function AdminDashboardPage() {
                 key={opt.value}
                 variant={quickStatusFilter === opt.value ? "default" : "outline"}
                 onClick={() => setQuickStatusFilter(opt.value)}
-                className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2")}
+                className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2 dark:ring-offset-background")}
               >
                 {opt.label}
               </Button>

@@ -17,8 +17,7 @@ import { auth } from '@/lib/firebase'; // Import Firebase auth instance
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const OWNER_UID = "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Your specific Owner UID
+import { OWNER_UID } from '@/lib/constants'; // Import OWNER_UID
 
 export default function SuperiorAdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -163,7 +162,7 @@ export default function SuperiorAdminPage() {
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant="secondary" disabled>Adjust System Settings (Not Implemented)</Button>
-            </Footer>
+            </CardFooter>
           </Card>
 
           <Card className="hover:shadow-xl transition-shadow duration-300">
