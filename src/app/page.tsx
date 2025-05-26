@@ -1,3 +1,4 @@
+
 'use client'; // This page will manage state and interactivity
 
 import * as React from 'react';
@@ -18,21 +19,7 @@ import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming a debounce hook exists or will be created
-
-// A simple debounce hook (can be moved to hooks/use-debounce.ts)
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
+import { useDebounce } from '@/hooks/use-debounce';
 
 
 export default function AdminDashboardPage() {
