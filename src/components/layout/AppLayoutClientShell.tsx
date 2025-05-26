@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -40,6 +41,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
+import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 
 interface NavItem {
   href: string;
@@ -108,6 +110,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               />
             </div> */}
           </div>
+          <ThemeToggleButton />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
