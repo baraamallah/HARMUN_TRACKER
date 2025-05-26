@@ -22,6 +22,16 @@ const firebaseConfig = {
   measurementId: "G-2GC9MRVG8Q"
 };
 
+// Developer-facing check for placeholder API key
+if (typeof window !== 'undefined' && firebaseConfig.apiKey === "YOUR_API_KEY") {
+  console.error(
+    "Firebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
+    "Please replace it with your actual Firebase project API key in src/lib/firebase.ts. " +
+    "You can find your API key in your Firebase project settings: " +
+    "Project Overview -> Project settings (gear icon) -> General -> Your apps -> Web app -> SDK setup and configuration."
+  );
+}
+
 // Initialize Firebase
 let app;
 if (!getApps().length) {
