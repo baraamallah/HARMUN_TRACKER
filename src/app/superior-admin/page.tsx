@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
+import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,10 +13,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookMarked, Landmark, PlusCircle, Trash2, List } from 'lucide-react';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookMarked, Landmark, PlusCircle, ArrowLeft, ExternalLink, Settings2, UserPlus } from 'lucide-react';
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants'; 
 import { getSystemSchools, addSystemSchool, getSystemCommittees, addSystemCommittee } from '@/lib/actions';
@@ -113,6 +113,7 @@ export default function SuperiorAdminPage() {
   const handleSuperAdminLogout = async () => {
     try {
       await signOut(auth);
+      // The onAuthStateChanged listener will handle UI updates (redirect or access denial)
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -168,7 +169,7 @@ export default function SuperiorAdminPage() {
           <CardFooter className="flex-col gap-4">
             <Link href="/" legacyBehavior passHref>
               <Button variant="outline" className="w-full">
-                <Home className="mr-2 h-4 w-4" /> Go to Homepage
+                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
               </Button>
             </Link>
             <p className="text-xs text-muted-foreground">
@@ -208,7 +209,7 @@ export default function SuperiorAdminPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Manage Schools Card */}
           <Card className="hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -240,7 +241,6 @@ export default function SuperiorAdminPage() {
                       {systemSchools.map((school) => (
                         <li key={school} className="text-sm p-1.5 hover:bg-muted rounded-sm">
                           {school}
-                          {/* Future: Add delete/edit icons here */}
                         </li>
                       ))}
                     </ul>
@@ -283,7 +283,6 @@ export default function SuperiorAdminPage() {
                       {systemCommittees.map((committee) => (
                         <li key={committee} className="text-sm p-1.5 hover:bg-muted rounded-sm">
                           {committee}
-                           {/* Future: Add delete/edit icons here */}
                         </li>
                       ))}
                     </ul>
@@ -294,9 +293,7 @@ export default function SuperiorAdminPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
         
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mt-6">
           <Card className="hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Global Participant Data</CardTitle>
@@ -304,18 +301,24 @@ export default function SuperiorAdminPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                View, edit, and manage all participant records.
+                View, edit, and manage all participant records from the main dashboard.
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary" disabled>Access Data Controls (Not Implemented)</Button>
+              <Link href="/" passHref legacyBehavior>
+                <Button className="w-full" variant="secondary">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Go to Participant Dashboard
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
-
+        </div>
+        
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mt-6">
           <Card className="hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">System Settings</CardTitle>
-              <Settings className="h-6 w-6 text-primary" />
+              <Settings2 className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -323,14 +326,18 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary" disabled>Adjust System Settings (Not Implemented)</Button>
+              <Link href="/superior-admin/system-settings" passHref legacyBehavior>
+                <Button className="w-full" variant="secondary">
+                   <Settings className="mr-2 h-4 w-4" /> Configure System Settings
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
 
           <Card className="hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Admin Account Management</CardTitle>
-              <Users className="h-6 w-6 text-primary" />
+              <UserPlus className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -338,7 +345,11 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary" disabled>Manage Admin Accounts (Not Implemented)</Button>
+              <Link href="/superior-admin/admin-management" passHref legacyBehavior>
+                <Button className="w-full" variant="secondary">
+                    <Users className="mr-2 h-4 w-4" /> Manage Admin Accounts
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
         </div>
@@ -360,3 +371,4 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
+
