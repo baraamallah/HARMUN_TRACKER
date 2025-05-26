@@ -1,75 +1,36 @@
-import type { Participant } from '@/types';
+// This file is no longer the primary source of data after Firestore integration.
+// It can be kept for reference or removed.
+// For a clean setup, it's better to remove it if all data operations now go through Firestore.
+
+// import type { Participant } from '@/types';
 
 // Helper to generate IDs if uuid is not available/preferred for mocks
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// const generateId = () => Math.random().toString(36).substr(2, 9);
 
 
-export const schools: string[] = ["Northwood High", "University High", "Portola High", "Woodbridge High", "Irvine High", "Beckman High"];
-export const committees: string[] = ["UNSC", "DISEC", "SOCHUM", "ECOFIN", "WHO", "UNHRC", "SPECPOL"];
+// export const schools: string[] = ["Northwood High", "University High", "Portola High", "Woodbridge High", "Irvine High", "Beckman High"];
+// export const committees: string[] = ["UNSC", "DISEC", "SOCHUM", "ECOFIN", "WHO", "UNHRC", "SPECPOL"];
 
-export const initialParticipants: Participant[] = [
-  {
-    id: generateId(),
-    name: "John Doe",
-    school: "Northwood High",
-    committee: "UNSC",
-    status: "Present",
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Alice Smith",
-    school: "University High",
-    committee: "DISEC",
-    status: "In Break", // Updated status
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Bob Johnson",
-    school: "Portola High",
-    committee: "SOCHUM",
-    status: "Present On Account",
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Eva Williams",
-    school: "Northwood High",
-    committee: "ECOFIN",
-    status: "Technical Issue", // Updated status
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Michael Brown",
-    school: "Woodbridge High",
-    committee: "UNSC",
-    status: "Absent",
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Sophia Davis",
-    school: "University High",
-    committee: "WHO",
-    status: "Stepped Out", // Updated status
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "David Wilson",
-    school: "Irvine High",
-    committee: "DISEC",
-    status: "Restroom Break", // Updated status
-    imageUrl: "https://placehold.co/40x40.png",
-  },
-  {
-    id: generateId(),
-    name: "Olivia Garcia",
-    school: "Beckman High",
-    committee: "UNHRC",
-    status: "Present",
-    imageUrl: "https://placehold.co/40x40.png",
-  }
-];
+// export const initialParticipants: Participant[] = [
+//   {
+//     id: generateId(),
+//     name: "John Doe",
+//     school: "Northwood High",
+//     committee: "UNSC",
+//     status: "Present",
+//     imageUrl: "https://placehold.co/40x40.png",
+//   },
+//   {
+//     id: generateId(),
+//     name: "Alice Smith",
+//     school: "University High",
+//     committee: "DISEC",
+//     status: "In Break", 
+//     imageUrl: "https://placehold.co/40x40.png",
+//   },
+//   // ... other mock participants
+// ];
+
+export const schools: string[] = []; // Will be fetched from Firestore
+export const committees: string[] = []; // Will be fetched from Firestore
+export const initialParticipants: Participant[] = []; // Will be fetched from Firestore

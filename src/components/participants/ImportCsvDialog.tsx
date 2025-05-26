@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useTransition, ChangeEvent } from 'react';
@@ -46,32 +47,42 @@ export function ImportCsvDialog() {
             return;
         }
         // Basic CSV parsing: assumes Name,School,Committee columns in order
-        // A more robust solution would use a library like PapaParse
         const lines = text.split('\n').slice(1); // Skip header
         const parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl'>[] = [];
         lines.forEach(line => {
-          const values = line.split(',');
-          if (values.length >= 3 && values[0]?.trim() && values[1]?.trim() && values[2]?.trim()) {
+          const values = line.split(',').map(v => v.trim()); // Trim values
+          if (values.length >= 3 && values[0] && values[1] && values[2]) {
             parsedParticipants.push({
-              name: values[0].trim(),
-              school: values[1].trim(),
-              committee: values[2].trim(),
+              name: values[0],
+              school: values[1],
+              committee: values[2],
             });
           }
         });
 
         if (parsedParticipants.length === 0) {
-          toast({ title: 'No valid data found', description: 'The CSV file might be empty or incorrectly formatted.', variant: 'destructive' });
+          toast({ title: 'No valid data found', description: 'The CSV file might be empty or incorrectly formatted. Expected: Name,School,Committee', variant: 'default' });
           return;
         }
 
         try {
           const result = await importParticipants(parsedParticipants);
-          toast({ title: 'Import Successful', description: `${result.count} participants imported.` });
+          if (result.errors > 0) {
+            toast({ 
+              title: 'Import Partially Successful', 
+              description: `${result.count} participants imported. ${result.errors} failed. Check console for details.`,
+              variant: 'default' 
+            });
+          } else {
+            toast({ title: 'Import Successful', description: `${result.count} participants imported.` });
+          }
           setIsOpen(false);
           setFile(null);
+          // Consider adding a way to refresh the participant list on the page here
+          // e.g., by calling a passed-in refresh function or using a global state.
         } catch (error) {
-          toast({ title: 'Import Failed', description: 'An error occurred while importing participants.', variant: 'destructive' });
+          console.error("Import error:", error);
+          toast({ title: 'Import Failed', description: 'An error occurred while importing participants. Check console for details.', variant: 'destructive' });
         }
       };
       reader.onerror = () => {
@@ -93,7 +104,7 @@ export function ImportCsvDialog() {
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
           <DialogDescription>
-            Upload a CSV file with participant data. Ensure columns are: Name, School, Committee.
+            Upload a CSV file with participant data. Ensure columns are in order: Name, School, Committee.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
