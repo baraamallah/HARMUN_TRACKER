@@ -25,3 +25,12 @@ export interface Committee {
   id: string;
   name: string;
 }
+
+export interface VisibleColumns {
+  avatar: boolean;
+  name: boolean;
+  school: boolean;
+  committee: boolean;
+  status: boolean;
+  actions: boolean;
+}

@@ -2,7 +2,7 @@
 'use client'; // This page will manage state and interactivity
 
 import * as React from 'react';
-import { PlusCircle, Filter } from 'lucide-react';
+import { PlusCircle, Filter, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,12 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
-import type { Participant } from '@/types';
+import type { Participant, VisibleColumns } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 
@@ -36,6 +44,24 @@ export default function AdminDashboardPage() {
   const [participantToEdit, setParticipantToEdit] = React.useState<Participant | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  const [visibleColumns, setVisibleColumns] = React.useState<VisibleColumns>({
+    avatar: true,
+    name: true,
+    school: true,
+    committee: true,
+    status: true,
+    actions: true,
+  });
+
+  const columnLabels: Record<keyof VisibleColumns, string> = {
+    avatar: 'Avatar',
+    name: 'Name',
+    school: 'School',
+    committee: 'Committee',
+    status: 'Status',
+    actions: 'Actions',
+  };
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
@@ -85,6 +111,28 @@ export default function AdminDashboardPage() {
           <div className="flex gap-2 flex-wrap">
             <ImportCsvDialog />
             <ExportCsvButton participants={participants} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <ListFilter className="mr-2 h-4 w-4" /> Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {(Object.keys(visibleColumns) as Array<keyof VisibleColumns>).map((key) => (
+                  <DropdownMenuCheckboxItem
+                    key={key}
+                    checked={visibleColumns[key]}
+                    onCheckedChange={(checked) =>
+                      setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
+                    }
+                  >
+                    {columnLabels[key]}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={handleAddParticipant}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
             </Button>
@@ -128,6 +176,7 @@ export default function AdminDashboardPage() {
           participants={participants}
           isLoading={isLoading}
           onEditParticipant={handleEditParticipant}
+          visibleColumns={visibleColumns}
         />
       </div>
 
