@@ -1,8 +1,6 @@
-'use client'; // This page will manage state and interactivity
+'use client'; // This page will manage state and interactivity for filters
 
 import * as React from 'react';
-import { PlusCircle, Filter } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -11,14 +9,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ParticipantTable } from '@/components/participants/ParticipantTable';
-import { ParticipantForm } from '@/components/participants/ParticipantForm';
-import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
-import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
-import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
+import { PublicAttendanceTable } from '@/components/public/PublicAttendanceTable';
+import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming a debounce hook exists or will be created
+import { useDebounce } from '@/hooks/use-debounce'; // Assuming a debounce hook exists
 
 // A simple debounce hook (can be moved to hooks/use-debounce.ts)
 function useDebounce<T>(value: T, delay: number): T {
@@ -34,8 +29,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-
-export default function AdminDashboardPage() {
+export default function PublicAttendancePage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
@@ -44,9 +38,6 @@ export default function AdminDashboardPage() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
-
-  const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
-  const [participantToEdit, setParticipantToEdit] = React.useState<Participant | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -66,8 +57,7 @@ export default function AdminDashboardPage() {
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
     } catch (error) {
-      console.error("Failed to fetch data:", error);
-      // Optionally set an error state and display a message
+      console.error("Failed to fetch public data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -75,33 +65,18 @@ export default function AdminDashboardPage() {
 
   React.useEffect(() => {
     fetchData();
-  }, [fetchData]); // Re-fetch when filters or search term change
+    // Optional: Set up polling for "real-time" updates on the public page
+    const intervalId = setInterval(fetchData, 30000); // Refresh every 30 seconds
+    return () => clearInterval(intervalId);
+  }, [fetchData]);
 
-  const handleAddParticipant = () => {
-    setParticipantToEdit(null);
-    setIsParticipantFormOpen(true);
-  };
-
-  const handleEditParticipant = (participant: Participant) => {
-    setParticipantToEdit(participant);
-    setIsParticipantFormOpen(true);
-  };
 
   return (
-    <AppLayoutClientShell>
+    <PublicLayout>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Attendance Dashboard</h1>
-            <p className="text-muted-foreground">Manage and track participant attendance.</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <ImportCsvDialog />
-            <ExportCsvButton participants={participants} />
-            <Button onClick={handleAddParticipant}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
-            </Button>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Public Attendance View</h1>
+          <p className="text-muted-foreground">Live attendance status for all participants.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg shadow-sm bg-card">
@@ -137,20 +112,8 @@ export default function AdminDashboardPage() {
           </Select>
         </div>
 
-        <ParticipantTable
-          participants={participants}
-          isLoading={isLoading}
-          onEditParticipant={handleEditParticipant}
-        />
+        <PublicAttendanceTable participants={participants} isLoading={isLoading} />
       </div>
-
-      <ParticipantForm
-        isOpen={isParticipantFormOpen}
-        onOpenChange={setIsParticipantFormOpen}
-        participantToEdit={participantToEdit}
-        schools={schools.filter(s => s !== 'All Schools')} // Pass actual schools, not "All Schools"
-        committees={committees.filter(c => c !== 'All Committees')} // Pass actual committees
-      />
-    </AppLayoutClientShell>
+    </PublicLayout>
   );
 }
