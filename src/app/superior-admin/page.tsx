@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, FormEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,75 +12,91 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap } from 'lucide-react'; // Added more icons
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home } from 'lucide-react';
+import { auth } from '@/lib/firebase'; // Import Firebase auth instance
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// IMPORTANT: THIS IS A HARDCODED PASSWORD FOR PROTOTYPING ONLY.
-// For any real application, use a secure backend authentication system
-// and store credentials safely (e.g., hashed passwords in a database, environment variables for secrets).
-const SUPER_ADMIN_PASSWORD = 'superadmin123';
+const OWNER_UID = "JZgMG6xdwAYInXsdciaGj6qNAsG2";
 
 export default function SuperiorAdminPage() {
-  const [passwordInput, setPasswordInput] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const handleLoginAttempt = (e: FormEvent) => {
-    e.preventDefault();
-    if (passwordInput === SUPER_ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      setErrorMessage('');
-      setPasswordInput(''); // Clear password input after successful login
-    } else {
-      setErrorMessage('Incorrect password. Please try again.');
-      setIsAuthenticated(false);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsLoadingAuth(false);
+    });
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, []);
+
+  const handleSuperAdminLogout = async () => {
+    try {
+      await signOut(auth);
+      // currentUser will be set to null by onAuthStateChanged
+    } catch (error) {
+      console.error("Error signing out: ", error);
+      // Handle logout error if needed
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setPasswordInput('');
-  };
-
-  if (!isAuthenticated) {
+  if (isLoadingAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ShieldAlert size={32} />
-            </div>
+             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ShieldAlert size={32} />
+              </div>
             <CardTitle className="text-2xl font-bold">Superior Admin Access</CardTitle>
-            <CardDescription>
-              This area is restricted. Enter the password to proceed.
-              <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-                (Demo password: superadmin123)
-              </p>
+            <CardDescription>Verifying your credentials...</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!currentUser || currentUser.uid !== OWNER_UID) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
+        <Card className="w-full max-w-lg shadow-2xl border-destructive">
+          <CardHeader>
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert size={48} />
+            </div>
+            <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
+            <CardDescription className="text-lg mt-2 text-muted-foreground">
+              You do not have permission to access this page.
+              <br />
+              This area is restricted to the Superior Administrator.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLoginAttempt} className="space-y-4">
-              <div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  className="text-lg"
-                  aria-label="Password for superior admin access"
-                />
-              </div>
-              {errorMessage && (
-                <p className="text-sm text-destructive">{errorMessage}</p>
-              )}
-              <Button type="submit" className="w-full text-base py-3">
-                Unlock Full Control
+            {currentUser && ( // Show logout only if a user (wrong user) is logged in
+              <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full">
+                <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
-            </form>
+            )}
+            {!currentUser && (
+                 <p className="text-sm text-muted-foreground mt-4">
+                    Please log in with the superior admin account.
+                 </p>
+            )}
           </CardContent>
-          <CardFooter>
-            <p className="text-xs text-muted-foreground text-center w-full">
-              Access to this panel is logged and monitored.
+          <CardFooter className="flex-col gap-4">
+            <Link href="/" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <Home className="mr-2 h-4 w-4" /> Go to Homepage
+              </Button>
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              If you believe this is an error, please contact support.
             </p>
           </CardFooter>
         </Card>
@@ -88,7 +104,7 @@ export default function SuperiorAdminPage() {
     );
   }
 
-  // Authenticated view
+  // Authenticated view for the Owner
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
@@ -99,7 +115,7 @@ export default function SuperiorAdminPage() {
               Superior Admin Dashboard
             </h1>
           </div>
-          <Button variant="outline" onClick={handleLogout} size="lg">
+          <Button variant="outline" onClick={handleSuperAdminLogout} size="lg">
             <LogOut className="mr-2 h-5 w-5" />
             Logout
           </Button>
@@ -111,6 +127,9 @@ export default function SuperiorAdminPage() {
           <h2 className="text-3xl font-semibold mb-2 text-foreground">Welcome, Superior Administrator!</h2>
           <p className="text-lg text-muted-foreground">
             You have master control over the MUN Attendance Tracker system.
+          </p>
+           <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+            Authenticated as: {currentUser.email || currentUser.uid}
           </p>
         </div>
 
@@ -126,7 +145,7 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary">Access Data Controls</Button>
+              <Button className="w-full" variant="secondary" disabled>Access Data Controls (Not Implemented)</Button>
             </CardFooter>
           </Card>
 
@@ -141,7 +160,7 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary">Adjust System Settings</Button>
+              <Button className="w-full" variant="secondary" disabled>Adjust System Settings (Not Implemented)</Button>
             </CardFooter>
           </Card>
 
@@ -156,15 +175,14 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="secondary">Manage Admin Accounts</Button>
+              <Button className="w-full" variant="secondary" disabled>Manage Admin Accounts (Not Implemented)</Button>
             </CardFooter>
           </Card>
         </div>
         
-        <div className="mt-8 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-center">
-          <p className="font-medium text-destructive">
-            Reminder: The current password protection is for demonstration only and is not secure for production use.
-            Implement robust backend authentication before deployment.
+        <div className="mt-8 p-4 bg-green-600/10 border border-green-600/30 rounded-lg text-center">
+          <p className="font-medium text-green-700 dark:text-green-500">
+            Security Notice: Access to this panel is restricted by Firebase Authentication. Ensure your account remains secure.
           </p>
         </div>
       </main>
@@ -179,4 +197,3 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
-
