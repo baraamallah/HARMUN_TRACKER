@@ -24,6 +24,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
         *   Global data management.
         *   System-wide settings.
         *   Admin account management (future).
+    *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
 *   **Theme Toggling**:
     *   User-selectable Light, Dark, or System theme preference.
 *   **Responsive Design**:
@@ -64,7 +65,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Clone the Repository (or get the code)**:
     ```bash
     git clone <your-repository-url>
-    cd mun-attendance-tracker 
+    cd mun-attendance-tracker
     ```
 2.  **Install Dependencies**:
     ```bash
@@ -74,7 +75,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     ```
 3.  **Configure Firebase Credentials**:
     *   Open `src/lib/firebase.ts`.
-    *   Replace the placeholder `firebaseConfig` object with the one you obtained from your Firebase project.
+    *   Replace the placeholder `firebaseConfig` object with the one you obtained from your Firebase project (or ensure the existing one is correct). The `apiKey` field is particularly important.
     *   **IMPORTANT FOR PRODUCTION**: For actual deployment, it's highly recommended to move your Firebase configuration into environment variables (e.g., in a `.env.local` file) to keep your API keys and other sensitive information secure.
         Example `.env.local` (this file should be in your `.gitignore`):
         ```
@@ -84,15 +85,15 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
         NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="your-storage-bucket"
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-messaging-sender-id"
         NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
-        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id" 
+        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id"
         ```
         Then update `src/lib/firebase.ts` to use these environment variables.
 
 4.  **Set Superior Admin UID**:
-    *   Open `src/app/superior-admin/page.tsx`.
+    *   Open `src/lib/constants.ts`.
     *   Update the `OWNER_UID` constant with the Firebase UID of the user who should have superior admin access.
-    ```javascript
-    const OWNER_UID = "YOUR_ACTUAL_FIREBASE_OWNER_UID"; 
+    ```typescript
+    export const OWNER_UID = "YOUR_ACTUAL_FIREBASE_OWNER_UID"; // e.g., "JZgMG6xdwAYInXsdciaGj6qNAsG2"
     ```
 
 ### Running the Application Locally
@@ -109,11 +110,12 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 ### Admin Access
 
-*   **Logging In**: Currently, the application relies on Firebase Authentication but does not have a dedicated login page. An administrator would need to be logged in to Firebase (e.g., through a separate process or if they were already authenticated in a previous session for the `harmun-tracker.firebaseapp.com` domain). **For production, you need to implement a proper login page/flow.**
+*   **Logging In**: Currently, the application relies on Firebase Authentication but does not have a dedicated login page. An administrator would need to be logged in to Firebase (e.g., through a separate process or if they were already authenticated in a previous session for the Firebase project domain). **For production, you need to implement a proper login page/flow.**
 *   **Dashboard (`/`)**: Once logged in, an admin can access the main dashboard to manage participants.
 *   **Superior Admin Panel (`/superior-admin`)**:
     *   Navigate to `/superior-admin`.
-    *   You must be logged in with the Firebase account whose UID matches the `OWNER_UID` configured in `src/app/superior-admin/page.tsx`.
+    *   You must be logged in with the Firebase account whose UID matches the `OWNER_UID` configured in `src/lib/constants.ts`.
+    *   If logged in as the owner, a link to this panel will also appear in the sidebar.
 
 ### Public View
 
@@ -134,6 +136,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   `shared/`: General shared components (Logo, Theme Toggle).
 *   `src/lib/`: Core logic and utilities.
     *   `actions.ts`: Server Actions for interacting with Firebase Firestore.
+    *   `constants.ts`: Application-wide constants like `OWNER_UID`.
     *   `firebase.ts`: Firebase initialization and configuration.
     *   `utils.ts`: Utility functions (like `cn` for classnames).
 *   `src/types/`: TypeScript type definitions.
@@ -157,7 +160,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 ## Customization
 
-*   **Owner UID**: Change the `OWNER_UID` in `src/app/superior-admin/page.tsx`.
+*   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts`.
 *   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
 
