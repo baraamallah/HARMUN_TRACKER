@@ -10,9 +10,9 @@ import {
   LogOut,
   UserCircle,
   LogIn,
-  SettingsIcon, // placeholder for settings
-  UserCog, // placeholder for profile
-  ShieldCheck, // Icon for Superior Admin
+  SettingsIcon, 
+  UserCog, 
+  ShieldCheck, 
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -40,24 +40,21 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
-import { auth } from '@/lib/firebase'; // Import Firebase auth
-import { onAuthStateChanged, signOut, User } from 'firebase/auth'; // Import auth functions
-import { OWNER_UID } from '@/lib/constants'; // Import OWNER_UID
+import { auth } from '@/lib/firebase'; 
+import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
+import { OWNER_UID } from '@/lib/constants'; 
 
 interface NavItem {
   href: string;
   icon: React.ElementType;
   label: string;
   tooltip: string;
-  ownerOnly?: boolean; // New property
+  ownerOnly?: boolean; 
 }
 
 const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Dashboard' },
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public View' },
-  // Add more items like settings, reports etc. if needed
-  // { href: '/reports', icon: FileText, label: 'Reports', tooltip: 'Reports' },
-  // { href: '/settings', icon: Settings, label: 'Settings', tooltip: 'Settings' },
 ];
 
 const superiorAdminNavItem: NavItem = {
@@ -84,7 +81,9 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // User state will be updated by onAuthStateChanged
+      // User state will be updated by onAuthStateChanged, which will trigger re-renders
+      // Potentially redirect to login page after logout
+      // router.push('/auth/login'); // if using useRouter
     } catch (error) {
       console.error("Error signing out: ", error);
     }
@@ -136,17 +135,20 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          {loggedInUser ? (
+          {authSessionLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : loggedInUser ? (
             <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
               <span>Logout</span>
             </Button>
           ) : (
-            <Button variant="ghost" className="w-full justify-start gap-2" disabled> 
-              {/* Replace with Link to login page later if needed */}
-              <LogIn className="h-5 w-5" />
-              <span>Login</span>
-            </Button>
+            <Link href="/auth/login" legacyBehavior passHref>
+              <Button variant="ghost" className="w-full justify-start gap-2">
+                <LogIn className="h-5 w-5" />
+                <span>Login</span>
+              </Button>
+            </Link>
           )}
         </SidebarFooter>
       </Sidebar>
@@ -176,10 +178,10 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                   {loggedInUser.displayName || loggedInUser.email || "My Account"}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled> {/* Replace with Link to profile page */}
+                <DropdownMenuItem disabled> 
                   <UserCog className="mr-2 h-4 w-4" /> Profile (Not Implemented)
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled> {/* Replace with Link to settings page */}
+                <DropdownMenuItem disabled> 
                   <SettingsIcon className="mr-2 h-4 w-4" /> Settings (Not Implemented)
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -189,9 +191,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-             <Button variant="outline" disabled> {/* Replace with Link to login page */}
-               <LogIn className="mr-2 h-4 w-4" /> Sign In
-             </Button>
+             <Link href="/auth/login" legacyBehavior passHref>
+                <Button variant="outline">
+                  <LogIn className="mr-2 h-4 w-4" /> Sign In
+                </Button>
+             </Link>
           )}
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

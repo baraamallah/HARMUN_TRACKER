@@ -5,32 +5,45 @@ import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/anal
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth"; // Import getAuth
 
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-// IMPORTANT: For production, move this configuration to environment variables!
-// See: https://firebase.google.com/docs/web/setup#safe-manage-your-credentials
+// IMPORTANT: For production, these values MUST be sourced from environment variables.
+// Create a .env.local file in your project root and add your Firebase config there.
+// Example .env.local:
+// NEXT_PUBLIC_FIREBASE_API_KEY="your-api-key"
+// NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="your-auth-domain"
+// NEXT_PUBLIC_FIREBASE_PROJECT_ID="your-project-id"
+// ... and so on for all firebaseConfig keys.
+
 const firebaseConfig = {
-  apiKey: "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU", // Updated API key
-  authDomain: "harmun-tracker.firebaseapp.com",
-  projectId: "harmun-tracker",
-  storageBucket: "harmun-tracker.appspot.com",
-  messagingSenderId: "920897622876",
-  appId: "1:920897622876:web:39df153705816e4345e799",
-  measurementId: "G-2GC9MRVG8Q"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "harmun-tracker.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "harmun-tracker",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "harmun-tracker.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "920897622876",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:920897622876:web:39df153705816e4345e799",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-2GC9MRVG8Q"
 };
 
-// Developer-facing check for placeholder API key
-if (typeof window !== 'undefined' && firebaseConfig.apiKey === "YOUR_API_KEY") {
-  console.error(
-    "Firebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
-    "Please replace it with your actual Firebase project API key in src/lib/firebase.ts. " +
-    "You can find your API key in your Firebase project settings: " +
-    "Project Overview -> Project settings (gear icon) -> General -> Your apps -> Web app -> SDK setup and configuration."
-  );
+// Developer-facing check for placeholder or default API key during development
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  if (firebaseConfig.apiKey === "YOUR_API_KEY" || firebaseConfig.apiKey === "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU") {
+    const isUsingHardcodedDefaults = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (isUsingHardcodedDefaults) {
+      console.warn(
+        "Firebase Initialization Warning: Using hardcoded default Firebase config. " +
+        "For better security and production readiness, create a .env.local file and set your Firebase project credentials as environment variables. " +
+        "Refer to src/lib/firebase.ts and README.md for details."
+      );
+    }
+  }
+  if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+     console.error(
+      "Firebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
+      "Please replace it with your actual Firebase project API key using environment variables (NEXT_PUBLIC_FIREBASE_API_KEY in .env.local)."
+    );
+  }
 }
+
 
 // Initialize Firebase
 let app;
@@ -44,7 +57,7 @@ if (!getApps().length) {
 const db = getFirestore(app);
 
 // Initialize Firebase Auth
-const auth = getAuth(app); // Initialize and export auth
+const auth = getAuth(app);
 
 let analytics;
 if (typeof window !== 'undefined') {
@@ -55,5 +68,4 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export { app, db, auth, analytics, firebaseConfig }; // Export auth
-
+export { app, db, auth, analytics, firebaseConfig };

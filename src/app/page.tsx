@@ -1,8 +1,11 @@
 
-'use client'; // This page will manage state and interactivity
+'use client';
 
 import * as React from 'react';
-import { PlusCircle, ListFilter, CheckSquare, Square } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { PlusCircle, ListFilter, CheckSquare, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,11 +33,15 @@ import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
-
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
+
   const [participants, setParticipants] = React.useState<Participant[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
   
@@ -42,7 +49,6 @@ export default function AdminDashboardPage() {
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
   const [quickStatusFilter, setQuickStatusFilter] = React.useState<AttendanceStatus | 'All'>('All');
-
 
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [participantToEdit, setParticipantToEdit] = React.useState<Participant | null>(null);
@@ -67,8 +73,22 @@ export default function AdminDashboardPage() {
     actions: 'Actions',
   };
 
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+        router.push('/auth/login'); // Redirect to login if not authenticated
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
+
   const fetchData = React.useCallback(async () => {
-    setIsLoading(true);
+    if (!currentUser) return; // Don't fetch if not authenticated or auth is loading
+    setIsLoadingData(true);
     try {
       const [participantsData, schoolsData, committeesData] = await Promise.all([
         getParticipants({ 
@@ -85,15 +105,16 @@ export default function AdminDashboardPage() {
       setCommittees(['All Committees', ...committeesData]);
     } catch (error) {
       console.error("Failed to fetch data:", error);
-      // Optionally set an error state and display a message
     } finally {
-      setIsLoading(false);
+      setIsLoadingData(false);
     }
-  }, [selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter]);
+  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter]);
 
   React.useEffect(() => {
-    fetchData();
-  }, [fetchData]); // Re-fetch when filters or search term change
+    if (!isAuthLoading && currentUser) {
+      fetchData();
+    }
+  }, [fetchData, isAuthLoading, currentUser]);
 
   const handleAddParticipant = () => {
     setParticipantToEdit(null);
@@ -119,6 +140,46 @@ export default function AdminDashboardPage() {
     { label: 'Present', value: 'Present' },
     { label: 'Absent', value: 'Absent' },
   ];
+
+  if (isAuthLoading) {
+    return (
+      <AppLayoutClientShell>
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-4 text-lg text-muted-foreground">Verifying authentication...</p>
+          </div>
+           {/* Skeleton for dashboard structure */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <Skeleton className="h-9 w-72 mb-2" />
+              <Skeleton className="h-5 w-96" />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-40" />
+            </div>
+          </div>
+          <Skeleton className="h-20 w-full rounded-lg" />
+          <Skeleton className="h-10 w-64 mb-4" />
+          <Skeleton className="h-96 w-full rounded-lg" />
+        </div>
+      </AppLayoutClientShell>
+    );
+  }
+
+  if (!currentUser) {
+    // This case should ideally be handled by the redirect, but as a fallback:
+    return (
+       <AppLayoutClientShell>
+        <div className="flex items-center justify-center h-64">
+            <p className="text-lg text-muted-foreground">Redirecting to login...</p>
+        </div>
+       </AppLayoutClientShell>
+    );
+  }
 
   return (
     <AppLayoutClientShell>
@@ -216,7 +277,7 @@ export default function AdminDashboardPage() {
 
         <ParticipantTable
           participants={participants}
-          isLoading={isLoading}
+          isLoading={isLoadingData}
           onEditParticipant={handleEditParticipant}
           visibleColumns={visibleColumns}
         />
@@ -226,8 +287,8 @@ export default function AdminDashboardPage() {
         isOpen={isParticipantFormOpen}
         onOpenChange={setIsParticipantFormOpen}
         participantToEdit={participantToEdit}
-        schools={schools.filter(s => s !== 'All Schools')} // Pass actual schools, not "All Schools"
-        committees={committees.filter(c => c !== 'All Committees')} // Pass actual committees
+        schools={schools.filter(s => s !== 'All Schools')}
+        committees={committees.filter(c => c !== 'All Committees')}
       />
     </AppLayoutClientShell>
   );
