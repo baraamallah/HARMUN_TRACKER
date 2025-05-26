@@ -15,7 +15,7 @@ import {
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
 import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, UserX } from 'lucide-react'; // Changed UsersX to UserX
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ParticipantTableProps {
@@ -91,13 +91,8 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
 
   if (participants.length === 0 && !isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 border rounded-md shadow-sm bg-card">
-        <img 
-          src="https://placehold.co/120x120.png/F0F4F8/363D45?text=No+Data" 
-          alt="No data" 
-          className="mb-4 opacity-70" 
-          data-ai-hint="empty state illustration" 
-        />
+      <div className="flex flex-col items-center justify-center h-64 border rounded-md shadow-sm bg-card p-6 text-center">
+        <UserX className="h-20 w-20 text-muted-foreground mb-4 opacity-70" data-ai-hint="no users" /> 
         <h3 className="text-xl font-semibold text-muted-foreground">No Participants Found</h3>
         <p className="text-muted-foreground">Try adjusting your filters or add new participants.</p>
       </div>

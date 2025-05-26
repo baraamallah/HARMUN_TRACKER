@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,13 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
     const headers = ['ID', 'Name', 'School', 'Committee', 'Status'];
     const csvContent = [
       headers.join(','),
-      ...participants.map(p => [p.id, p.name, p.school, p.committee, p.status].join(',')),
+      ...participants.map(p => [
+        p.id || '', 
+        `"${p.name.replace(/"/g, '""')}"`, // Escape double quotes
+        `"${p.school.replace(/"/g, '""')}"`,
+        `"${p.committee.replace(/"/g, '""')}"`,
+        p.status
+      ].join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

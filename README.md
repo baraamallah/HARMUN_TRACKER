@@ -12,7 +12,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Export participant data to a CSV file.
     *   Filter participants by school, committee, status, or search term.
     *   Toggle visibility of table columns (Avatar, Name, School, Committee, Status, Actions).
-    *   Secure: Requires user to be logged in (basic setup, login page implementation pending).
+    *   **Security Note**: Currently, this page does not enforce login. For production, you should implement route protection to ensure only authenticated admins can access it.
 *   **Public View (`/public`)**:
     *   Read-only list of participants.
     *   Filter participants by school, committee, status, or search term.
@@ -55,7 +55,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this.
-4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **IMPORTANT**: You MUST set up proper [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started) before deploying to production.
+4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started) before deploying to production.
 5.  **Enable Firebase Authentication**: In the Firebase Console, go to "Authentication".
     *   Enable at least one sign-in method (e.g., Email/Password, Google). This will be needed for admins to log in.
     *   Note the UID of the user you want to be the "Superior Admin". You can find this in the Authentication users list after they've signed up/logged in once.
@@ -75,8 +75,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     ```
 3.  **Configure Firebase Credentials**:
     *   Open `src/lib/firebase.ts`.
-    *   Replace the placeholder `firebaseConfig` object with the one you obtained from your Firebase project (or ensure the existing one is correct). The `apiKey` field is particularly important.
-    *   **IMPORTANT FOR PRODUCTION**: For actual deployment, it's highly recommended to move your Firebase configuration into environment variables (e.g., in a `.env.local` file) to keep your API keys and other sensitive information secure.
+    *   Replace the placeholder `firebaseConfig` object with the one you obtained from your Firebase project. The `apiKey` field is particularly important. If it's still the placeholder, the app will show console errors.
+    *   **CRITICAL FOR PRODUCTION**: For actual deployment, it's highly recommended to move your Firebase configuration into environment variables (e.g., in a `.env.local` file) to keep your API keys and other sensitive information secure.
         Example `.env.local` (this file should be in your `.gitignore`):
         ```
         NEXT_PUBLIC_FIREBASE_API_KEY="your-api-key"
@@ -85,14 +85,15 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
         NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="your-storage-bucket"
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-messaging-sender-id"
         NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
-        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id"
+        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id" # Optional
         ```
-        Then update `src/lib/firebase.ts` to use these environment variables.
+        Then update `src/lib/firebase.ts` to use these environment variables (e.g., `apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY`).
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
     *   Update the `OWNER_UID` constant with the Firebase UID of the user who should have superior admin access.
     ```typescript
+    // src/lib/constants.ts
     export const OWNER_UID = "YOUR_ACTUAL_FIREBASE_OWNER_UID"; // e.g., "JZgMG6xdwAYInXsdciaGj6qNAsG2"
     ```
 
@@ -108,16 +109,20 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 ## Usage
 
-### Admin Access
+### Admin Access (`/`)
 
-*   **Logging In**: Currently, the application relies on Firebase Authentication but does not have a dedicated login page. An administrator would need to be logged in to Firebase (e.g., through a separate process or if they were already authenticated in a previous session for the Firebase project domain). **For production, you need to implement a proper login page/flow.**
-*   **Dashboard (`/`)**: Once logged in, an admin can access the main dashboard to manage participants.
-*   **Superior Admin Panel (`/superior-admin`)**:
-    *   Navigate to `/superior-admin`.
-    *   You must be logged in with the Firebase account whose UID matches the `OWNER_UID` configured in `src/lib/constants.ts`.
-    *   If logged in as the owner, a link to this panel will also appear in the sidebar.
+*   **Logging In**: Currently, the application relies on Firebase Authentication but does not have a dedicated login page for the main admin dashboard (`/`). An administrator would need to be logged in to Firebase. **For production, you need to implement a proper login page/flow and route protection for this dashboard.**
+*   **Dashboard (`/`)**: Once logged in (or if no login is enforced yet), an admin can access the main dashboard to manage participants.
 
-### Public View
+### Superior Admin Access (`/superior-admin`)
+
+*   **Prerequisite**: You must be logged into the application using the Firebase account whose UID matches the `OWNER_UID` configured in `src/lib/constants.ts`.
+*   **Navigation**:
+    *   If you are logged in as the owner, a "Superior Admin" link will appear in the sidebar.
+    *   Alternatively, navigate directly to `/superior-admin` in your browser.
+*   **Functionality**: This panel is for system-wide controls, currently with placeholders.
+
+### Public View (`/public`)
 
 *   Navigate to `/public`. No login is required to view this page.
 
@@ -142,26 +147,50 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   `src/types/`: TypeScript type definitions.
 *   `src/hooks/`: Custom React hooks.
 
-## Deployment
+## Deployment Checklist (CRITICAL)
 
-1.  **Firebase App Hosting**: This project is structured well for deployment on Firebase App Hosting.
-2.  **CRITICAL - Firestore Security Rules**:
-    *   Before deploying, **you MUST configure Firestore Security Rules** in the Firebase Console. The default "test mode" rules are insecure and allow anyone to read/write your data.
-    *   Define rules to control who can access and modify data (e.g., only authenticated admins can write, public can read specific fields, superior admin has broader access).
-3.  **CRITICAL - Admin Login Page**:
-    *   Implement a proper login page/flow using Firebase Authentication (e.g., Email/Password, Google Sign-In) so administrators can securely log in.
-4.  **CRITICAL - Environment Variables**:
-    *   Move your `firebaseConfig` from `src/lib/firebase.ts` to environment variables (e.g., `.env.local` for local development, and configure them in your hosting provider's settings for deployment). This protects your API keys.
-5.  **Build the Application**:
-    ```bash
-    npm run build
-    ```
-6.  **Deploy**: Follow your hosting provider's instructions (e.g., using `firebase deploy` for Firebase Hosting).
+Before deploying this application to a live environment, ensure you address the following:
+
+1.  🔐 **Firestore Security Rules**:
+    *   **THIS IS THE MOST IMPORTANT STEP FOR SECURITY.**
+    *   In the Firebase Console, go to "Firestore Database" -> "Rules".
+    *   The default "test mode" rules (`allow read, write: if true;` or `if request.time < timestamp.date(YYYY, MM, DD);`) are **INSECURE** for production.
+    *   Define rules to control who can access and modify data. Examples:
+        *   Only authenticated users (admins) can write to the `participants` collection.
+        *   Anyone can read the `participants` collection (for the public view).
+        *   The superior admin might have broader permissions (though typically data access rules are role-based, not UID-specific at the rule level unless carefully managed).
+    *   Refer to the [Firebase Firestore Security Rules documentation](https://firebase.google.com/docs/firestore/security/get-started).
+
+2.  🔑 **Environment Variables for Firebase Config**:
+    *   Move your `firebaseConfig` from `src/lib/firebase.ts` to environment variables (e.g., `.env.local` for local, and configure them in your hosting provider's settings).
+    *   Prefix public environment variables with `NEXT_PUBLIC_`.
+    *   This protects your API keys and other sensitive Firebase project details.
+
+3.  🚪 **Admin Login Page & Route Protection**:
+    *   Implement a proper login page/flow using Firebase Authentication (e.g., Email/Password, Google Sign-In) for regular administrators to access the main dashboard (`/`).
+    *   Protect the `/` route so that only authenticated admins can access it. You can use Next.js middleware or higher-order components for this.
+
+4.  🛠️ **Build-time Error Checks**:
+    *   In `next.config.ts`, consider setting:
+        ```typescript
+        typescript: {
+          ignoreBuildErrors: false, // Set to false for production
+        },
+        eslint: {
+          ignoreDuringBuilds: false, // Set to false for production
+        },
+        ```
+    *   This ensures that TypeScript and ESLint errors are caught during the build process, leading to a more stable application.
+
+5.  🚀 **Build and Deploy**:
+    *   Build the application: `npm run build`.
+    *   Deploy to your chosen hosting provider (e.g., Firebase Hosting, Vercel, Netlify). Follow their specific deployment instructions.
 
 ## Customization
 
 *   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts`.
 *   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
+*   **"No Data" View**: The empty state in `src/components/participants/ParticipantTable.tsx` can be customized if desired.
 
-This guide should help you get started and understand the application's structure and deployment considerations!
+This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
