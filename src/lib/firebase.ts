@@ -10,11 +10,13 @@ import { getAuth } from "firebase/auth"; // Import getAuth
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// IMPORTANT: For production, move this configuration to environment variables!
+// See: https://firebase.google.com/docs/web/setup#safe-manage-your-credentials
 const firebaseConfig = {
-  apiKey: "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU",
+  apiKey: "YOUR_API_KEY", // Replace with your actual API key or use environment variables
   authDomain: "harmun-tracker.firebaseapp.com",
   projectId: "harmun-tracker",
-  storageBucket: "harmun-tracker.appspot.com", // Corrected common typo: .appspot.com for storageBucket
+  storageBucket: "harmun-tracker.appspot.com",
   messagingSenderId: "920897622876",
   appId: "1:920897622876:web:39df153705816e4345e799",
   measurementId: "G-2GC9MRVG8Q"

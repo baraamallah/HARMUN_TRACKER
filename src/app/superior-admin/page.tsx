@@ -18,7 +18,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const OWNER_UID = "JZgMG6xdwAYInXsdciaGj6qNAsG2";
+const OWNER_UID = "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Your specific Owner UID
 
 export default function SuperiorAdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -80,13 +80,15 @@ export default function SuperiorAdminPage() {
           <CardContent>
             {currentUser && ( // Show logout only if a user (wrong user) is logged in
               <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full">
-                <LogOut className="mr-2 h-5 w-5" /> Logout
+                <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Wrong User'})
               </Button>
             )}
             {!currentUser && (
                  <p className="text-sm text-muted-foreground mt-4">
                     Please log in with the superior admin account.
                  </p>
+                 // Note: A real login page/flow is needed for users to log in.
+                 // This page assumes the user might already be logged in via Firebase.
             )}
           </CardContent>
           <CardFooter className="flex-col gap-4">
@@ -96,7 +98,7 @@ export default function SuperiorAdminPage() {
               </Button>
             </Link>
             <p className="text-xs text-muted-foreground">
-              If you believe this is an error, please contact support.
+              If you believe this is an error, please contact support or ensure you are logged in with the correct account.
             </p>
           </CardFooter>
         </Card>
@@ -161,7 +163,7 @@ export default function SuperiorAdminPage() {
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant="secondary" disabled>Adjust System Settings (Not Implemented)</Button>
-            </CardFooter>
+            </Footer>
           </Card>
 
           <Card className="hover:shadow-xl transition-shadow duration-300">
@@ -182,7 +184,7 @@ export default function SuperiorAdminPage() {
         
         <div className="mt-8 p-4 bg-green-600/10 border border-green-600/30 rounded-lg text-center">
           <p className="font-medium text-green-700 dark:text-green-500">
-            Security Notice: Access to this panel is restricted by Firebase Authentication. Ensure your account remains secure.
+            Security Notice: Access to this panel is restricted by Firebase Authentication to the designated Owner UID. Ensure your account remains secure.
           </p>
         </div>
       </main>
