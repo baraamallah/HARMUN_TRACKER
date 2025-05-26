@@ -1,8 +1,8 @@
 
-'use client';
+'use client'; // This page will manage state and interactivity for public viewing
 
 import * as React from 'react';
-import { ListFilter, CheckSquare, Square } from 'lucide-react';
+import { ListFilter, CheckSquare, Square, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,14 +22,16 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
-import { PublicLayout } from '@/components/layout/PublicLayout';
+import { PublicLayout } from '@/components/layout/PublicLayout'; // Use PublicLayout
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 
+// Define visible columns specifically for the public page, excluding actions
+type PublicVisibleColumns = Omit<VisibleColumns, 'actions'>;
 
-export default function PublicAttendancePage() {
+export default function PublicViewPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
@@ -42,22 +44,22 @@ export default function PublicAttendancePage() {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const [visibleColumns, setVisibleColumns] = React.useState<VisibleColumns>({
+  const [visibleColumns, setVisibleColumns] = React.useState<PublicVisibleColumns>({
     avatar: true,
     name: true,
     school: true,
     committee: true,
     status: true,
-    actions: false, // Actions typically not shown on public view
+    // 'actions' column is intentionally omitted for public view
   });
 
-  const columnLabels: Record<keyof VisibleColumns, string> = {
+  // Labels for columns that can be toggled in public view
+  const columnLabels: Record<keyof PublicVisibleColumns, string> = {
     avatar: 'Avatar',
     name: 'Name',
     school: 'School',
     committee: 'Committee',
     status: 'Status',
-    actions: 'Actions',
   };
 
   const fetchData = React.useCallback(async () => {
@@ -87,21 +89,16 @@ export default function PublicAttendancePage() {
     fetchData();
   }, [fetchData]);
 
-  const toggleAllColumns = (show: boolean) => {
+  const handleEditParticipantNop = (_participant: Participant) => {
+    // No-op for public page, actions are not available
+  };
+  
+  const toggleAllPublicColumns = (show: boolean) => {
     setVisibleColumns(prev => 
       Object.keys(prev).reduce((acc, key) => {
-        // Keep actions hidden on public page regardless of "Show All"
-        if (key === 'actions' && !show) {
-             acc[key as keyof VisibleColumns] = false;
-        } else if (key === 'actions' && show) {
-            // if show all is true, still respect the initial false for actions
-             acc[key as keyof VisibleColumns] = false;
-        }
-        else {
-            acc[key as keyof VisibleColumns] = show;
-        }
+        acc[key as keyof PublicVisibleColumns] = show;
         return acc;
-      }, {} as VisibleColumns)
+      }, {} as PublicVisibleColumns)
     );
   };
 
@@ -111,16 +108,24 @@ export default function PublicAttendancePage() {
     { label: 'Absent', value: 'Absent' },
   ];
 
+  // Construct the full VisibleColumns type for ParticipantTable, ensuring actions is always false
+  const tableVisibleColumns: VisibleColumns = {
+    ...visibleColumns,
+    actions: false, 
+  };
 
   return (
     <PublicLayout>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Public Attendance View</h1>
+            <h1 className="text-3xl font-bold tracking-tight flex items-center">
+              <Eye className="mr-3 h-8 w-8 text-primary" /> Public Attendance View
+            </h1>
             <p className="text-muted-foreground">View participant attendance status.</p>
           </div>
-           <DropdownMenu>
+          <div className="flex gap-2 flex-wrap">
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <ListFilter className="mr-2 h-4 w-4" /> Columns
@@ -129,21 +134,19 @@ export default function PublicAttendancePage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
+                <DropdownMenuItem onClick={() => toggleAllPublicColumns(true)}>
                   <CheckSquare className="mr-2 h-4 w-4" /> Show All
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
+                <DropdownMenuItem onClick={() => toggleAllPublicColumns(false)}>
                   <Square className="mr-2 h-4 w-4" /> Hide All
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {(Object.keys(visibleColumns) as Array<keyof VisibleColumns>)
-                  .filter(key => key !== 'actions') // Do not show 'Actions' toggle on public page
-                  .map((key) => (
+                {(Object.keys(columnLabels) as Array<keyof PublicVisibleColumns>).map((key) => (
                   <DropdownMenuCheckboxItem
                     key={key}
                     checked={visibleColumns[key]}
                     onCheckedChange={(checked) =>
-                      setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
+                      setVisibleColumns((prev) => ({ ...prev, [key]: Boolean(checked) }))
                     }
                   >
                     {columnLabels[key]}
@@ -151,8 +154,10 @@ export default function PublicAttendancePage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Admin-specific buttons removed */}
+          </div>
         </div>
-
+        
         <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
             placeholder="Search by name, school, committee..."
@@ -204,11 +209,11 @@ export default function PublicAttendancePage() {
         <ParticipantTable
           participants={participants}
           isLoading={isLoading}
-          onEditParticipant={() => {}} // No edit on public page
-          visibleColumns={visibleColumns}
+          onEditParticipant={handleEditParticipantNop} // Pass a no-op function
+          visibleColumns={tableVisibleColumns} // Pass the full type with actions: false
         />
       </div>
+      {/* ParticipantForm removed as it's admin-only */}
     </PublicLayout>
   );
 }
-
