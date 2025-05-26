@@ -1,8 +1,8 @@
 
-'use client'; // This page will manage state and interactivity for public viewing
+'use client';
 
 import * as React from 'react';
-import { ListFilter, CheckSquare, Square, Eye } from 'lucide-react';
+import { ListFilter, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,21 +22,18 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
-import { PublicLayout } from '@/components/layout/PublicLayout'; // Use PublicLayout
+import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 
-// Define visible columns specifically for the public page, excluding actions
-type PublicVisibleColumns = Omit<VisibleColumns, 'actions'>;
-
-export default function PublicViewPage() {
+export default function PublicParticipantsPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
-  
+
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
@@ -44,17 +41,16 @@ export default function PublicViewPage() {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const [visibleColumns, setVisibleColumns] = React.useState<PublicVisibleColumns>({
+  const [visibleColumns, setVisibleColumns] = React.useState<VisibleColumns>({
     avatar: true,
     name: true,
     school: true,
     committee: true,
     status: true,
-    // 'actions' column is intentionally omitted for public view
+    actions: false, // Actions column is always false for public view
   });
 
-  // Labels for columns that can be toggled in public view
-  const columnLabels: Record<keyof PublicVisibleColumns, string> = {
+  const columnLabels: Record<keyof Omit<VisibleColumns, 'actions'>, string> = {
     avatar: 'Avatar',
     name: 'Name',
     school: 'School',
@@ -66,8 +62,8 @@ export default function PublicViewPage() {
     setIsLoading(true);
     try {
       const [participantsData, schoolsData, committeesData] = await Promise.all([
-        getParticipants({ 
-          school: selectedSchool === 'All Schools' ? undefined : selectedSchool, 
+        getParticipants({
+          school: selectedSchool === 'All Schools' ? undefined : selectedSchool,
           committee: selectedCommittee === 'All Committees' ? undefined : selectedCommittee,
           searchTerm: debouncedSearchTerm,
           status: quickStatusFilter,
@@ -89,16 +85,13 @@ export default function PublicViewPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleEditParticipantNop = (_participant: Participant) => {
-    // No-op for public page, actions are not available
-  };
-  
-  const toggleAllPublicColumns = (show: boolean) => {
-    setVisibleColumns(prev => 
+  const toggleAllColumns = (show: boolean) => {
+    setVisibleColumns(prev =>
       Object.keys(prev).reduce((acc, key) => {
-        acc[key as keyof PublicVisibleColumns] = show;
+        // Ensure 'actions' column remains false for public page
+        acc[key as keyof VisibleColumns] = key === 'actions' ? false : show;
         return acc;
-      }, {} as PublicVisibleColumns)
+      }, {} as VisibleColumns)
     );
   };
 
@@ -108,23 +101,15 @@ export default function PublicViewPage() {
     { label: 'Absent', value: 'Absent' },
   ];
 
-  // Construct the full VisibleColumns type for ParticipantTable, ensuring actions is always false
-  const tableVisibleColumns: VisibleColumns = {
-    ...visibleColumns,
-    actions: false, 
-  };
-
   return (
     <PublicLayout>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center">
-              <Eye className="mr-3 h-8 w-8 text-primary" /> Public Attendance View
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Participant Directory</h1>
             <p className="text-muted-foreground">View participant attendance status.</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -134,19 +119,19 @@ export default function PublicViewPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => toggleAllPublicColumns(true)}>
+                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
                   <CheckSquare className="mr-2 h-4 w-4" /> Show All
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toggleAllPublicColumns(false)}>
+                <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
                   <Square className="mr-2 h-4 w-4" /> Hide All
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {(Object.keys(columnLabels) as Array<keyof PublicVisibleColumns>).map((key) => (
+                {(Object.keys(columnLabels) as Array<keyof typeof columnLabels>).map((key) => (
                   <DropdownMenuCheckboxItem
                     key={key}
                     checked={visibleColumns[key]}
                     onCheckedChange={(checked) =>
-                      setVisibleColumns((prev) => ({ ...prev, [key]: Boolean(checked) }))
+                      setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
                     }
                   >
                     {columnLabels[key]}
@@ -154,10 +139,9 @@ export default function PublicViewPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* Admin-specific buttons removed */}
           </div>
         </div>
-        
+
         <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
             placeholder="Search by name, school, committee..."
@@ -192,7 +176,7 @@ export default function PublicViewPage() {
             </Select>
           </div>
         </div>
-
+        
         <div className="flex gap-2 mb-4">
             {statusFilterOptions.map(opt => (
               <Button
@@ -209,11 +193,10 @@ export default function PublicViewPage() {
         <ParticipantTable
           participants={participants}
           isLoading={isLoading}
-          onEditParticipant={handleEditParticipantNop} // Pass a no-op function
-          visibleColumns={tableVisibleColumns} // Pass the full type with actions: false
+          onEditParticipant={() => {}} // No-op for public page
+          visibleColumns={visibleColumns}
         />
       </div>
-      {/* ParticipantForm removed as it's admin-only */}
     </PublicLayout>
   );
 }

@@ -15,8 +15,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="py-6 border-t">
-        <div className="container mx-auto text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} MUN Attendance Tracker. All rights reserved.
+        <div className="container mx-auto px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <Logo variant="circled-icon" size="sm" />
+          <p className="text-sm text-muted-foreground text-center sm:text-right">
+            &copy; {new Date().getFullYear()} MUN Attendance Tracker. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>
