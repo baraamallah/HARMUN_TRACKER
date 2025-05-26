@@ -13,7 +13,7 @@ import { getAuth } from "firebase/auth"; // Import getAuth
 // IMPORTANT: For production, move this configuration to environment variables!
 // See: https://firebase.google.com/docs/web/setup#safe-manage-your-credentials
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // Replace with your actual API key or use environment variables
+  apiKey: "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU", // Updated API key
   authDomain: "harmun-tracker.firebaseapp.com",
   projectId: "harmun-tracker",
   storageBucket: "harmun-tracker.appspot.com",
@@ -56,3 +56,4 @@ if (typeof window !== 'undefined') {
 }
 
 export { app, db, auth, analytics, firebaseConfig }; // Export auth
+
