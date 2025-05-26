@@ -2,7 +2,7 @@
 'use client'; // This page will manage state and interactivity
 
 import * as React from 'react';
-import { PlusCircle, Filter, ListFilter } from 'lucide-react';
+import { PlusCircle, ListFilter, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -19,15 +19,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
-import type { Participant, VisibleColumns } from '@/types';
+import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
+import { cn } from '@/lib/utils';
 
 
 export default function AdminDashboardPage() {
@@ -39,6 +41,8 @@ export default function AdminDashboardPage() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
+  const [quickStatusFilter, setQuickStatusFilter] = React.useState<AttendanceStatus | 'All'>('All');
+
 
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [participantToEdit, setParticipantToEdit] = React.useState<Participant | null>(null);
@@ -70,7 +74,8 @@ export default function AdminDashboardPage() {
         getParticipants({ 
           school: selectedSchool === 'All Schools' ? undefined : selectedSchool, 
           committee: selectedCommittee === 'All Committees' ? undefined : selectedCommittee,
-          searchTerm: debouncedSearchTerm 
+          searchTerm: debouncedSearchTerm,
+          status: quickStatusFilter,
         }),
         getSchools(),
         getCommittees(),
@@ -84,7 +89,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSchool, selectedCommittee, debouncedSearchTerm]);
+  }, [selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter]);
 
   React.useEffect(() => {
     fetchData();
@@ -99,6 +104,21 @@ export default function AdminDashboardPage() {
     setParticipantToEdit(participant);
     setIsParticipantFormOpen(true);
   };
+  
+  const toggleAllColumns = (show: boolean) => {
+    setVisibleColumns(prev => 
+      Object.keys(prev).reduce((acc, key) => {
+        acc[key as keyof VisibleColumns] = show;
+        return acc;
+      }, {} as VisibleColumns)
+    );
+  };
+
+  const statusFilterOptions: { label: string; value: AttendanceStatus | 'All' }[] = [
+    { label: 'All Participants', value: 'All' },
+    { label: 'Present', value: 'Present' },
+    { label: 'Absent', value: 'Absent' },
+  ];
 
   return (
     <AppLayoutClientShell>
@@ -120,6 +140,13 @@ export default function AdminDashboardPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
+                  <CheckSquare className="mr-2 h-4 w-4" /> Show All
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
+                  <Square className="mr-2 h-4 w-4" /> Hide All
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {(Object.keys(visibleColumns) as Array<keyof VisibleColumns>).map((key) => (
                   <DropdownMenuCheckboxItem
                     key={key}
@@ -138,38 +165,53 @@ export default function AdminDashboardPage() {
             </Button>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg shadow-sm bg-card">
+        
+        <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
             placeholder="Search by name, school, committee..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="md:col-span-1"
+            className="flex-grow"
           />
-          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Filter by school" />
-            </SelectTrigger>
-            <SelectContent>
-              {schools.map((school) => (
-                <SelectItem key={school} value={school}>
-                  {school}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Filter by committee" />
-            </SelectTrigger>
-            <SelectContent>
-              {committees.map((committee) => (
-                <SelectItem key={committee} value={committee}>
-                  {committee}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2 flex-shrink-0">
+            <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Filter by school" />
+              </SelectTrigger>
+              <SelectContent>
+                {schools.map((school) => (
+                  <SelectItem key={school} value={school}>
+                    {school}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Filter by committee" />
+              </SelectTrigger>
+              <SelectContent>
+                {committees.map((committee) => (
+                  <SelectItem key={committee} value={committee}>
+                    {committee}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+            {statusFilterOptions.map(opt => (
+              <Button
+                key={opt.value}
+                variant={quickStatusFilter === opt.value ? "default" : "outline"}
+                onClick={() => setQuickStatusFilter(opt.value)}
+                className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2")}
+              >
+                {opt.label}
+              </Button>
+            ))}
         </div>
 
         <ParticipantTable

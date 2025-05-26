@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -7,7 +8,7 @@ import type { Participant, AttendanceStatus } from '@/types';
 // Simulate a database. In a real app, this would be a database client.
 let participantsDB: Participant[] = JSON.parse(JSON.stringify(initialParticipants)); // Deep copy to allow modifications
 
-export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string }): Promise<Participant[]> {
+export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
   
   let filteredParticipants = [...participantsDB];
@@ -25,6 +26,9 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       p.school.toLowerCase().includes(term) ||
       p.committee.toLowerCase().includes(term)
     );
+  }
+  if (filters?.status && filters.status !== 'All') {
+    filteredParticipants = filteredParticipants.filter(p => p.status === filters.status);
   }
   return JSON.parse(JSON.stringify(filteredParticipants));
 }
