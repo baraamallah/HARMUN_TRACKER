@@ -1,5 +1,4 @@
 import type { Participant } from '@/types';
-import { v4 as uuidv4 } from 'uuid'; // Ensure uuid is installed or use a simpler ID generation
 
 // Helper to generate IDs if uuid is not available/preferred for mocks
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -22,7 +21,7 @@ export const initialParticipants: Participant[] = [
     name: "Alice Smith",
     school: "University High",
     committee: "DISEC",
-    status: "Absent",
+    status: "In Break", // Updated status
     imageUrl: "https://placehold.co/40x40.png",
   },
   {
@@ -38,7 +37,7 @@ export const initialParticipants: Participant[] = [
     name: "Eva Williams",
     school: "Northwood High",
     committee: "ECOFIN",
-    status: "Present",
+    status: "Technical Issue", // Updated status
     imageUrl: "https://placehold.co/40x40.png",
   },
   {
@@ -54,7 +53,7 @@ export const initialParticipants: Participant[] = [
     name: "Sophia Davis",
     school: "University High",
     committee: "WHO",
-    status: "Present",
+    status: "Stepped Out", // Updated status
     imageUrl: "https://placehold.co/40x40.png",
   },
   {
@@ -62,7 +61,7 @@ export const initialParticipants: Participant[] = [
     name: "David Wilson",
     school: "Irvine High",
     committee: "DISEC",
-    status: "Present On Account",
+    status: "Restroom Break", // Updated status
     imageUrl: "https://placehold.co/40x40.png",
   },
   {

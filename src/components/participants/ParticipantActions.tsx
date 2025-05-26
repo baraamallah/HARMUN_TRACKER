@@ -9,7 +9,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuGroup,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -24,9 +23,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, AlertCircle, ChevronDown, Coffee, PersonStanding, Wrench, DoorOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { markAttendance, deleteParticipant } from '@/lib/actions';
 import { useState, useTransition } from 'react';
@@ -82,6 +80,10 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
     { status: 'Present', label: 'Present', icon: CheckCircle },
     { status: 'Absent', label: 'Absent', icon: XCircle },
     { status: 'Present On Account', label: 'Present On Account', icon: AlertCircle },
+    { status: 'In Break', label: 'In Break', icon: Coffee },
+    { status: 'Restroom Break', label: 'Restroom Break', icon: PersonStanding },
+    { status: 'Technical Issue', label: 'Technical Issue', icon: Wrench },
+    { status: 'Stepped Out', label: 'Stepped Out', icon: DoorOpen },
   ];
 
   return (
@@ -93,7 +95,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             <span className="sr-only">Open menu</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuContent align="end" className="w-56"> {/* Increased width for longer labels */}
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuSub>

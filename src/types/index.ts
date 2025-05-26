@@ -1,4 +1,11 @@
-export type AttendanceStatus = "Present" | "Absent" | "Present On Account";
+export type AttendanceStatus =
+  | "Present"
+  | "Absent"
+  | "Present On Account"
+  | "In Break"
+  | "Restroom Break"
+  | "Technical Issue"
+  | "Stepped Out";
 
 export interface Participant {
   id: string;
@@ -6,7 +13,7 @@ export interface Participant {
   school: string;
   committee: string;
   status: AttendanceStatus;
-  imageUrl?: string; 
+  imageUrl?: string;
 }
 
 export interface School {
