@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,9 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -24,69 +22,93 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, UserPlus, Edit3, Trash2, MoreVertical } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth'; // Renamed to avoid conflict
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-// Placeholder type for an Admin user - you'd expand this
-type AdminUser = {
-  id: string;
-  email: string | null;
-  displayName?: string | null;
-  role: string;
-  lastLogin?: string; // Example additional field
-  avatarUrl?: string;
-};
+import { AddAdminDialog } from '@/components/superior-admin/AddAdminDialog';
+import { getAdminUsers, revokeAdminRole } from '@/lib/actions';
+import type { AdminManagedUser } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function AdminManagementPage() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const { toast } = useToast();
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]); // Placeholder for admin users list
-  const [isLoadingAdmins, setIsLoadingAdmins] = useState(false); // Placeholder for loading state
+  
+  const [adminUsers, setAdminUsers] = useState<AdminManagedUser[]>([]);
+  const [isLoadingAdmins, setIsLoadingAdmins] = useState(true);
+  const [isPendingAction, startTransitionAction] = useTransition();
+
+  const [userToRevoke, setUserToRevoke] = useState<AdminManagedUser | null>(null);
+  const [isRevokeDialogVisible, setIsRevokeDialogVisible] = useState(false);
+
+  const fetchAdmins = useCallback(async () => {
+    setIsLoadingAdmins(true);
+    try {
+      const admins = await getAdminUsers();
+      setAdminUsers(admins);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load admin users.', variant: 'destructive' });
+    } finally {
+      setIsLoadingAdmins(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
-        // TODO: Fetch actual admin users from Firestore based on a 'role' field
-        // For now, using placeholder data or an empty list.
-        // setIsLoadingAdmins(true);
-        // fetchAdminUsers().then(data => {
-        //   setAdminUsers(data);
-        //   setIsLoadingAdmins(false);
-        // });
+        fetchAdmins();
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [fetchAdmins]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // router.push('/auth/login'); // Or wherever you want to redirect after logout
-    } catch (error)
-      {
+      // Redirect or state update will be handled by onAuthStateChanged
+    } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
     }
   };
 
-  const handleInviteAdmin = () => {
-    // TODO: Implement dialog/modal to invite a new admin
-    // This would involve:
-    // 1. A form to enter the new admin's email.
-    // 2. A server action or Firebase Function to:
-    //    a. Create the user in Firebase Authentication (if they don't exist).
-    //    b. Add a document to a 'users' collection in Firestore with their UID and a 'role: "admin"' field.
-    //    c. Optionally send an invitation email.
-    toast({
-      title: 'Invite Admin',
-      description: 'Functionality to invite new admin (e.g., open dialog) is not yet implemented.',
-      variant: 'default',
+  const confirmRevokeAdmin = (admin: AdminManagedUser) => {
+    setUserToRevoke(admin);
+    setIsRevokeDialogVisible(true);
+  };
+
+  const handleRevokeAdmin = () => {
+    if (!userToRevoke) return;
+    startTransitionAction(async () => {
+      try {
+        const result = await revokeAdminRole(userToRevoke.id);
+        if (result.success) {
+          toast({ title: 'Admin Role Revoked', description: result.message });
+          fetchAdmins(); // Refresh list
+        } else {
+          toast({ title: 'Error', description: result.message, variant: 'destructive' });
+        }
+      } catch (error: any) {
+        toast({ title: 'Operation Failed', description: error.message || 'Could not revoke admin role.', variant: 'destructive' });
+      } finally {
+        setIsRevokeDialogVisible(false);
+        setUserToRevoke(null);
+      }
     });
   };
 
@@ -176,14 +198,13 @@ export default function AdminManagementPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Manage Administrator Accounts</CardTitle>
             <CardDescription>
-              Create, view, and manage accounts for regular administrators.
+              Grant or revoke admin privileges for existing Firebase Authentication users.
+              This does not create or delete their main Firebase Auth accounts.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex justify-end">
-              <Button onClick={handleInviteAdmin}>
-                <UserPlus className="mr-2 h-5 w-5" /> Invite New Admin
-              </Button>
+              <AddAdminDialog onAdminAdded={fetchAdmins} />
             </div>
             
             <Separator />
@@ -203,8 +224,9 @@ export default function AdminManagementPage() {
                       <TableRow>
                         <TableHead className="w-[60px]">Avatar</TableHead>
                         <TableHead>Name/Email</TableHead>
+                        <TableHead>Auth UID</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Last Login</TableHead>
+                        <TableHead>Granted At</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -221,14 +243,21 @@ export default function AdminManagementPage() {
                             <div className="font-medium">{admin.displayName || admin.email}</div>
                             {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
                           </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{admin.uid || admin.id}</TableCell>
                           <TableCell><Badge variant="secondary">{admin.role}</Badge></TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{admin.lastLogin || 'N/A'}</TableCell>
+                           <TableCell className="text-sm text-muted-foreground">
+                            {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                          </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" onClick={() => toast({title: 'Edit Admin', description: 'Edit functionality not implemented.'})} >
-                              <Edit3 className="h-4 w-4" /> <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80" onClick={() => toast({title: 'Delete Admin', description: 'Delete functionality not implemented.'})}>
-                              <Trash2 className="h-4 w-4" /> <span className="sr-only">Delete</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-destructive hover:text-destructive/80" 
+                              onClick={() => confirmRevokeAdmin(admin)}
+                              disabled={isPendingAction}
+                            >
+                              {isPendingAction && userToRevoke?.id === admin.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              <span className="sr-only">Revoke Admin Role</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -243,17 +272,36 @@ export default function AdminManagementPage() {
                     No administrator accounts found.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Click "Invite New Admin" to add administrators.
+                    Click "Grant Admin Role" to assign admin privileges to an existing user.
                   </p>
                 </div>
               )}
-               <p className="text-xs text-muted-foreground mt-4">
-                * Admin listing and full management (creation, roles, deletion) requires backend implementation with Firebase Auth & Firestore.
-              </p>
             </div>
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={isRevokeDialogVisible} onOpenChange={setIsRevokeDialogVisible}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Revoke Admin Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke admin privileges for {userToRevoke?.email || 'this user'}?
+              They will no longer have admin access. This does not delete their Firebase Authentication account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToRevoke(null)} disabled={isPendingAction}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevokeAdmin}
+              disabled={isPendingAction}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isPendingAction ? 'Revoking...' : 'Yes, Revoke Role'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
