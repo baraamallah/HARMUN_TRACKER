@@ -1,4 +1,5 @@
-'use client'; // This page will manage state and interactivity for filters
+
+'use client';
 
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
@@ -9,27 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PublicAttendanceTable } from '@/components/public/PublicAttendanceTable';
+import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { PublicLayout } from '@/components/layout/PublicLayout';
-import type { Participant } from '@/types';
+import type { Participant, VisibleColumns } from '@/types';
 import { getParticipants, getSchools, getCommittees } from '@/lib/actions';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming a debounce hook exists
+import { useDebounce } from '@/hooks/use-debounce'; // Correct import
 
-// A simple debounce hook (can be moved to hooks/use-debounce.ts)
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
-
-export default function PublicAttendancePage() {
+export default function PublicFacingPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
@@ -40,6 +27,16 @@ export default function PublicAttendancePage() {
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // For public view, actions are not available
+  const visibleColumns: VisibleColumns = {
+    avatar: true,
+    name: true,
+    school: true,
+    committee: true,
+    status: true,
+    actions: false, // Actions column is hidden for public page
+  };
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
@@ -57,7 +54,7 @@ export default function PublicAttendancePage() {
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
     } catch (error) {
-      console.error("Failed to fetch public data:", error);
+      console.error("Failed to fetch data for public page:", error);
     } finally {
       setIsLoading(false);
     }
@@ -65,18 +62,17 @@ export default function PublicAttendancePage() {
 
   React.useEffect(() => {
     fetchData();
-    // Optional: Set up polling for "real-time" updates on the public page
-    const intervalId = setInterval(fetchData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(intervalId);
   }, [fetchData]);
 
+  // Dummy onEditParticipant for public page as actions are hidden
+  const handleEditParticipant = () => {}; 
 
   return (
     <PublicLayout>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Public Attendance View</h1>
-          <p className="text-muted-foreground">Live attendance status for all participants.</p>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">MUN Participant Status</h1>
+          <p className="text-muted-foreground">View current participant attendance information.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg shadow-sm bg-card">
@@ -112,7 +108,12 @@ export default function PublicAttendancePage() {
           </Select>
         </div>
 
-        <PublicAttendanceTable participants={participants} isLoading={isLoading} />
+        <ParticipantTable
+          participants={participants}
+          isLoading={isLoading}
+          onEditParticipant={handleEditParticipant} // Pass dummy function
+          visibleColumns={visibleColumns}
+        />
       </div>
     </PublicLayout>
   );
