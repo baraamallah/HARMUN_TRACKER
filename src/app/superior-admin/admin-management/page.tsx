@@ -10,23 +10,56 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
-import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, UserPlus, Edit3, Trash2, MoreVertical } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth'; // Renamed to avoid conflict
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+// Placeholder type for an Admin user - you'd expand this
+type AdminUser = {
+  id: string;
+  email: string | null;
+  displayName?: string | null;
+  role: string;
+  lastLogin?: string; // Example additional field
+  avatarUrl?: string;
+};
 
 export default function AdminManagementPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const { toast } = useToast();
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]); // Placeholder for admin users list
+  const [isLoadingAdmins, setIsLoadingAdmins] = useState(false); // Placeholder for loading state
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoadingAuth(false);
+      if (user && user.uid === OWNER_UID) {
+        // TODO: Fetch actual admin users from Firestore based on a 'role' field
+        // For now, using placeholder data or an empty list.
+        // setIsLoadingAdmins(true);
+        // fetchAdminUsers().then(data => {
+        //   setAdminUsers(data);
+        //   setIsLoadingAdmins(false);
+        // });
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -34,25 +67,43 @@ export default function AdminManagementPage() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-    } catch (error) {
+      // router.push('/auth/login'); // Or wherever you want to redirect after logout
+    } catch (error)
+      {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
     }
   };
 
+  const handleInviteAdmin = () => {
+    // TODO: Implement dialog/modal to invite a new admin
+    // This would involve:
+    // 1. A form to enter the new admin's email.
+    // 2. A server action or Firebase Function to:
+    //    a. Create the user in Firebase Authentication (if they don't exist).
+    //    b. Add a document to a 'users' collection in Firestore with their UID and a 'role: "admin"' field.
+    //    c. Optionally send an invitation email.
+    toast({
+      title: 'Invite Admin',
+      description: 'Functionality to invite new admin (e.g., open dialog) is not yet implemented.',
+      variant: 'default',
+    });
+  };
+
   if (isLoadingAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
-        <Card className="w-full max-w-md shadow-2xl">
+        <Card className="w-full max-w-lg shadow-2xl">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Users size={32} />
             </div>
-            <CardTitle className="text-2xl font-bold">Admin Management</CardTitle>
+            <CardTitle className="text-2xl font-bold">Admin Account Management</CardTitle>
             <CardDescription>Verifying your credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-40 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -125,17 +176,81 @@ export default function AdminManagementPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Manage Administrator Accounts</CardTitle>
             <CardDescription>
-              Create, modify, and manage accounts for regular administrators. (This section is a placeholder for future development).
+              Create, view, and manage accounts for regular administrators.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-center py-12">
-            <Users size={64} className="mx-auto text-muted-foreground opacity-50" />
-            <p className="mt-4 text-lg text-muted-foreground">
-              Admin account management features will be implemented here.
-            </p>
-             <p className="text-sm text-muted-foreground">
-                Examples: List admins, invite new admins, set permissions, etc.
-            </p>
+          <CardContent className="space-y-6">
+            <div className="flex justify-end">
+              <Button onClick={handleInviteAdmin}>
+                <UserPlus className="mr-2 h-5 w-5" /> Invite New Admin
+              </Button>
+            </div>
+            
+            <Separator />
+
+            <div>
+              <h3 className="text-xl font-semibold mb-4">Existing Administrators</h3>
+              {isLoadingAdmins ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : adminUsers.length > 0 ? (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[60px]">Avatar</TableHead>
+                        <TableHead>Name/Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Last Login</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {adminUsers.map((admin) => (
+                        <TableRow key={admin.id}>
+                          <TableCell>
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={admin.avatarUrl || `https://placehold.co/40x40.png?text=${admin.email?.[0].toUpperCase() ?? 'A'}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
+                              <AvatarFallback>{admin.displayName?.[0] || admin.email?.[0].toUpperCase() || 'A'}</AvatarFallback>
+                            </Avatar>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{admin.displayName || admin.email}</div>
+                            {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
+                          </TableCell>
+                          <TableCell><Badge variant="secondary">{admin.role}</Badge></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{admin.lastLogin || 'N/A'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => toast({title: 'Edit Admin', description: 'Edit functionality not implemented.'})} >
+                              <Edit3 className="h-4 w-4" /> <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80" onClick={() => toast({title: 'Delete Admin', description: 'Delete functionality not implemented.'})}>
+                              <Trash2 className="h-4 w-4" /> <span className="sr-only">Delete</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-10 border rounded-md">
+                  <Users size={48} className="mx-auto text-muted-foreground opacity-50" />
+                  <p className="mt-4 text-lg text-muted-foreground">
+                    No administrator accounts found.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Click "Invite New Admin" to add administrators.
+                  </p>
+                </div>
+              )}
+               <p className="text-xs text-muted-foreground mt-4">
+                * Admin listing and full management (creation, roles, deletion) requires backend implementation with Firebase Auth & Firestore.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </main>
