@@ -64,7 +64,13 @@ export default function SuperiorAdminPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("Superior Admin Page Auth Check: Current User: ", user ? user.uid : 'null', "Required Owner UID: ", OWNER_UID);
+      console.log(
+        "[Superior Admin Page Auth Check] Current User UID:", 
+        user ? user.uid : 'Not Logged In', 
+        "| Required Owner UID:", 
+        OWNER_UID,
+        "| Match:", user ? user.uid === OWNER_UID : false
+      );
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
@@ -76,6 +82,7 @@ export default function SuperiorAdminPage() {
   }, [fetchSchools, fetchCommittees]);
 
   const handleAddSchool = async () => {
+    console.log("[Superior Admin Action] Attempting to add school. Current auth.currentUser?.uid:", auth.currentUser?.uid, "Required Owner UID:", OWNER_UID);
     if (!newSchoolName.trim()) {
       toast({ title: 'Validation Error', description: 'School name cannot be empty.', variant: 'destructive' });
       return;
@@ -89,7 +96,7 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding School', 
-          description: result.error || `Failed to add school. Are you logged in as Owner (UID: ${OWNER_UID})? Check Firestore rules for 'system_schools' allow writes for the owner. Check browser console for details.`, 
+          description: result.error || `Failed to add school. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that Firestore rules for 'system_schools' allow writes by the owner. Check browser console for more details.`, 
           variant: 'destructive',
           duration: 10000,
         });
@@ -98,6 +105,7 @@ export default function SuperiorAdminPage() {
   };
 
   const handleAddCommittee = async () => {
+    console.log("[Superior Admin Action] Attempting to add committee. Current auth.currentUser?.uid:", auth.currentUser?.uid, "Required Owner UID:", OWNER_UID);
     if (!newCommitteeName.trim()) {
       toast({ title: 'Validation Error', description: 'Committee name cannot be empty.', variant: 'destructive' });
       return;
@@ -111,7 +119,7 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding Committee', 
-          description: result.error || `Failed to add committee. Are you logged in as Owner (UID: ${OWNER_UID})? Check Firestore rules for 'system_committees' allow writes for the owner. Check browser console for details.`, 
+          description: result.error || `Failed to add committee. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that Firestore rules for 'system_committees' allow writes by the owner. Check browser console for more details.`, 
           variant: 'destructive',
           duration: 10000, 
         });
@@ -160,7 +168,7 @@ export default function SuperiorAdminPage() {
             <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-xl mt-3 text-muted-foreground">
               This area is restricted to the Superior Administrator.
-              Current User UID: {currentUser ? currentUser.uid : 'Not Logged In'}. Required UID: {OWNER_UID}.
+              Current User UID: {currentUser ? `'${currentUser.uid}'` : 'Not Logged In'}. Required Owner UID: '{OWNER_UID}'.
               {currentUser && currentUser.uid !== OWNER_UID && " (This is NOT the Owner Account)"}
             </CardDescription>
           </CardHeader>
@@ -183,7 +191,7 @@ export default function SuperiorAdminPage() {
               </Button>
             </Link>
             <p className="text-xs text-muted-foreground mt-4">
-              If you believe this is an error, please verify your login credentials or contact system support.
+              If you believe this is an error, please verify your login credentials or contact system support. Ensure your Firestore Security Rules in your Firebase project are correctly published (see README.md).
             </p>
           </CardFooter>
         </Card>
@@ -401,4 +409,6 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
+    
+
     
