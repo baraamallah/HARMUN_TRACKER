@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, User } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth'; // User type not directly needed here
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,16 +43,46 @@ export default function LoginPage() {
       });
       router.push('/'); 
     } catch (e: any) {
-      console.error('Login error:', e);
-      let errorMessage = 'Failed to log in. Please check your credentials.';
-      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
-        errorMessage = 'Invalid email or password.';
-      } else if (e.code === 'auth/invalid-email') {
-        errorMessage = 'Please enter a valid email address.';
+      let errorMessage = 'An unexpected error occurred during login. Please try again.';
+      let errorTitle = 'Login Error';
+
+      if (e && typeof e.code === 'string') { // Check if it's a Firebase-like error with a code
+        // Log as warning for typical auth rejections, error for others
+        if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-email', 'auth/user-disabled', 'auth/too-many-requests'].includes(e.code)) {
+          console.warn(`Firebase Auth Rejected Login (${e.code}): ${e.message}. Email attempted: ${email}`);
+        } else {
+          console.error(`Firebase Auth Error (${e.code}): ${e.message}. Email attempted: ${email}`, e);
+        }
+
+        switch (e.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential': // This is the one from your log
+            errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'The email address you entered is not valid. Please check the format.';
+            break;
+          case 'auth/user-disabled':
+            errorMessage = 'This user account has been disabled. Please contact an administrator.';
+            errorTitle = 'Account Disabled';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Access to this account has been temporarily disabled due to many failed login attempts. You can try again later or reset your password.';
+            errorTitle = 'Too Many Attempts';
+            break;
+          default:
+            // For other Firebase errors, show a more generic message but include the code for admins
+            errorMessage = `Login failed. Please try again. (Error code: ${e.code})`;
+        }
+      } else {
+        // For non-Firebase errors (e.g., network issues not caught by Firebase SDK)
+        console.error('An unexpected login error occurred:', e);
       }
-      setError(errorMessage);
+
+      setError(errorMessage); // This updates the on-page Alert component
       toast({
-        title: 'Login Failed',
+        title: errorTitle,
         description: errorMessage,
         variant: 'destructive',
       });
@@ -77,7 +107,7 @@ export default function LoginPage() {
           {error && (
             <Alert variant="destructive" className="bg-destructive/10">
               <AlertCircle className="h-5 w-5" />
-              <AlertTitle className="font-semibold">Login Error</AlertTitle>
+              <AlertTitle className="font-semibold">{errorTitle}</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
