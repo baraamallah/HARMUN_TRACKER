@@ -95,11 +95,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
-    *   Update the `OWNER_UID` constant with the Firebase UID of the user who should have superior admin access (the one you noted in Firebase Setup Step 5).
-    ```typescript
-    // src/lib/constants.ts
-    export const OWNER_UID = "YOUR_ACTUAL_FIREBASE_OWNER_UID"; // e.g., "JZgMG6xdwAYInXsdciaGj6qNAsG2"
-    ```
+    *   Ensure the `OWNER_UID` constant matches the Firebase UID of the user who should have superior admin access (the one you noted in Firebase Setup Step 5). The current value is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
 
 ### Running the Application Locally
 
@@ -169,7 +165,7 @@ Before deploying this application to a live environment, ensure you address the 
     *   **THIS IS THE MOST IMPORTANT STEP FOR SECURITY.**
     *   In the Firebase Console, go to "Firestore Database" -> "Rules".
     *   The default "test mode" rules are **INSECURE** for production.
-    *   Define rules to control who can access and modify data. See [Firestore Security Rules Examples](#firestore-security-rules-examples) below.
+    *   Define rules to control who can access and modify data. See [Firestore Security Rules Examples](#firestore-security-rules-examples) below. **Test them thoroughly** using the Firebase Rules Playground.
 
 2.  🔑 **Environment Variables for Firebase Config**:
     *   Ensure your hosting provider is configured with the same `NEXT_PUBLIC_FIREBASE_...` environment variables that you have in your `.env.local` file.
@@ -177,10 +173,10 @@ Before deploying this application to a live environment, ensure you address the 
 
 3.  🚪 **Firebase Authentication Setup & Admin Roles**:
     *   **Enable Email/Password Provider**: In Firebase Console > Authentication > Sign-in method, enable the "Email/Password" provider.
-    *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and set it as `OWNER_UID` in `src/lib/constants.ts`.
-    *   The current login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to attempt login. Access to the main admin dashboard (`/`) is then granted if they are logged in.
-    *   True admin access (beyond just being logged in) should ideally be verified by checking their role in the `users` Firestore collection after login or in middleware (this part is not fully implemented for the main dashboard yet, but the Superior Admin panel uses it for managing admins).
-    *   The Superior Admin panel allows granting 'admin' roles to existing Firebase Auth users.
+    *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and ensure it matches `OWNER_UID` in `src/lib/constants.ts`.
+    *   The login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to attempt login.
+    *   Access to the main admin dashboard (`/`) is granted if they are logged in. True admin access (beyond just being logged in) should ideally be verified by checking their role in the `users` Firestore collection. The example Firestore rules for `/participants` demonstrate this.
+    *   The Superior Admin panel allows granting 'admin' roles to existing Firebase Auth users. Ensure these users also exist in Firebase Authentication.
 
 4.  🛠️ **Build-time Error Checks (`next.config.ts`)**:
     *   The `next.config.ts` file has been updated to set `typescript.ignoreBuildErrors = false` and `eslint.ignoreDuringBuilds = false`. This is good practice for production as it ensures TypeScript and ESLint errors are caught during the build process.
@@ -200,14 +196,13 @@ These are example rules. You **MUST** review and tailor them to your exact appli
   "rules": {
     "participants": {
       // Allow public read for the /public page and authenticated users for the admin dashboard
-      "allow read": "if true;", 
+      "allow read": "if true;",
       // Allow write access only to authenticated users who have an 'admin' role or are the owner.
-      // This assumes you have a 'users' collection where roles are stored, and documents are keyed by Auth UID.
       "allow write": "if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');"
     },
     "system_schools": {
       // Allow public read for filters and forms
-      "allow read": "if true;", 
+      "allow read": "if true;",
       // Only the owner can create, update, or delete schools
       "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
     },
@@ -227,7 +222,7 @@ These are example rules. You **MUST** review and tailor them to your exact appli
       // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
       // Documents are keyed by the Firebase Auth UID.
 
-      // Allow the owner to list/read all user documents for the admin management page
+      // Allow the owner to list all user documents for the admin management page
       "allow list": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';",
       
       // Individual user documents:
@@ -242,7 +237,6 @@ These are example rules. You **MUST** review and tailor them to your exact appli
   }
 }
 ```
-
 **Explanation of User Rules Example:**
 *   The rules for the `users` collection allow the Owner to manage all documents within it (granting/revoking admin roles).
 *   The `allow list` rule on `/users` is specifically for the `getAdminUsers` query to work for the Owner.
@@ -254,6 +248,19 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 *   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts`.
 *   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly. The default status for new participants can be configured in the Superior Admin panel.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
+
+## Troubleshooting Deployment
+
+*   **Permission Denied / Missing Data**:
+    *   Check your browser's developer console for errors from Firebase. These often indicate issues with **Firestore Security Rules**.
+    *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs. Use the Rules Playground in Firebase to test them.
+*   **Missing Firestore Indexes**:
+    *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index.
+*   **Firebase Connection Issues / API Key Errors**:
+    *   Verify that your `NEXT_PUBLIC_FIREBASE_...` **environment variables** are correctly set up in your hosting provider's settings (e.g., Vercel, Netlify). These must match your Firebase project configuration.
+*   **Login Problems**:
+    *   Ensure the **Email/Password Sign-in Provider** is enabled in your Firebase project's Authentication settings.
+    *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
 
