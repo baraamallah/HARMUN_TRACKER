@@ -395,19 +395,18 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       };
 
       if (existingAdminObject.role === 'admin') {
-        // Optionally update email or displayName if provided and different
         const updates: Partial<AdminManagedUser> = {};
         if (currentEmail !== existingAdminObject.email) updates.email = currentEmail;
         if (currentDisplayName !== existingAdminObject.displayName) updates.displayName = currentDisplayName;
+        
         if (Object.keys(updates).length > 0) {
           await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()});
-           const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: Timestamp.now() };
+          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: Timestamp.now() };
           revalidatePath('/superior-admin/admin-management');
           return { success: true, message: `User ${authUid} is already an admin. Details updated.`, admin: updatedAdmin };
         }
         return { success: true, message: `User ${authUid} is already an admin. No changes made.`, admin: existingAdminObject };
       } else {
-        // User exists but not as admin, update their role and other details
         const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
         const updatedFields = {
           email: currentEmail,
@@ -426,14 +425,11 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         return { success: true, message: `Admin role granted to user ${authUid}.`, admin: updatedAdminForReturn };
       }
     } else {
-      // User document does not exist, create it
       const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
       const emailQuerySnapshot = await getDocs(qEmail);
       if (!emailQuerySnapshot.empty) {
           const conflictingUserDoc = emailQuerySnapshot.docs[0];
-          if (conflictingUserDoc.id !== authUid) { // Should not happen if doc ID is authUid
-            return { success: false, message: `Error: Email ${currentEmail} is already associated with a different admin (UID: ${conflictingUserDoc.id}). Please use a unique email or resolve the conflict.` };
-          }
+          return { success: false, message: `Error: Email ${currentEmail} is already associated with a different admin (UID: ${conflictingUserDoc.id}). Please use a unique email or resolve the conflict.` };
       }
 
       const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
@@ -448,10 +444,10 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       await setDoc(userDocRefByUid, newAdminDataFields);
 
       const createdAdmin: AdminManagedUser = {
-        id: authUid.trim(), // Ensure id is the authUid used for the doc
+        id: authUid.trim(),
         ...newAdminDataFields,
-        createdAt: Timestamp.now(), // Approximate for return
-        updatedAt: Timestamp.now(), // Approximate for return
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
 
       revalidatePath('/superior-admin/admin-management');
@@ -481,7 +477,7 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
       return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` };
     }
 
-    await deleteDoc(adminDocRef); // This removes the document, effectively revoking the role.
+    await deleteDoc(adminDocRef); 
 
     revalidatePath('/superior-admin/admin-management');
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
@@ -494,3 +490,4 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     };
   }
 }
+

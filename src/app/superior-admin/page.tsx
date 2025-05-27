@@ -82,7 +82,8 @@ export default function SuperiorAdminPage() {
   }, [fetchSchools, fetchCommittees]);
 
   const handleAddSchool = async () => {
-    console.log("[Superior Admin Action] Attempting to add school. Current auth.currentUser?.uid:", auth.currentUser?.uid, "Required Owner UID:", OWNER_UID);
+    const currentAuthUserUid = auth.currentUser?.uid;
+    console.log("[Superior Admin Action] Attempting to add school. Current auth.currentUser?.uid:", currentAuthUserUid, "Required Owner UID:", OWNER_UID);
     if (!newSchoolName.trim()) {
       toast({ title: 'Validation Error', description: 'School name cannot be empty.', variant: 'destructive' });
       return;
@@ -96,16 +97,17 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding School', 
-          description: result.error || `Failed to add school. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that Firestore rules for 'system_schools' allow writes by the owner. Check browser console for more details.`, 
+          description: `Failed: ${result.error || 'Unknown error'}. App expected Owner UID: '${OWNER_UID}'. Attempting user UID: '${currentAuthUserUid || 'Not available'}'. Please verify Firestore rules for 'system_schools' allow the Owner to write. Check browser console for more details.`, 
           variant: 'destructive',
-          duration: 10000,
+          duration: 15000,
         });
       }
     });
   };
 
   const handleAddCommittee = async () => {
-    console.log("[Superior Admin Action] Attempting to add committee. Current auth.currentUser?.uid:", auth.currentUser?.uid, "Required Owner UID:", OWNER_UID);
+    const currentAuthUserUid = auth.currentUser?.uid;
+    console.log("[Superior Admin Action] Attempting to add committee. Current auth.currentUser?.uid:", currentAuthUserUid, "Required Owner UID:", OWNER_UID);
     if (!newCommitteeName.trim()) {
       toast({ title: 'Validation Error', description: 'Committee name cannot be empty.', variant: 'destructive' });
       return;
@@ -119,9 +121,9 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding Committee', 
-          description: result.error || `Failed to add committee. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that Firestore rules for 'system_committees' allow writes by the owner. Check browser console for more details.`, 
+          description: `Failed: ${result.error || 'Unknown error'}. App expected Owner UID: '${OWNER_UID}'. Attempting user UID: '${currentAuthUserUid || 'Not available'}'. Please verify Firestore rules for 'system_committees' allow the Owner to write. Check browser console for more details.`, 
           variant: 'destructive',
-          duration: 10000, 
+          duration: 15000, 
         });
       }
     });
