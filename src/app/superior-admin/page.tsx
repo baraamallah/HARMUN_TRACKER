@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText } from 'lucide-react'; // Updated icons
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2 } from 'lucide-react'; // Updated icons
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,6 +64,7 @@ export default function SuperiorAdminPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Superior Admin Page Auth Check: Current User: ", user ? user.uid : 'null', "Required Owner UID: ", OWNER_UID);
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
@@ -88,8 +89,9 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding School', 
-          description: result.error || `Failed to add school. Please ensure you are logged in as the Owner (${OWNER_UID}) and check Firestore rules for 'system_schools' allow writes for the owner. Check console for more details.`, 
-          variant: 'destructive' 
+          description: result.error || `Failed to add school. Are you logged in as Owner (UID: ${OWNER_UID})? Check Firestore rules for 'system_schools' allow writes for the owner. Check browser console for details.`, 
+          variant: 'destructive',
+          duration: 10000,
         });
       }
     });
@@ -109,9 +111,9 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding Committee', 
-          description: result.error || `Failed to add committee. Critical: Ensure you are logged in as the Owner (UID: ${OWNER_UID}). Verify Firestore rules for 'system_committees' collection grant write access to this UID. Check browser console for specific Firebase errors.`, 
+          description: result.error || `Failed to add committee. Are you logged in as Owner (UID: ${OWNER_UID})? Check Firestore rules for 'system_committees' allow writes for the owner. Check browser console for details.`, 
           variant: 'destructive',
-          duration: 10000, // Longer duration for important error
+          duration: 10000, 
         });
       }
     });
@@ -132,8 +134,8 @@ export default function SuperiorAdminPage() {
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary">
           <CardHeader className="text-center py-8">
-             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary animate-pulse">
-                <ShieldAlert size={40} />
+             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Loader2 className="h-10 w-10 animate-spin" />
               </div>
             <CardTitle className="text-3xl font-bold tracking-tight">Superior Admin Access</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">Verifying credentials...</CardDescription>
@@ -159,6 +161,7 @@ export default function SuperiorAdminPage() {
             <CardDescription className="text-xl mt-3 text-muted-foreground">
               This area is restricted to the Superior Administrator.
               Current User UID: {currentUser ? currentUser.uid : 'Not Logged In'}. Required UID: {OWNER_UID}.
+              {currentUser && currentUser.uid !== OWNER_UID && " (This is NOT the Owner Account)"}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
@@ -169,7 +172,7 @@ export default function SuperiorAdminPage() {
             )}
             {!currentUser && (
                  <p className="text-md text-muted-foreground mt-4">
-                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account.
+                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account ({OWNER_UID}).
                  </p>
             )}
           </CardContent>
@@ -243,7 +246,7 @@ export default function SuperiorAdminPage() {
                 <Separator />
                 <h4 className="text-md font-medium text-muted-foreground">Existing Schools:</h4>
                 {isLoadingSchools ? (
-                  <Skeleton className="h-32 w-full rounded-md" />
+                  <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : systemSchools.length > 0 ? (
                   <ScrollArea className="h-48 w-full rounded-md border bg-muted/30 p-3">
                     <ul className="space-y-1.5">
@@ -285,7 +288,7 @@ export default function SuperiorAdminPage() {
                 <Separator />
                 <h4 className="text-md font-medium text-muted-foreground">Existing Committees:</h4>
                 {isLoadingCommittees ? (
-                  <Skeleton className="h-32 w-full rounded-md" />
+                  <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : systemCommittees.length > 0 ? (
                   <ScrollArea className="h-48 w-full rounded-md border bg-muted/30 p-3">
                     <ul className="space-y-1.5">
@@ -391,7 +394,7 @@ export default function SuperiorAdminPage() {
             MUN Tracker - Superior Administration Panel &copy; {new Date().getFullYear()}
           </p>
            <p className="text-xs text-muted-foreground mt-1">
-            UID: {OWNER_UID}
+            Owner UID: {OWNER_UID}
           </p>
         </div>
       </footer>

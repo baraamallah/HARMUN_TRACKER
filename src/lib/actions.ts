@@ -21,13 +21,13 @@ import {
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-import { OWNER_UID } from './constants'; // Import OWNER_UID
+import { OWNER_UID } from './constants'; 
 
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
-const USERS_COLLECTION = 'users'; // For storing user roles and metadata
+const USERS_COLLECTION = 'users'; 
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
@@ -58,7 +58,7 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
     console.error("Error updating default attendance status setting: ", error);
     let detailedMessage = 'Could not update setting.';
     if (error instanceof Error) {
-        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner (UID: ${OWNER_UID}) to write to 'system_config/${APP_SETTINGS_DOC_ID}'.`;
+        detailedMessage += ` Details: ${error.message}. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that Firestore rules allow the Owner to write to 'system_config/${APP_SETTINGS_DOC_ID}'. Check browser console for more details.`;
     }
     return { success: false, error: detailedMessage };
   }
@@ -102,7 +102,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     return participantsData;
   } catch (error) {
     console.error(
-      "HARMUN_TRACKER: Error fetching participants from Firestore. Active filters:", 
+      "Error fetching participants from Firestore. Active filters:", 
       filters, 
       "Underlying error:", 
       error
@@ -214,10 +214,8 @@ export async function addSystemSchool(schoolName: string): Promise<{success: boo
     return {success: true, id: docRef.id};
   } catch (error) {
     console.error("Error adding system school: ", error);
-    let detailedMessage = "Failed to add system school.";
-    if (error instanceof Error) {
-        detailedMessage += ` Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_schools' collection. The README.md has the correct rules.`;
-    }
+    let detailedMessage = `Failed to add system school. Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${ (error as any).message || String(error)}.`;
+    detailedMessage += ` CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_schools' collection. Check the README.md for correct rules.`;
     return {success: false, error: detailedMessage};
   }
 }
@@ -251,10 +249,8 @@ export async function addSystemCommittee(committeeName: string): Promise<{succes
     return {success: true, id: docRef.id};
   } catch (error) {
     console.error("Error adding system committee: ", error);
-    let detailedMessage = "Failed to add system committee.";
-     if (error instanceof Error) {
-        detailedMessage += ` Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_committees' collection. The README.md has the correct rules.`;
-    }
+    let detailedMessage = `Failed to add system committee. Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${ (error as any).message || String(error)}.`;
+    detailedMessage += ` CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_committees' collection. Check the README.md for correct rules.`;
     return {success: false, error: detailedMessage};
   }
 }
@@ -399,7 +395,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           role: 'admin',
           email: updatedFields.email,
           displayName: updatedFields.displayName,
-          updatedAt: Timestamp.now(), // Represent server timestamp for immediate return
+          updatedAt: Timestamp.now(), 
         };
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to ${email} (UID: ${authUid}).`, admin: updatedAdminForReturn };
@@ -431,8 +427,8 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const createdAdmin: AdminManagedUser = {
         id: authUid, 
         ...newAdminDataFields,
-        createdAt: Timestamp.now(), // Represent server timestamp for immediate return
-        updatedAt: Timestamp.now(), // Represent server timestamp for immediate return
+        createdAt: Timestamp.now(), 
+        updatedAt: Timestamp.now(), 
       };
       
       revalidatePath('/superior-admin/admin-management');
@@ -441,10 +437,8 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
   } catch (error) {
     console.error('Error granting admin role:', error);
-    let detailedMessage = 'Failed to grant admin role.';
-    if (error instanceof Error) {
-      detailedMessage += ` Firebase Error: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'users' collection for the document ID '${authUid}'. The README.md has the correct rules.`;
-    }
+    let detailedMessage = `Failed to grant admin role. Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${ (error as any).message || String(error)}.`;
+    detailedMessage += ` CRITICAL: This is likely a Firestore Security Rules issue. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that rules allow the Owner to write to the 'users' collection for the document ID '${authUid}'. Check the README.md for correct rules.`;
     return { success: false, message: detailedMessage };
   }
 }
@@ -468,12 +462,9 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
   } catch (error) {
     console.error('Error revoking admin role:', error);
-    let detailedMessage = 'Could not revoke admin role.';
-    if (error instanceof Error) {
-      detailedMessage += ` Firebase Error: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to delete documents from the 'users' collection. The README.md has the correct rules.`;
-    }
+    let detailedMessage = `Could not revoke admin role. Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${ (error as any).message || String(error)}.`;
+     detailedMessage += ` CRITICAL: This is likely a Firestore Security Rules issue. Ensure you are logged in as Owner (UID: ${OWNER_UID}) and that rules allow the Owner to delete documents from the 'users' collection. Check the README.md for correct rules.`;
     return { success: false, message: detailedMessage };
   }
 }
     
-
