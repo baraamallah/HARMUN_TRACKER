@@ -56,7 +56,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables.
-4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write for 30 days). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) (see section below) *before* the test mode expires or before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
+4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write for 30 days). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-examples) (see section below) *before* the test mode expires or before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
 5.  **Enable Firebase Authentication**:
     *   In the Firebase Console, go to "Authentication".
     *   Go to the "Sign-in method" tab.
@@ -188,7 +188,7 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-**Replace `JZgMG6xdwAYInXsdciaGj6qNAsG2` with the `OWNER_UID` from `src/lib/constants.ts` if it ever changes.**
+**The `OWNER_UID` used in these rules is `JZgMG6xdwAYInXsdciaGj6qNAsG2` (as defined in `src/lib/constants.ts`). If your Owner UID is different, you MUST update it in these rules before publishing.**
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
@@ -198,47 +198,63 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Participants Collection
+    // Defines who can read and write participant data.
     match /participants/{participantId} {
-      // Allow public read for the /public page and authenticated users for the admin dashboard
+      // Allow public read for the /public page.
+      // Authenticated users can also read for the admin dashboard.
       allow read: if true;
-      // Allow write access only to authenticated users who have an 'admin' role or are the owner.
-      allow write: if request.auth != null && 
-                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+
+      // Allow write access only to authenticated users who have an 'admin' role
+      // in the 'users' collection, OR if the user is the Owner.
+      allow write: if request.auth != null &&
+                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
                     request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
     }
 
+    // System Schools Collection
+    // Defines who can read and write the list of system-wide schools.
     match /system_schools/{schoolId} {
-      // Allow public read for filters and forms
+      // Allow public read for filters and forms throughout the app.
       allow read: if true;
-      // Only the owner can create, update, or delete schools
+
+      // Only the Owner can create, update, or delete schools.
       allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
 
+    // System Committees Collection
+    // Defines who can read and write the list of system-wide committees.
     match /system_committees/{committeeId} {
-      // Allow public read for filters and forms
+      // Allow public read for filters and forms throughout the app.
       allow read: if true;
-      // Only the owner can create, update, or delete committees
+
+      // Only the Owner can create, update, or delete committees.
       allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
 
-    match /system_config/{settingId} {
-      // Only the owner can read and write system configuration
+    // System Configuration Collection
+    // Defines who can read and write application-wide settings.
+    match /system_config/{settingId} { // e.g., {settingId} could be 'main_settings'
+      // Only the Owner can read and write system configuration.
       allow read, write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
 
-    // Users Collection (for roles - documents are keyed by Auth UID)
-    // Rules for individual user documents
+    // Users Collection (for managing admin roles)
+    // Documents in this collection are keyed by Firebase Auth UID.
+    // Example document: { uid: "someAuthUID", email: "admin@example.com", role: "admin" }
     match /users/{userId} {
-      // Allow the owner to create, update, delete any user role document
+      // Allow the Owner to create, update, or delete any user role document.
       allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
-      // Allow authenticated users to read their own role document (if needed for client-side checks)
-      // Also allow owner to read any user document
-      allow read: if request.auth != null && 
+
+      // Allow an authenticated user to read their own role document.
+      // Also, allow the Owner to read any user's role document.
+      allow read: if request.auth != null &&
                   (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
     }
 
-    // Rule for listing documents in the users collection
-    // This is needed for the getAdminUsers query by the owner
+    // Rule for LISTING documents in the users collection.
+    // This is specifically needed for the getAdminUsers query by the Owner
+    // on the Admin Account Management page.
     match /users {
        allow list: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
@@ -253,7 +269,7 @@ service cloud.firestore {
 
 ## Customization
 
-*   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts`.
+*   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts` (if you did, you MUST update it in the Firestore Security Rules as well).
 *   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly. The default status for new participants can be configured in the Superior Admin panel.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
 
@@ -273,3 +289,4 @@ service cloud.firestore {
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication. If granting 'admin' roles, ensure those users also exist in Firebase Auth.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
+
