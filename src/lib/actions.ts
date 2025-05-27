@@ -205,27 +205,28 @@ export async function getSystemSchools(): Promise<string[]> {
 }
 
 export async function addSystemSchool(schoolName: string): Promise<{success: boolean, id?: string, error?: string}> {
-  if (!schoolName.trim()) {
+  const trimmedSchoolName = schoolName.trim();
+  if (!trimmedSchoolName) {
     return {success: false, error: "School name cannot be empty."};
   }
   try {
-    const q = query(collection(db, SYSTEM_SCHOOLS_COLLECTION), where('name', '==', schoolName.trim()));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      return {success: false, error: "School already exists."};
-    }
-
-    const docRef = await addDoc(collection(db, SYSTEM_SCHOOLS_COLLECTION), { name: schoolName.trim(), createdAt: serverTimestamp() });
+    // Simplified: Directly attempt to add. Uniqueness checks are removed for this test.
+    const docRef = await addDoc(collection(db, SYSTEM_SCHOOLS_COLLECTION), { 
+      name: trimmedSchoolName, 
+      createdAt: serverTimestamp() 
+    });
     revalidatePath('/superior-admin');
     revalidatePath('/');
     revalidatePath('/public');
     return {success: true, id: docRef.id};
   } catch (error) {
-    console.error("Error adding system school: ", error);
+    console.error("Error adding system school (simplified action): ", error);
     const firebaseError = error as { code?: string; message?: string };
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_SCHOOLS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
+    console.error(detailedError); // Log the detailed error to server console too
     return {
         success: false,
-        error: `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_SCHOOLS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`
+        error: detailedError
     };
   }
 }
@@ -242,27 +243,28 @@ export async function getSystemCommittees(): Promise<string[]> {
 }
 
 export async function addSystemCommittee(committeeName: string): Promise<{success: boolean, id?: string, error?: string}> {
-   if (!committeeName.trim()) {
+  const trimmedCommitteeName = committeeName.trim();
+  if (!trimmedCommitteeName) {
     return {success: false, error: "Committee name cannot be empty."};
   }
   try {
-    const q = query(collection(db, SYSTEM_COMMITTEES_COLLECTION), where('name', '==', committeeName.trim()));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      return {success: false, error: "Committee already exists."};
-    }
-
-    const docRef = await addDoc(collection(db, SYSTEM_COMMITTEES_COLLECTION), { name: committeeName.trim(), createdAt: serverTimestamp() });
+    // Simplified: Directly attempt to add. Uniqueness checks are removed for this test.
+    const docRef = await addDoc(collection(db, SYSTEM_COMMITTEES_COLLECTION), { 
+      name: trimmedCommitteeName, 
+      createdAt: serverTimestamp() 
+    });
     revalidatePath('/superior-admin');
     revalidatePath('/');
     revalidatePath('/public');
     return {success: true, id: docRef.id};
   } catch (error) {
-    console.error("Error adding system committee: ", error);
+    console.error("Error adding system committee (simplified action): ", error);
     const firebaseError = error as { code?: string; message?: string };
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_COMMITTEES_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
+    console.error(detailedError); // Log the detailed error to server console too
     return {
         success: false,
-        error: `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_COMMITTEES_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`
+        error: detailedError
     };
   }
 }
@@ -355,8 +357,8 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
         email: data.email,
         displayName: data.displayName,
         role: data.role,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+        createdAt: data.createdAt, // Keep as Firestore Timestamp
+        updatedAt: data.updatedAt, // Keep as Firestore Timestamp
         avatarUrl: data.avatarUrl
       } as AdminManagedUser;
     });
@@ -371,12 +373,13 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
   if (!email || !authUid) {
     return { success: false, message: 'Email and Auth UID are required.' };
   }
-  if (!authUid.trim()) {
+  const trimmedAuthUid = authUid.trim();
+  if (!trimmedAuthUid) {
     return { success: false, message: 'Auth UID cannot be empty.' };
   }
 
   try {
-    const userDocRefByUid = doc(db, USERS_COLLECTION, authUid.trim());
+    const userDocRefByUid = doc(db, USERS_COLLECTION, trimmedAuthUid);
     const userDocSnapByUid = await getDoc(userDocRefByUid);
 
     const currentEmail = email.toLowerCase().trim();
@@ -403,9 +406,9 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()});
           const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: Timestamp.now() };
           revalidatePath('/superior-admin/admin-management');
-          return { success: true, message: `User ${authUid} is already an admin. Details updated.`, admin: updatedAdmin };
+          return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: updatedAdmin };
         }
-        return { success: true, message: `User ${authUid} is already an admin. No changes made.`, admin: existingAdminObject };
+        return { success: true, message: `User ${trimmedAuthUid} is already an admin. No changes made.`, admin: existingAdminObject };
       } else {
         const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
         const updatedFields = {
@@ -422,7 +425,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           updatedAt: Timestamp.now(),
         };
         revalidatePath('/superior-admin/admin-management');
-        return { success: true, message: `Admin role granted to user ${authUid}.`, admin: updatedAdminForReturn };
+        return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: updatedAdminForReturn };
       }
     } else {
       const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
@@ -444,22 +447,24 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       await setDoc(userDocRefByUid, newAdminDataFields);
 
       const createdAdmin: AdminManagedUser = {
-        id: authUid.trim(),
+        id: trimmedAuthUid,
         ...newAdminDataFields,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
 
       revalidatePath('/superior-admin/admin-management');
-      return { success: true, message: `User ${authUid} granted admin role.`, admin: createdAdmin };
+      return { success: true, message: `User ${trimmedAuthUid} granted admin role.`, admin: createdAdmin };
     }
 
   } catch (error) {
     console.error('Error granting admin role:', error);
     const firebaseError = error as { code?: string; message?: string };
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${trimmedAuthUid}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${USERS_COLLECTION}' collection for document ID '${trimmedAuthUid}'. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
+    console.error(detailedError);
     return {
         success: false,
-        message: `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${authUid}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${USERS_COLLECTION}' collection for document ID '${authUid}'. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`
+        message: detailedError
     };
   }
 }
@@ -484,9 +489,11 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
   } catch (error) {
     console.error('Error revoking admin role:', error);
     const firebaseError = error as { code?: string; message?: string };
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${adminId}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to delete documents from the '${USERS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
+    console.error(detailedError);
     return {
         success: false,
-        message: `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${adminId}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to delete documents from the '${USERS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`
+        message: detailedError
     };
   }
 }
