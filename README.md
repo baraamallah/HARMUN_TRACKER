@@ -199,74 +199,60 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 🔁 Helper to check if user is Owner
-    function isOwner() {
-      return request.auth != null &&
-             request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Ensure this UID matches src/lib/constants.ts
-    }
-
-    // 🔁 Helper to check if user is Admin
-    function isAdmin() {
-      // This assumes you have a 'users' collection where documents are keyed by Auth UID
-      // and each document has a 'role' field (e.g., role: "admin").
-      return request.auth != null &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
-    }
-
-    // 👤 Participants Collection
+    // Participants Collection
     // Defines who can read and write participant data.
     match /participants/{participantId} {
       // Allow public read for the /public page.
       // Authenticated users can also read for the admin dashboard.
       allow read: if true;
 
-      // Admins and Owner can write
-      allow write: if isOwner() || isAdmin();
+      // Admins (users with role 'admin' in the /users collection) and the Owner can write.
+      allow write: if (request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2") ||
+                     (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin");
     }
 
-    // 🏫 System Schools Collection
+    // System Schools Collection
     // Defines who can read and write the list of system-wide schools.
     match /system_schools/{schoolId} {
       // Allow public read for filters and forms throughout the app.
       allow read: if true;
       // Only the Owner can create, update, or delete schools.
-      allow write: if isOwner();
+      allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
 
-    // 🏛️ System Committees Collection
+    // System Committees Collection
     // Defines who can read and write the list of system-wide committees.
     match /system_committees/{committeeId} {
       // Allow public read for filters and forms throughout the app.
       allow read: if true;
       // Only the Owner can create, update, or delete committees.
-      allow write: if isOwner();
+      allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
 
-    // ⚙️ System Configuration Collection
+    // System Configuration Collection
     // Defines who can read and write application-wide settings.
     match /system_config/{settingId} { // e.g., {settingId} could be 'main_settings'
       // Only the Owner can read and write system configuration.
-      allow read, write: if isOwner();
+      allow read, write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
 
-    // 👥 Users Collection (for managing admin roles)
+    // Users Collection (for managing admin roles)
     // Documents in this collection are keyed by Firebase Auth UID.
-    // Example document: { id: "someAuthUID", email: "admin@example.com", role: "admin" }
     match /users/{userId} {
       // Owner can manage all user documents (create, update, delete roles)
-      allow write: if isOwner();
+      allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
 
       // Authenticated users can read their own role document.
       // Owner can read any user's role document.
       allow read: if request.auth != null &&
-                  (isOwner() || request.auth.uid == userId);
+                  (request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2" || request.auth.uid == userId);
     }
 
-    // 📋 Allow Owner to list all user documents
+    // Allow Owner to list all user documents
     // This is specifically needed for the getAdminUsers query by the Owner
     // on the Admin Account Management page.
     match /users {
-       allow list: if isOwner();
+       allow list: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
   }
 }
@@ -275,7 +261,7 @@ service cloud.firestore {
 *   The rules for the `users` collection allow the Owner to manage all documents within it (granting/revoking admin roles).
 *   The `allow list` rule on `/users` is specifically for the `getAdminUsers` query to work for the Owner.
 *   Individual users can read their *own* role document if needed.
-*   The `participants` write rule is an example of how to check a user's role from the `users` collection using the `isAdmin()` helper function.
+*   The `participants` write rule is an example of how to check a user's role from the `users` collection.
 
 ## Customization
 
@@ -299,7 +285,7 @@ If you need to change who the owner is:
 3.  **Update Firestore Security Rules (CRITICAL)**:
     *   Open your Firebase project in the Firebase Console.
     *   Navigate to Firestore Database -> Rules.
-    *   In your security rules, find **all instances** where the old `OWNER_UID` is used within the `isOwner()` function or directly (e.g., `request.auth.uid == 'oldOwnerUID'`).
+    *   In your security rules, find **all instances** where the old `OWNER_UID` is used (e.g., `request.auth.uid == 'oldOwnerUID'`).
     *   Replace these instances with the new `OWNER_UID`. Refer to the examples in [Firestore Security Rules Examples](#firestore-security-rules-examples) and ensure the UID used there matches your new `OWNER_UID` from `constants.ts`.
     *   **Publish** your updated security rules.
 4.  **Update `README.md` (Optional but Recommended)**:
@@ -313,7 +299,7 @@ If you need to change who the owner is:
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
     *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
     *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
-    *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`). The `isOwner()` helper function in the rules relies on the correct UID.
+    *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`).
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
 *   **Missing Firestore Indexes**:
     *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index. The `getParticipants` function is most likely to trigger this if multiple filters are applied.
