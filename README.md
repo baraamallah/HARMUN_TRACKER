@@ -57,7 +57,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables.
-4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) before deploying to production.
+4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
 5.  **Enable Firebase Authentication**:
     *   In the Firebase Console, go to "Authentication".
     *   Go to the "Sign-in method" tab.
@@ -166,6 +166,7 @@ Before deploying this application to a live environment, ensure you address the 
     *   In the Firebase Console, go to "Firestore Database" -> "Rules".
     *   The default "test mode" rules are **INSECURE** for production.
     *   Define rules to control who can access and modify data. See [Firestore Security Rules Examples](#firestore-security-rules-examples) below. **Test them thoroughly** using the Firebase Rules Playground.
+    *   **If you see "Missing or insufficient permissions" errors in your application, it's almost always because your Firestore security rules are not correctly configured to allow the operation for the currently authenticated user.**
 
 2.  🔑 **Environment Variables for Firebase Config**:
     *   Ensure your hosting provider is configured with the same `NEXT_PUBLIC_FIREBASE_...` environment variables that you have in your `.env.local` file.
@@ -251,9 +252,11 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 
 ## Troubleshooting Deployment
 
-*   **Permission Denied / Missing Data**:
-    *   Check your browser's developer console for errors from Firebase. These often indicate issues with **Firestore Security Rules**.
-    *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs. Use the Rules Playground in Firebase to test them.
+*   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
+    *   This **almost always points to an issue with your Firestore Security Rules.**
+    *   Check your browser's developer console for errors from Firebase. These often indicate issues with Firestore Security Rules.
+    *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`).
+    *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
 *   **Missing Firestore Indexes**:
     *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index.
 *   **Firebase Connection Issues / API Key Errors**:
