@@ -88,7 +88,7 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding School', 
-          description: result.error || 'An unexpected error occurred. Check console for details and ensure Firestore rules are correctly set.', 
+          description: result.error || `Failed to add school. Please ensure you are logged in as the Owner (${OWNER_UID}) and check Firestore rules for 'system_schools' allow writes for the owner. Check console for more details.`, 
           variant: 'destructive' 
         });
       }
@@ -109,8 +109,9 @@ export default function SuperiorAdminPage() {
       } else {
         toast({ 
           title: 'Error Adding Committee', 
-          description: result.error || 'An unexpected error occurred. Check console for details and ensure Firestore rules are correctly set.', 
-          variant: 'destructive' 
+          description: result.error || `Failed to add committee. Critical: Ensure you are logged in as the Owner (UID: ${OWNER_UID}). Verify Firestore rules for 'system_committees' collection grant write access to this UID. Check browser console for specific Firebase errors.`, 
+          variant: 'destructive',
+          duration: 10000, // Longer duration for important error
         });
       }
     });
@@ -157,6 +158,7 @@ export default function SuperiorAdminPage() {
             <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-xl mt-3 text-muted-foreground">
               This area is restricted to the Superior Administrator.
+              Current User UID: {currentUser ? currentUser.uid : 'Not Logged In'}. Required UID: {OWNER_UID}.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
@@ -197,7 +199,7 @@ export default function SuperiorAdminPage() {
                 Superior Admin Panel
                 </h1>
                 <p className="text-xs text-green-600 dark:text-green-400">
-                    Authenticated as: {currentUser.email}
+                    Authenticated as: {currentUser.email} (UID: {currentUser.uid})
                 </p>
             </div>
           </div>
@@ -396,5 +398,4 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
-
     

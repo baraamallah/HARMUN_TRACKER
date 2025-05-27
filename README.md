@@ -275,3 +275,4 @@ service cloud.firestore {
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
 
 
+
