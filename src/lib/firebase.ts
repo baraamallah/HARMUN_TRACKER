@@ -26,28 +26,31 @@ const firebaseConfig = {
 
 // Developer-facing check for placeholder or default API key during development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  const isUsingHardcodedDefaults = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY; 
-  
-  if (firebaseConfig.apiKey === "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU" && isUsingHardcodedDefaults) {
+  const isUsingHardcodedDefaultApiKey = firebaseConfig.apiKey === "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU";
+  const isEnvVarMissing = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
+  if (isUsingHardcodedDefaultApiKey && isEnvVarMissing) {
     console.warn(
       "%cFirebase Initialization Warning: Using a hardcoded default Firebase API key from an example. " +
-      "For security and to connect to YOUR Firebase project, ensure you have a .env.local file with your Firebase project credentials (e.g., NEXT_PUBLIC_FIREBASE_API_KEY). " +
-      "Refer to src/lib/firebase.ts and README.md for details. Without .env.local, your app might not connect correctly or might use a generic demo project.",
+      "This is okay for initial local testing with a generic demo project, but to connect to YOUR Firebase project, " +
+      "ensure you have a .env.local file with your Firebase project credentials (e.g., NEXT_PUBLIC_FIREBASE_API_KEY). " +
+      "Refer to src/lib/firebase.ts and README.md for details. Without your project's .env.local, your app might not connect correctly.",
       "color: orange; font-weight: bold; font-size: 1.1em;"
     );
-  }
-  if (firebaseConfig.apiKey === "YOUR_API_KEY" && isUsingHardcodedDefaults) { 
+  } else if (firebaseConfig.apiKey === "YOUR_API_KEY") { 
      console.error(
       "%cFirebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
       "Please replace it with your actual Firebase project API key using environment variables (NEXT_PUBLIC_FIREBASE_API_KEY in .env.local).",
       "color: red; font-weight: bold; font-size: 1.1em;"
     );
   }
+  // Diagnostic log for projectId
+  console.log(`[Firebase Setup] Attempting to connect to Firebase project ID: ${firebaseConfig.projectId}`);
 }
 
 
 // Initialize Firebase
-let app: FirebaseApp; // Explicitly typed here
+let app: FirebaseApp; 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 } else {
