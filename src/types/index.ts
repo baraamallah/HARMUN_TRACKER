@@ -40,12 +40,13 @@ export interface VisibleColumns {
 
 // Used for managing admin users in the superior admin panel
 export interface AdminManagedUser {
-  id: string; // Firestore document ID (can be same as Firebase Auth UID if you structure it that way)
-  uid?: string; // Firebase Auth UID (optional if id is already the UID)
+  id: string; // Firestore document ID (should be the Auth UID)
+  uid?: string; // Firebase Auth UID (stored as a field, potentially redundant if id is always Auth UID)
   email: string;
   displayName?: string | null;
-  role: 'admin' | string; // Can be extended for more roles
+  role: 'admin' | string; 
   createdAt?: any; // Firebase Timestamp
-  lastLogin?: any; // Firebase Timestamp (example, might not be directly available from client)
+  updatedAt?: any; // Firebase Timestamp
   avatarUrl?: string; // Optional avatar URL
 }
+

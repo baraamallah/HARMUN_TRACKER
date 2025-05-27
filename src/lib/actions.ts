@@ -110,10 +110,11 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 export async function addParticipant(participantData: Omit<Participant, 'id' | 'status' | 'imageUrl'>): Promise<Participant | null> {
   try {
     const defaultStatus = await getDefaultAttendanceStatusSetting();
+    const nameInitial = (participantData.name.trim() || 'P').substring(0,2).toUpperCase();
     const newParticipantData = {
       ...participantData,
       status: defaultStatus, 
-      imageUrl: `https://placehold.co/40x40.png?text=${(participantData.name || 'P').substring(0,2).toUpperCase()}`,
+      imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
       createdAt: serverTimestamp() 
     };
     const docRef = await addDoc(collection(db, PARTICIPANTS_COLLECTION), newParticipantData);
@@ -275,7 +276,6 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
 
   for (const data of parsedParticipants) {
     try {
-      // Use robust placeholder logic consistent with addParticipant
       const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
       const newParticipant: Omit<Participant, 'id'> = {
         name: data.name.trim(),
@@ -298,9 +298,6 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
     await batch.commit();
   } catch (error) {
     console.error("Error committing batch import: ", error);
-    // Consider not re-throwing here to allow partial success reporting, 
-    // but ensure the calling function knows about the batch commit failure.
-    // For simplicity, we'll let it throw, and the caller (ImportCsvDialog) handles it.
     throw new Error("Batch import failed. Some participants or new schools/committees might not have been added.");
   }
 
@@ -308,7 +305,7 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
     revalidatePath('/');
     revalidatePath('/public');
     if (newSchoolsCount > 0 || newCommitteesCount > 0) {
-      revalidatePath('/superior-admin'); // Only revalidate if schools/committees changed
+      revalidatePath('/superior-admin'); 
     }
   }
   return { count: importedCount, errors: errorCount, newSchools: newSchoolsCount, newCommittees: newCommitteesCount };
@@ -321,13 +318,19 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
     const usersCol = collection(db, USERS_COLLECTION);
     const q = query(usersCol, where('role', '==', 'admin'), orderBy('email'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docSnap => ({
-      id: docSnap.id, 
-      uid: docSnap.data().uid || docSnap.id, // Use docSnap.id as UID if uid field is missing for some reason
-      ...docSnap.data(),
-      // Ensure createdAt is a Firebase Timestamp or can be converted
-      createdAt: docSnap.data().createdAt, 
-    } as AdminManagedUser));
+    return querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id, 
+        uid: data.uid || docSnap.id, 
+        email: data.email,
+        displayName: data.displayName,
+        role: data.role,
+        createdAt: data.createdAt, 
+        updatedAt: data.updatedAt,
+        avatarUrl: data.avatarUrl
+      } as AdminManagedUser;
+    });
   } catch (error) {
     console.error('Error fetching admin users:', error);
     throw new Error('Failed to fetch admin users.');
@@ -345,19 +348,41 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
     const userDocSnapByUid = await getDoc(userDocRefByUid);
 
     if (userDocSnapByUid.exists()) {
-      const existingUserData = userDocSnapByUid.data() as AdminManagedUser;
-      if (existingUserData.role === 'admin') {
-        return { success: true, message: `User ${email} (UID: ${authUid}) is already an admin.`, admin: { id: userDocSnapByUid.id, ...existingUserData} };
+      // User document exists, construct AdminManagedUser properly
+      const data = userDocSnapByUid.data();
+      const currentAdminData: AdminManagedUser = {
+        id: userDocSnapByUid.id,
+        uid: data.uid || userDocSnapByUid.id,
+        email: data.email,
+        displayName: data.displayName,
+        role: data.role,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        avatarUrl: data.avatarUrl
+      };
+
+      if (currentAdminData.role === 'admin') {
+        return { success: true, message: `User ${email} (UID: ${authUid}) is already an admin.`, admin: currentAdminData };
       } else {
         // User exists but not as admin, update their role
-        await updateDoc(userDocRefByUid, {
-          role: 'admin',
-          email: email.toLowerCase(), 
-          displayName: displayName || existingUserData.displayName || null,
+        const updatedFields = {
+          role: 'admin' as const,
+          email: email.toLowerCase().trim(),
+          displayName: displayName?.trim() || currentAdminData.displayName || null,
           updatedAt: serverTimestamp(),
-        });
+        };
+        await updateDoc(userDocRefByUid, updatedFields);
+        
+        const updatedAdminForReturn: AdminManagedUser = {
+          ...currentAdminData,
+          role: 'admin', // Ensure role is updated in the returned object
+          email: updatedFields.email, // Ensure email is updated
+          displayName: updatedFields.displayName, // Ensure displayName is updated
+          // Note: serverTimestamp for updatedAt means the exact timestamp isn't available client-side immediately without a re-fetch
+          // but for the purpose of returning the object, this structure is okay.
+        };
         revalidatePath('/superior-admin/admin-management');
-        return { success: true, message: `Admin role granted to ${email} (UID: ${authUid}).`, admin: { id: userDocSnapByUid.id, uid: authUid, email, displayName, role: 'admin'} as AdminManagedUser };
+        return { success: true, message: `Admin role granted to ${email} (UID: ${authUid}).`, admin: updatedAdminForReturn };
       }
     } else {
       // User document doesn't exist for this authUid, check if email is already used by another UID
@@ -370,18 +395,26 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       
       // Safe to create new admin record
       const firstLetter = (displayName?.trim() || email.trim() || 'A').charAt(0).toUpperCase();
-      const newAdminData: Omit<AdminManagedUser, 'id'> = {
+      // Fields to store in Firestore, excluding 'id' as it's the document ID
+      const newAdminDataFields: Omit<AdminManagedUser, 'id' | 'updatedAt'> = { 
         uid: authUid,
         email: email.toLowerCase().trim(),
         displayName: displayName?.trim() || null,
-        role: 'admin',
+        role: 'admin' as const,
         createdAt: serverTimestamp(),
         avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`
       };
-      await setDoc(userDocRefByUid, newAdminData); 
+      await setDoc(userDocRefByUid, newAdminDataFields); 
+      
+      // Construct the AdminManagedUser object to return, including the 'id'
+      const createdAdmin: AdminManagedUser = {
+        id: authUid, 
+        ...newAdminDataFields,
+        // updatedAt will be undefined here, which is fine for an optional field
+      };
       
       revalidatePath('/superior-admin/admin-management');
-      return { success: true, message: `User ${email} (UID: ${authUid}) granted admin role.`, admin: { id: authUid, ...newAdminData } as AdminManagedUser };
+      return { success: true, message: `User ${email} (UID: ${authUid}) granted admin role.`, admin: createdAdmin };
     }
 
   } catch (error) {
@@ -404,8 +437,6 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
       return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection.` };
     }
     
-    // Instead of deleting, consider setting role to null or a 'revoked' status if you want to keep user record
-    // For this implementation, we'll delete the document from the users collection that marks them as admin.
     await deleteDoc(adminDocRef);
     
     revalidatePath('/superior-admin/admin-management');
@@ -416,3 +447,4 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     return { success: false, message: `Failed to revoke admin role: ${errorMessage}` };
   }
 }
+
