@@ -62,7 +62,7 @@ export default function AdminManagementPage() {
       setAdminUsers(admins);
     } catch (error) {
       console.error("Error fetching admins:", error);
-      toast({ title: 'Error', description: 'Failed to load admin users. Please try again.', variant: 'destructive' });
+      toast({ title: 'Error Fetching Admins', description: (error as Error).message || 'Failed to load admin users. Please try again.', variant: 'destructive' });
     } finally {
       setIsLoadingAdmins(false);
     }
@@ -98,13 +98,13 @@ export default function AdminManagementPage() {
     if (!userToRevoke) return;
     startTransitionAction(async () => {
       try {
-        // Assuming userToRevoke.id is the Firestore document ID, which should be the Auth UID
+        // userToRevoke.id is the Firestore document ID (which is the Auth UID)
         const result = await revokeAdminRole(userToRevoke.id); 
         if (result.success) {
           toast({ title: 'Admin Role Revoked', description: result.message });
           fetchAdmins(); // Refresh list
         } else {
-          toast({ title: 'Error', description: result.message, variant: 'destructive' });
+          toast({ title: 'Error Revoking Role', description: result.message, variant: 'destructive' });
         }
       } catch (error: any) {
         toast({ title: 'Operation Failed', description: error.message || 'Could not revoke admin role.', variant: 'destructive' });
@@ -201,7 +201,7 @@ export default function AdminManagementPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Manage Administrator Accounts</CardTitle>
             <CardDescription>
-              Grant or revoke admin privileges for existing Firebase Authentication users.
+              Grant or revoke admin privileges for existing Firebase Authentication users by providing their Auth UID.
               This action manages their role within this application; it does not create or delete their main Firebase Auth accounts.
             </CardDescription>
           </CardHeader>
@@ -216,9 +216,16 @@ export default function AdminManagementPage() {
               <h3 className="text-xl font-semibold mb-4">Existing Administrators</h3>
               {isLoadingAdmins ? (
                 <div className="space-y-4">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center space-x-4 p-3 border rounded-md">
+                        <Skeleton className="h-10 w-10 rounded-full" />
+                        <div className="space-y-1">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="h-3 w-60" />
+                        </div>
+                        <Skeleton className="h-8 w-20 ml-auto" />
+                    </div>
+                  ))}
                 </div>
               ) : adminUsers.length > 0 ? (
                 <div className="overflow-x-auto rounded-md border">
@@ -246,7 +253,7 @@ export default function AdminManagementPage() {
                             <div className="font-medium">{admin.displayName || admin.email}</div>
                             {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{admin.uid || admin.id}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{admin.id}</TableCell>
                           <TableCell><Badge variant="secondary">{admin.role}</Badge></TableCell>
                            <TableCell className="text-sm text-muted-foreground">
                             {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : 'N/A'}
@@ -309,4 +316,3 @@ export default function AdminManagementPage() {
     </div>
   );
 }
-
