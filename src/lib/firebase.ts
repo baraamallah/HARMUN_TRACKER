@@ -26,19 +26,16 @@ const firebaseConfig = {
 
 // Developer-facing check for placeholder or default API key during development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  const isUsingHardcodedDefaults = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY; // True if env var is NOT set
+  const isUsingHardcodedDefaults = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY; 
   
-  // This specific key "AIzaSy..." was an example often used in prompts. 
-  // The warning is most relevant if this default example key is present AND env vars are not used.
   if (firebaseConfig.apiKey === "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU" && isUsingHardcodedDefaults) {
     console.warn(
-      "%cFirebase Initialization Warning: Using a hardcoded default Firebase API key from example. " +
-      "For security and to connect to YOUR Firebase project, create a .env.local file and set your Firebase project credentials as environment variables (e.g., NEXT_PUBLIC_FIREBASE_API_KEY). " +
-      "Refer to src/lib/firebase.ts and README.md for details. Without .env.local, your app might not connect correctly or use a generic demo project.",
+      "%cFirebase Initialization Warning: Using a hardcoded default Firebase API key from an example. " +
+      "For security and to connect to YOUR Firebase project, ensure you have a .env.local file with your Firebase project credentials (e.g., NEXT_PUBLIC_FIREBASE_API_KEY). " +
+      "Refer to src/lib/firebase.ts and README.md for details. Without .env.local, your app might not connect correctly or might use a generic demo project.",
       "color: orange; font-weight: bold; font-size: 1.1em;"
     );
   }
-  // A general check if the user just copied a "YOUR_API_KEY" placeholder.
   if (firebaseConfig.apiKey === "YOUR_API_KEY" && isUsingHardcodedDefaults) { 
      console.error(
       "%cFirebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
@@ -50,7 +47,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 
 
 // Initialize Firebase
-let app: FirebaseApp;
+let app: FirebaseApp; // Explicitly typed here
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 } else {
