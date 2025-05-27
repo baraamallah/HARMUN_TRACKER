@@ -16,7 +16,8 @@ import {
   Timestamp,
   writeBatch,
   serverTimestamp,
-  getDoc
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,6 +27,38 @@ const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const USERS_COLLECTION = 'users'; // For storing user roles and metadata
+const SYSTEM_CONFIG_COLLECTION = 'system_config';
+const APP_SETTINGS_DOC_ID = 'main_settings';
+
+
+// System Settings Actions
+export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    const docSnap = await getDoc(configDocRef);
+    if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
+      return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
+    }
+    return 'Absent'; // Fallback default status
+  } catch (error) {
+    console.error("Error fetching default attendance status setting: ", error);
+    return 'Absent'; // Fallback on error
+  }
+}
+
+export async function updateDefaultAttendanceStatusSetting(newStatus: AttendanceStatus): Promise<{success: boolean, error?: string}> {
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
+    revalidatePath('/superior-admin/system-settings');
+    // Potentially revalidate other paths if new participant forms might be open elsewhere
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating default attendance status setting: ", error);
+    const errorMessage = error instanceof Error ? error.message : 'Could not update setting.';
+    return { success: false, error: `Failed to update setting: ${errorMessage}` };
+  }
+}
 
 
 // Participant Actions
@@ -57,8 +90,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       ...docSnap.data()
     } as Participant));
 
-    // Note: For large datasets, client-side search term filtering is not performant.
-    // Consider server-side search solutions (e.g., Algolia, Typesense) or specific field queries.
     if (filters?.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       participantsData = participantsData.filter(p =>
@@ -77,16 +108,17 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 
 export async function addParticipant(participantData: Omit<Participant, 'id' | 'status' | 'imageUrl'>): Promise<Participant | null> {
   try {
+    const defaultStatus = await getDefaultAttendanceStatusSetting();
     const newParticipantData = {
       ...participantData,
-      status: 'Absent' as AttendanceStatus, 
-      imageUrl: `https://placehold.co/40x40.png?text=${(participantData.name || 'P').substring(0,2).toUpperCase()}`, // Ensure name exists
+      status: defaultStatus, 
+      imageUrl: `https://placehold.co/40x40.png?text=${(participantData.name || 'P').substring(0,2).toUpperCase()}`,
       createdAt: serverTimestamp() 
     };
     const docRef = await addDoc(collection(db, PARTICIPANTS_COLLECTION), newParticipantData);
     revalidatePath('/');
     revalidatePath('/public');
-    return { id: docRef.id, ...newParticipantData, status: 'Absent', imageUrl: newParticipantData.imageUrl };
+    return { id: docRef.id, ...newParticipantData, status: defaultStatus, imageUrl: newParticipantData.imageUrl };
   } catch (error) {
     console.error("Error adding participant: ", error);
     throw new Error("Failed to add participant.");
@@ -125,7 +157,6 @@ export async function markAttendance(participantId: string, status: AttendanceSt
     await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
     revalidatePath('/');
     revalidatePath('/public');
-    // Fetch the updated participant to return complete data if needed, or just return status
      const updatedDocSnap = await getDoc(participantRef);
     if (updatedDocSnap.exists()) {
       return { id: updatedDocSnap.id, ...updatedDocSnap.data() } as Participant;
@@ -212,6 +243,7 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
   let newCommitteesCount = 0;
 
   const batch = writeBatch(db);
+  const defaultStatus = await getDefaultAttendanceStatusSetting();
 
   const uniqueImportSchools = new Set(parsedParticipants.map(p => p.school.trim()).filter(s => s));
   const uniqueImportCommittees = new Set(parsedParticipants.map(p => p.committee.trim()).filter(c => c));
@@ -221,7 +253,7 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
 
   for (const schoolName of uniqueImportSchools) {
     if (!existingSystemSchools.includes(schoolName)) {
-      const schoolRef = doc(collection(db, SYSTEM_SCHOOLS_COLLECTION)); // Creates a ref with auto-ID
+      const schoolRef = doc(collection(db, SYSTEM_SCHOOLS_COLLECTION)); 
       batch.set(schoolRef, { name: schoolName, createdAt: serverTimestamp() });
       newSchoolsCount++;
     }
@@ -229,7 +261,7 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
 
   for (const committeeName of uniqueImportCommittees) {
     if (!existingSystemCommittees.includes(committeeName)) {
-      const committeeRef = doc(collection(db, SYSTEM_COMMITTEES_COLLECTION)); // Creates a ref with auto-ID
+      const committeeRef = doc(collection(db, SYSTEM_COMMITTEES_COLLECTION)); 
       batch.set(committeeRef, { name: committeeName, createdAt: serverTimestamp() });
       newCommitteesCount++;
     }
@@ -237,15 +269,16 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
 
   for (const data of parsedParticipants) {
     try {
+      const nameInitial = (data.name || 'P').substring(0,2).toUpperCase();
       const newParticipant: Omit<Participant, 'id'> = {
         name: data.name.trim(),
         school: data.school.trim(),
         committee: data.committee.trim(),
-        status: 'Absent',
-        imageUrl: `https://placehold.co/40x40.png?text=${(data.name || 'P').substring(0,2).toUpperCase()}`, // Ensure name exists
+        status: defaultStatus,
+        imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`, 
         createdAt: serverTimestamp(),
       };
-      const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION)); // Creates a ref with auto-ID
+      const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION)); 
       batch.set(participantRef, newParticipant);
       importedCount++;
     } catch (error) {
@@ -258,7 +291,6 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
     await batch.commit();
   } catch (error) {
     console.error("Error committing batch import: ", error);
-    // Note: If batch fails, all operations are rolled back. Error count might not reflect individual failures if batch itself fails.
     throw new Error("Batch import failed. Some participants or new schools/committees might not have been added.");
   }
 
@@ -272,16 +304,13 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
 
 // Admin Management Actions (Superior Admin)
 
-/**
- * Fetches users marked with an 'admin' role from the 'users' Firestore collection.
- */
 export async function getAdminUsers(): Promise<AdminManagedUser[]> {
   try {
     const usersCol = collection(db, USERS_COLLECTION);
     const q = query(usersCol, where('role', '==', 'admin'), orderBy('email'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => ({
-      id: docSnap.id, // Firestore document ID (which is the user's Auth UID)
+      id: docSnap.id, 
       uid: docSnap.data().uid, 
       ...docSnap.data(),
     } as AdminManagedUser));
@@ -291,15 +320,6 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
   }
 }
 
-/**
- * Grants admin role to a user by creating/updating their record in the 'users' Firestore collection.
- * This does NOT create a Firebase Auth user. Assumes the user already exists in Firebase Auth.
- * The document ID in the 'users' collection will be the user's Firebase Auth UID.
- *
- * @param email The email of the user to grant admin role.
- * @param displayName Optional display name for the user.
- * @param authUid The Firebase Auth UID of the user.
- */
 export async function grantAdminRole({ email, displayName, authUid }: { email: string; displayName?: string; authUid: string }): Promise<{ success: boolean; message: string; admin?: AdminManagedUser }> {
   if (!email || !authUid) {
     return { success: false, message: 'Email and Auth UID are required.' };
@@ -307,7 +327,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
   try {
     const usersCol = collection(db, USERS_COLLECTION);
-    const userDocRefByUid = doc(usersCol, authUid); // Document ID is the authUid
+    const userDocRefByUid = doc(usersCol, authUid); 
     const userDocSnapByUid = await getDoc(userDocRefByUid);
 
     if (userDocSnapByUid.exists()) {
@@ -315,7 +335,6 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       if (existingUserData.role === 'admin') {
         return { success: true, message: `User ${email} is already an admin.`, admin: { id: userDocSnapByUid.id, ...existingUserData} };
       } else {
-        // User exists but is not an admin, update their role
         await updateDoc(userDocRefByUid, {
           role: 'admin',
           email: email.toLowerCase(), 
@@ -326,16 +345,13 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         return { success: true, message: `Admin role granted to ${email}.`, admin: { id: userDocSnapByUid.id, uid: authUid, email, displayName, role: 'admin'} as AdminManagedUser };
       }
     } else {
-      // User does not exist with this UID, create new record
-      // Check if another user record exists with this email (could be an old record or different UID if data wasn't clean)
       const qEmail = query(usersCol, where('email', '==', email.toLowerCase()));
       const emailQuerySnapshot = await getDocs(qEmail);
       if (!emailQuerySnapshot.empty) {
-          // A user with this email but different/no UID record exists. This indicates a potential data conflict.
           return { success: false, message: `Error: A user record with email ${email} already exists but is not linked to this Auth UID (${authUid}). Please resolve manually or ensure the correct Auth UID is provided.` };
       }
       
-      const firstLetter = (displayName || email || 'A').substring(0,1).toUpperCase();
+      const firstLetter = (displayName || email || 'A').charAt(0).toUpperCase();
       const newAdminData: Omit<AdminManagedUser, 'id'> = {
         uid: authUid,
         email: email.toLowerCase(),
@@ -344,7 +360,6 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         createdAt: serverTimestamp(),
         avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`
       };
-      // Use setDoc since the document ID is known (authUid)
       await setDoc(userDocRefByUid, newAdminData); 
       
       revalidatePath('/superior-admin/admin-management');
@@ -353,25 +368,19 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
   } catch (error) {
     console.error('Error granting admin role:', error);
-    // It's good to be specific if possible, but generic fallback is okay
     const errorMessage = error instanceof Error ? error.message : 'Could not grant admin role.';
-    throw new Error(`Failed to grant admin role: ${errorMessage}`);
+    // throw new Error(`Failed to grant admin role: ${errorMessage}`); // Avoid throwing, return error object
+    return { success: false, message: `Failed to grant admin role: ${errorMessage}` };
   }
 }
 
 
-/**
- * Revokes admin role from a user by deleting their record from the 'users' Firestore collection.
- * This uses the user's Auth UID as the document ID in the 'users' collection.
- *
- * @param adminId The Firebase Auth UID of the admin whose role is to be revoked.
- */
 export async function revokeAdminRole(adminId: string): Promise<{ success: boolean; message: string }> {
   if (!adminId) {
     return { success: false, message: 'Admin Auth UID is required.' };
   }
   try {
-    const adminDocRef = doc(db, USERS_COLLECTION, adminId); // adminId here is the Auth UID
+    const adminDocRef = doc(db, USERS_COLLECTION, adminId); 
     const adminDocSnap = await getDoc(adminDocRef);
 
     if (!adminDocSnap.exists()) {
@@ -385,7 +394,10 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
   } catch (error) {
     console.error('Error revoking admin role:', error);
     const errorMessage = error instanceof Error ? error.message : 'Could not revoke admin role.';
-    throw new Error(`Failed to revoke admin role: ${errorMessage}`);
+    // throw new Error(`Failed to revoke admin role: ${errorMessage}`); // Avoid throwing, return error object
+    return { success: false, message: `Failed to revoke admin role: ${errorMessage}` };
   }
 }
 
+
+    

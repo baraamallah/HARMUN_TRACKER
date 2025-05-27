@@ -1,4 +1,5 @@
 
+
 # MUN Attendance Tracker
 
 The MUN Attendance Tracker is a Next.js application designed to help manage and track participant attendance for Model United Nations conferences. It features an admin dashboard for managing participants, a public view for general attendance information, and a superior admin panel for system-wide control.
@@ -24,7 +25,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Restricted access to a designated Owner UID via Firebase Authentication.
     *   Manage system-wide lists of Schools and Committees.
     *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
-    *   Links to placeholder pages for System Settings.
+    *   Manage System Settings (e.g., Default Attendance Status for new participants).
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
 *   **Theme Toggling**:
     *   User-selectable Light, Dark, or System theme preference.
@@ -39,7 +40,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **ShadCN UI Components**: Re-usable UI components.
 *   **Tailwind CSS**: Utility-first CSS framework for styling.
 *   **Firebase**:
-    *   **Firestore**: NoSQL database for storing participant data, system schools, system committees, and user roles.
+    *   **Firestore**: NoSQL database for storing participant data, system schools, system committees, user roles, and system configuration.
     *   **Firebase Authentication**: For user authentication (admin and superior admin).
 *   **Lucide React**: Library for icons.
 *   **Genkit (for AI)**: Configured but not actively used in current core features.
@@ -126,7 +127,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **Functionality**:
     *   Manage system-wide lists of Schools and Committees.
     *   Manage administrator accounts (grant/revoke admin privileges for existing Firebase Authentication users by providing their Auth UID).
-    *   Links to other control panels (e.g., System Settings - currently placeholders).
+    *   Manage system settings (e.g., default attendance status for new participants).
+    *   Links to other control panels.
 
 ### Public View (`/public`)
 
@@ -141,7 +143,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   `public/page.tsx`: Public participant view.
     *   `superior-admin/page.tsx`: Superior Admin dashboard.
     *   `superior-admin/admin-management/page.tsx`: Page for managing admin accounts.
-    *   `superior-admin/system-settings/page.tsx`: Placeholder page for system settings.
+    *   `superior-admin/system-settings/page.tsx`: Page for managing system-wide settings.
     *   `layout.tsx`: Root layout for the application.
     *   `globals.css`: Global styles and Tailwind CSS theme variables.
 *   `src/components/`: Reusable React components.
@@ -199,9 +201,9 @@ These are example rules. You **MUST** review and tailor them to your exact appli
     "participants": {
       // Allow public read for the /public page
       ".read": "true",
-      // Allow write access only to authenticated users (admins)
-      // You might want to refine this further to check for an 'admin' role if you implement it.
-      ".write": "request.auth != null"
+      // Allow write access only to authenticated users who have an 'admin' or 'owner' role
+      // This assumes you have a 'users' collection where roles are stored.
+      ".write": "request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.uid == 'YOUR_OWNER_UID')"
     },
     "system_schools": {
       // Allow public read for filters and forms
@@ -215,6 +217,12 @@ These are example rules. You **MUST** review and tailor them to your exact appli
       // Only the owner can create, update, or delete committees
       ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
     },
+    "system_config": {
+      // Only the owner can read and write system configuration
+      "{settingId}": { // e.g., main_settings
+        "allow read, write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
+      }
+    },
     "users": {
       // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
       // Documents are keyed by the Firebase Auth UID.
@@ -226,7 +234,7 @@ These are example rules. You **MUST** review and tailor them to your exact appli
       // Individual users might need to read their own role document if you expand functionality
       // Example: allow a user to read their own document if the document ID matches their UID
       // "{userId}": {
-      //   "allow read": "request.auth != null && request.auth.uid == userId"
+      //   "allow read": "request.auth != null && request.auth.uid == userId && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != null"
       // }
     }
   }
@@ -236,12 +244,17 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 **Explanation of User Rules Example:**
 *   The rules for the `users` collection allow the Owner to manage all documents within it (granting/revoking admin roles).
 *   The commented-out section for `"{userId}"` is an example of how you could allow individual users to read their *own* role document if needed.
-*   Granting `list` access on the collection level (`.read` on `users`) is generally needed for the owner to query the collection (e.g., `getAdminUsers`).
+*   Granting `list` access on the collection level (`.read` on `users`) is generally needed for the owner to query the collection (e.g., `getAdminUsers`). For more fine-grained list control, consider query-based rules.
+*   The `participants` write rule is an example of how to check a user's role from the `users` collection.
 
 ## Customization
 
 *   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts`.
-*   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly.
+*   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly. The default status for new participants can be configured in the Superior Admin panel.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
+
+```
+
+    
