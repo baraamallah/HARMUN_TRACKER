@@ -158,7 +158,7 @@ export function ParticipantForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {schools.length === 0 && <SelectItem value="" disabled>No schools available</SelectItem>}
+                      {/* Removed: schools.length === 0 && <SelectItem value="" disabled>No schools available</SelectItem> */}
                       {schools.map((school) => (
                         <SelectItem key={school} value={school}>
                           {school}
@@ -188,7 +188,7 @@ export function ParticipantForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {committees.length === 0 && <SelectItem value="" disabled>No committees available</SelectItem>}
+                      {/* Removed: committees.length === 0 && <SelectItem value="" disabled>No committees available</SelectItem> */}
                       {committees.map((committee) => (
                         <SelectItem key={committee} value={committee}>
                           {committee}
