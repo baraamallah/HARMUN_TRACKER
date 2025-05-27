@@ -191,48 +191,55 @@ Before deploying this application to a live environment, ensure you address the 
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
-```json
-{
-  "rules": {
-    "participants": {
-      // Allow public read for the /public page and authenticated users for the admin dashboard
-      "allow read": "if true;",
-      // Allow write access only to authenticated users who have an 'admin' role or are the owner.
-      "allow write": "if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');"
-    },
-    "system_schools": {
-      // Allow public read for filters and forms
-      "allow read": "if true;",
-      // Only the owner can create, update, or delete schools
-      "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
-    },
-    "system_committees": {
-      // Allow public read for filters and forms
-      "allow read": "if true;",
-      // Only the owner can create, update, or delete committees
-      "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
-    },
-    "system_config": {
-      // Only the owner can read and write system configuration
-      "{settingId}": { // e.g., main_settings
-        "allow read, write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
-      }
-    },
-    "users": {
-      // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
-      // Documents are keyed by the Firebase Auth UID.
+```
+rules_version = '2';
 
-      // Allow the owner to list all user documents for the admin management page
-      "allow list": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';",
-      
-      // Individual user documents:
-      "{userId}": {
-        // Allow the owner to create, update, delete any user role document
-        "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';",
-        // Allow authenticated users to read their own role document (if needed for client-side checks)
-        // Also allow owner to read any user document
-        "allow read": "if request.auth != null && (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');"
-      }
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /participants/{participantId} {
+      // Allow public read for the /public page and authenticated users for the admin dashboard
+      allow read: if true;
+      // Allow write access only to authenticated users who have an 'admin' role or are the owner.
+      allow write: if request.auth != null && 
+                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
+    }
+
+    match /system_schools/{schoolId} {
+      // Allow public read for filters and forms
+      allow read: if true;
+      // Only the owner can create, update, or delete schools
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+    }
+
+    match /system_committees/{committeeId} {
+      // Allow public read for filters and forms
+      allow read: if true;
+      // Only the owner can create, update, or delete committees
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+    }
+
+    match /system_config/{settingId} {
+      // Only the owner can read and write system configuration
+      allow read, write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+    }
+
+    // Users Collection (for roles - documents are keyed by Auth UID)
+    // Rules for individual user documents
+    match /users/{userId} {
+      // Allow the owner to create, update, delete any user role document
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+      // Allow authenticated users to read their own role document (if needed for client-side checks)
+      // Also allow owner to read any user document
+      allow read: if request.auth != null && 
+                  (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
+    }
+
+    // Rule for listing documents in the users collection
+    // This is needed for the getAdminUsers query by the owner
+    match /users {
+       allow list: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
   }
 }
