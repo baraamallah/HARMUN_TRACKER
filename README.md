@@ -95,7 +95,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
-    *   The `OWNER_UID` constant in this file defines who has superior admin access. The current value is `yBCdFnerFwVbfPQq4JWOUKnMb0z2`.
+    *   The `OWNER_UID` constant in this file defines who has superior admin access. The current value is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
     *   **If you change this UID, you MUST also update it in the Firestore Security Rules (see [Changing the Owner UID](#changing-the-owner-uid) and [Firestore Security Rules Examples](#firestore-security-rules-examples)).**
 
 ### Running the Application Locally
@@ -189,7 +189,7 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If your Owner UID in that file is different, you **MUST** update it in these rules before publishing. The current `OWNER_UID` in `src/lib/constants.ts` is `yBCdFnerFwVbfPQq4JWOUKnMb0z2`.
+The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If your Owner UID in that file is different, you **MUST** update it in these rules before publishing. The current `OWNER_UID` in `src/lib/constants.ts` is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
@@ -202,7 +202,7 @@ service cloud.firestore {
     // 🔁 Helper to check if user is Owner
     function isOwner() {
       return request.auth != null &&
-             request.auth.uid == "yBCdFnerFwVbfPQq4JWOUKnMb0z2"; // Ensure this UID matches src/lib/constants.ts
+             request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Ensure this UID matches src/lib/constants.ts
     }
 
     // 🔁 Helper to check if user is Admin
@@ -311,7 +311,7 @@ If you need to change who the owner is:
 ## Troubleshooting Deployment
 
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
-    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: yBCdFnerFwVbfPQq4JWOUKnMb0z2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
+    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
     *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`). The `isOwner()` helper function in the rules relies on the correct UID.
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
