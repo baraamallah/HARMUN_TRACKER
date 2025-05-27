@@ -1,5 +1,4 @@
 
-
 # MUN Attendance Tracker
 
 The MUN Attendance Tracker is a Next.js application designed to help manage and track participant attendance for Model United Nations conferences. It features an admin dashboard for managing participants, a public view for general attendance information, and a superior admin panel for system-wide control.
