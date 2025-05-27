@@ -25,7 +25,7 @@ import type { Participant } from '@/types'; // Added import
 //     name: "Alice Smith",
 //     school: "University High",
 //     committee: "DISEC",
-//     status: "In Break", 
+//     status: "In Break",
 //     imageUrl: "https://placehold.co/40x40.png",
 //   },
 //   // ... other mock participants
