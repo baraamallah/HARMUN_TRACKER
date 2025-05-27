@@ -191,51 +191,51 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-**Replace `YOUR_OWNER_UID` with the actual UID of the superior admin (from `src/lib/constants.ts`).**
+**Replace `JZgMG6xdwAYInXsdciaGj6qNAsG2` with the `OWNER_UID` from `src/lib/constants.ts` if it ever changes.**
 
-These are example rules. You **MUST** review and tailor them to your exact application needs.
+These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
-```json
-{
-  "rules": {
-    "participants": {
-      // Allow public read for the /public page
-      ".read": "true",
-      // Allow write access only to authenticated users who have an 'admin' or 'owner' role
-      // This assumes you have a 'users' collection where roles are stored.
-      ".write": "request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.uid == 'YOUR_OWNER_UID')"
-    },
-    "system_schools": {
-      // Allow public read for filters and forms
-      ".read": "true",
-      // Only the owner can create, update, or delete schools
-      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
-    },
-    "system_committees": {
-      // Allow public read for filters and forms
-      ".read": "true",
-      // Only the owner can create, update, or delete committees
-      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
-    },
-    "system_config": {
-      // Only the owner can read and write system configuration
-      "{settingId}": { // e.g., main_settings
-        "allow read, write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
-      }
-    },
-    "users": {
-      // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
-      // Documents are keyed by the Firebase Auth UID.
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-      // Superior Admin (Owner) can read/write/list all user role documents
-      ".read": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'",
-      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'",
-      
-      // Individual users might need to read their own role document if you expand functionality
-      // Example: allow a user to read their own document if the document ID matches their UID
-      // "{userId}": {
-      //   "allow read": "request.auth != null && request.auth.uid == userId && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != null"
-      // }
+    // Participants Collection
+    match /participants/{participantId} {
+      allow read: if true; // Allows public read for /public page
+      allow write: if request.auth != null &&
+                   (get(path("/databases/$(database)/documents/users/$(request.auth.uid)")).data.role == 'admin' ||
+                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'); // Admins or Owner can write
+    }
+
+    // System Schools Collection
+    match /system_schools/{schoolId} {
+      allow read: if true; // Allows public read for filters/forms
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write
+    }
+
+    // System Committees Collection
+    match /system_committees/{committeeId} {
+      allow read: if true; // Allows public read for filters/forms
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write
+    }
+
+    // System Configuration Collection
+    match /system_config/{settingId} { // e.g., settingId could be 'main_settings'
+      allow read, write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can read/write
+    }
+
+    // Users Collection (for roles - documents are keyed by Auth UID)
+    // Rule to allow owner to list users for admin management page
+    match /users {
+        allow list: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+    }
+    match /users/{userId} {
+      allow read: if request.auth != null && (
+                    request.auth.uid == userId || // User can read their own role
+                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2' // Owner can read any role
+                  );
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write (grant/revoke roles)
     }
   }
 }
@@ -243,8 +243,8 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 
 **Explanation of User Rules Example:**
 *   The rules for the `users` collection allow the Owner to manage all documents within it (granting/revoking admin roles).
-*   The commented-out section for `"{userId}"` is an example of how you could allow individual users to read their *own* role document if needed.
-*   Granting `list` access on the collection level (`.read` on `users`) is generally needed for the owner to query the collection (e.g., `getAdminUsers`). For more fine-grained list control, consider query-based rules.
+*   The `allow list` rule on `/users` is specifically for the `getAdminUsers` query to work for the Owner.
+*   Individual users can read their *own* role document if needed.
 *   The `participants` write rule is an example of how to check a user's role from the `users` collection.
 
 ## Customization
@@ -255,6 +255,3 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
 
-```
-
-    
