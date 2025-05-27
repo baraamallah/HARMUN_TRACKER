@@ -95,7 +95,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
-    *   The `OWNER_UID` constant in this file defines who has superior admin access. The current value is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
+    *   The `OWNER_UID` constant in this file defines who has superior admin access. The current value is `yBCdFnerFwVbfPQq4JWOUKnMb0z2`.
     *   **If you change this UID, you MUST also update it in the Firestore Security Rules (see [Changing the Owner UID](#changing-the-owner-uid) and [Firestore Security Rules Examples](#firestore-security-rules-examples)).**
 
 ### Running the Application Locally
@@ -189,7 +189,7 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If your Owner UID in that file is different, you **MUST** update it in these rules before publishing. The current `OWNER_UID` in `src/lib/constants.ts` is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
+The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If your Owner UID in that file is different, you **MUST** update it in these rules before publishing. The current `OWNER_UID` in `src/lib/constants.ts` is `yBCdFnerFwVbfPQq4JWOUKnMb0z2`.
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
@@ -210,7 +210,7 @@ service cloud.firestore {
       // in the 'users' collection, OR if the user is the Owner.
       allow write: if request.auth != null &&
                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
+                    request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2');
     }
 
     // System Schools Collection
@@ -220,7 +220,7 @@ service cloud.firestore {
       allow read: if true;
 
       // Only the Owner can create, update, or delete schools.
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+      allow write: if request.auth != null && request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2';
     }
 
     // System Committees Collection
@@ -230,14 +230,14 @@ service cloud.firestore {
       allow read: if true;
 
       // Only the Owner can create, update, or delete committees.
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+      allow write: if request.auth != null && request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2';
     }
 
     // System Configuration Collection
     // Defines who can read and write application-wide settings.
     match /system_config/{settingId} { // e.g., {settingId} could be 'main_settings'
       // Only the Owner can read and write system configuration.
-      allow read, write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+      allow read, write: if request.auth != null && request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2';
     }
 
     // Users Collection (for managing admin roles)
@@ -245,19 +245,19 @@ service cloud.firestore {
     // Example document: { uid: "someAuthUID", email: "admin@example.com", role: "admin" }
     match /users/{userId} {
       // Allow the Owner to create, update, or delete any user role document.
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+      allow write: if request.auth != null && request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2';
 
       // Allow an authenticated user to read their own role document.
       // Also, allow the Owner to read any user's role document.
       allow read: if request.auth != null &&
-                  (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
+                  (request.auth.uid == userId || request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2');
     }
 
     // Rule for LISTING documents in the users collection.
     // This is specifically needed for the getAdminUsers query by the Owner
     // on the Admin Account Management page.
     match /users {
-       allow list: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
+       allow list: if request.auth != null && request.auth.uid == 'yBCdFnerFwVbfPQq4JWOUKnMb0z2';
     }
   }
 }
@@ -302,7 +302,7 @@ If you need to change who the owner is:
 ## Troubleshooting Deployment
 
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
-    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
+    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: yBCdFnerFwVbfPQq4JWOUKnMb0z2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
     *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`).
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.

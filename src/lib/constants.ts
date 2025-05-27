@@ -16,4 +16,4 @@
  * - src/components/layout/AppLayoutClientShell.tsx (to conditionally show the Superior Admin link)
  * - Firestore Security Rules (in your Firebase project console, see README.md for examples)
  */
-export const OWNER_UID = "JZgMG6xdwAYInXsdciaGj6qNAsG2";
+export const OWNER_UID = "yBCdFnerFwVbfPQq4JWOUKnMb0z2";
