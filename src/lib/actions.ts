@@ -66,9 +66,9 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   try {
     const participantsCol = collection(db, PARTICIPANTS_COLLECTION);
-    let q = query(participantsCol, orderBy('name')); 
-
+    let q;
     const queryConstraints = [];
+
     if (filters?.school && filters.school !== "All Schools") {
       queryConstraints.push(where('school', '==', filters.school));
     }
@@ -79,11 +79,11 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       queryConstraints.push(where('status', '==', filters.status));
     }
     
-    if (queryConstraints.length > 0) {
-      q = query(participantsCol, ...queryConstraints, orderBy('name'));
-    } else {
-       q = query(participantsCol, orderBy('name'));
-    }
+    // Always order by name.
+    // If there are 'where' filters on other fields, Firestore will likely require a composite index.
+    // Example: If filtering by school, an index on (school ASC, name ASC) would be needed.
+    // The Firestore error message in the browser console usually provides a link to create this index.
+    q = query(participantsCol, ...queryConstraints, orderBy('name'));
     
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => ({
@@ -102,8 +102,22 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 
     return participantsData;
   } catch (error) {
-    console.error("Error fetching participants: ", error);
-    throw new Error("Failed to fetch participants.");
+    console.error(
+      "HARMUN_TRACKER: Error fetching participants from Firestore. Active filters:", 
+      filters, 
+      "Underlying error:", 
+      error
+    );
+    // Construct a more informative error message
+    let detailedMessage = "Failed to fetch participants from Firestore.";
+    if (error instanceof Error && (error.message.includes('firestore/failed-precondition') || error.message.includes('requires an index') || error.message.includes('The query requires an index'))) {
+      detailedMessage += " This often indicates a missing Firestore index. Please check your browser's developer console for a Firestore error message that might include a link to create the required index in your Firebase project console.";
+    } else if (error instanceof Error) {
+      detailedMessage += ` Details: ${error.message}`;
+    } else {
+      detailedMessage += ` Details: ${String(error)}`;
+    }
+    throw new Error(detailedMessage);
   }
 }
 
@@ -350,24 +364,22 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
     return { success: false, message: 'Auth UID cannot be empty.' };
   }
 
-
   try {
     const usersCol = collection(db, USERS_COLLECTION);
     const userDocRefByUid = doc(usersCol, authUid); 
     const userDocSnapByUid = await getDoc(userDocRefByUid);
 
     if (userDocSnapByUid.exists()) {
-      const dataFields = userDocSnapByUid.data(); // Raw data fields, does not include 'id'
+      const dataFields = userDocSnapByUid.data();
       
-      // Explicitly construct AdminManagedUser to ensure all fields are correctly sourced
       const existingAdminObject: AdminManagedUser = {
-        id: userDocSnapByUid.id, // Use the document snapshot ID
+        id: userDocSnapByUid.id,
         uid: dataFields.uid || authUid,
         email: dataFields.email,
         displayName: dataFields.displayName,
         role: dataFields.role,
         createdAt: dataFields.createdAt,
-        updatedAt: dataFields.updatedAt,
+        updatedAt: dataFields.updatedAt, 
         avatarUrl: dataFields.avatarUrl,
       };
 
@@ -384,11 +396,11 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         await updateDoc(userDocRefByUid, updatedFields);
         
         const updatedAdminForReturn: AdminManagedUser = {
-          ...existingAdminObject, // Start with existing data (like createdAt, avatarUrl)
-          role: 'admin',      // Override role
+          ...existingAdminObject,
+          role: 'admin',
           email: updatedFields.email,
           displayName: updatedFields.displayName,
-          // updatedAt will be a server timestamp, won't be immediately available as a JS Date here.
+          // updatedAt will be a server timestamp, not immediately a JS Date here.
         };
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to ${email} (UID: ${authUid}).`, admin: updatedAdminForReturn };
@@ -399,9 +411,6 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const emailQuerySnapshot = await getDocs(qEmail);
       if (!emailQuerySnapshot.empty) {
           const conflictingUserDoc = emailQuerySnapshot.docs[0];
-          // Check if the conflicting user is the same one we are trying to add (by authUid)
-          // This case should have been caught by userDocSnapByUid.exists() if authUid was the same.
-          // So, if we are here, it means the email is used by a *different* admin UID.
           if (conflictingUserDoc.id !== authUid) {
             return { success: false, message: `Error: Email ${email} is already associated with a different admin (UID: ${conflictingUserDoc.id}). Please use a unique email or resolve the conflict.` };
           }
@@ -423,6 +432,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const createdAdmin: AdminManagedUser = {
         id: authUid, 
         ...newAdminDataFields,
+        // Timestamps will be server-generated
       };
       
       revalidatePath('/superior-admin/admin-management');
@@ -446,16 +456,10 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     const adminDocSnap = await getDoc(adminDocRef);
 
     if (!adminDocSnap.exists()) {
-      // It's possible the user exists in Auth but not in our 'users' collection or not as an admin.
-      // For revoking, we primarily care about removing them from the 'users' collection if they are there.
       return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` };
     }
     
-    // Instead of deleting the doc (which removes all user info), just update the role or remove it.
-    // If you want to completely remove from this list:
     await deleteDoc(adminDocRef);
-    // If you want to just change role to something like 'user' or null:
-    // await updateDoc(adminDocRef, { role: null, updatedAt: serverTimestamp() }); 
     
     revalidatePath('/superior-admin/admin-management');
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
@@ -465,5 +469,4 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     return { success: false, message: `Failed to revoke admin role: ${errorMessage}` };
   }
 }
-
     
