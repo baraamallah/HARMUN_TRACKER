@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter, // Added CardFooter
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
