@@ -2,7 +2,7 @@
 // It can be kept for reference or removed.
 // For a clean setup, it's better to remove it if all data operations now go through Firestore.
 
-// import type { Participant } from '@/types';
+import type { Participant } from '@/types'; // Added import
 
 // Helper to generate IDs if uuid is not available/preferred for mocks
 // const generateId = () => Math.random().toString(36).substr(2, 9);
