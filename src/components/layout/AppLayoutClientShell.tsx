@@ -8,11 +8,10 @@ import {
   Home,
   Eye,
   LogOut,
-  UserCircle,
-  LogIn,
-  SettingsIcon, 
   UserCog, 
+  SettingsIcon, 
   ShieldCheck, 
+  LogIn,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -43,6 +42,8 @@ import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
 import { OWNER_UID } from '@/lib/constants'; 
+import { useToast } from '@/hooks/use-toast';
+
 
 interface NavItem {
   href: string;
@@ -67,6 +68,7 @@ const superiorAdminNavItem: NavItem = {
 
 export function AppLayoutClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { toast } = useToast();
   const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
 
@@ -81,12 +83,19 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // User state will be updated by onAuthStateChanged, which will trigger re-renders
-      // Potentially redirect to login page after logout
-      // router.push('/auth/login'); // if using useRouter
+      toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     } catch (error) {
       console.error("Error signing out: ", error);
+      toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
     }
+  };
+
+  const handlePlaceholderClick = (featureName: string) => {
+    toast({
+      title: 'Coming Soon!',
+      description: `${featureName} page is not yet implemented.`,
+      variant: 'default',
+    });
   };
 
   const getAvatarFallback = () => {
@@ -178,11 +187,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                   {loggedInUser.displayName || loggedInUser.email || "My Account"}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled> 
-                  <UserCog className="mr-2 h-4 w-4" /> Profile (Not Implemented)
+                <DropdownMenuItem onClick={() => handlePlaceholderClick('Profile')}> 
+                  <UserCog className="mr-2 h-4 w-4" /> Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled> 
-                  <SettingsIcon className="mr-2 h-4 w-4" /> Settings (Not Implemented)
+                <DropdownMenuItem onClick={() => handlePlaceholderClick('Settings')}> 
+                  <SettingsIcon className="mr-2 h-4 w-4" /> Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>

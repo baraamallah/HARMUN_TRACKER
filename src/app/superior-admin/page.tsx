@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookMarked, Landmark, PlusCircle, ArrowLeft, ExternalLink, Settings2, UserPlus } from 'lucide-react';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText } from 'lucide-react'; // Updated icons
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,12 +29,10 @@ export default function SuperiorAdminPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  // State for managing schools
   const [systemSchools, setSystemSchools] = useState<string[]>([]);
   const [newSchoolName, setNewSchoolName] = useState('');
   const [isLoadingSchools, setIsLoadingSchools] = useState(false);
 
-  // State for managing committees
   const [systemCommittees, setSystemCommittees] = useState<string[]>([]);
   const [newCommitteeName, setNewCommitteeName] = useState('');
   const [isLoadingCommittees, setIsLoadingCommittees] = useState(false);
@@ -46,7 +44,7 @@ export default function SuperiorAdminPage() {
       const schools = await getSystemSchools();
       setSystemSchools(schools);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to fetch schools.', variant: 'destructive' });
+      toast({ title: 'Error Fetching Schools', description: 'Failed to load the list of schools.', variant: 'destructive' });
     } finally {
       setIsLoadingSchools(false);
     }
@@ -58,7 +56,7 @@ export default function SuperiorAdminPage() {
       const committees = await getSystemCommittees();
       setSystemCommittees(committees);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to fetch committees.', variant: 'destructive' });
+      toast({ title: 'Error Fetching Committees', description: 'Failed to load the list of committees.', variant: 'destructive' });
     } finally {
       setIsLoadingCommittees(false);
     }
@@ -84,11 +82,11 @@ export default function SuperiorAdminPage() {
     startTransition(async () => {
       const result = await addSystemSchool(newSchoolName);
       if (result.success) {
-        toast({ title: 'Success', description: `School "${newSchoolName}" added.` });
+        toast({ title: 'School Added', description: `School "${newSchoolName}" has been successfully added to the system.` });
         setNewSchoolName('');
-        fetchSchools(); // Re-fetch schools
+        fetchSchools(); 
       } else {
-        toast({ title: 'Error', description: result.error || 'Failed to add school.', variant: 'destructive' });
+        toast({ title: 'Error Adding School', description: result.error || 'An unexpected error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -101,11 +99,11 @@ export default function SuperiorAdminPage() {
     startTransition(async () => {
       const result = await addSystemCommittee(newCommitteeName);
       if (result.success) {
-        toast({ title: 'Success', description: `Committee "${newCommitteeName}" added.` });
+        toast({ title: 'Committee Added', description: `Committee "${newCommitteeName}" has been successfully added.` });
         setNewCommitteeName('');
-        fetchCommittees(); // Re-fetch committees
+        fetchCommittees(); 
       } else {
-        toast({ title: 'Error', description: result.error || 'Failed to add committee.', variant: 'destructive' });
+        toast({ title: 'Error Adding Committee', description: result.error || 'An unexpected error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -113,7 +111,7 @@ export default function SuperiorAdminPage() {
   const handleSuperAdminLogout = async () => {
     try {
       await signOut(auth);
-      // The onAuthStateChanged listener will handle UI updates (redirect or access denial)
+      toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -123,17 +121,17 @@ export default function SuperiorAdminPage() {
   if (isLoadingAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
-        <Card className="w-full max-w-md shadow-2xl">
-          <CardHeader className="text-center">
-             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <ShieldAlert size={32} />
+        <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary">
+          <CardHeader className="text-center py-8">
+             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary animate-pulse">
+                <ShieldAlert size={40} />
               </div>
-            <CardTitle className="text-2xl font-bold">Superior Admin Access</CardTitle>
-            <CardDescription>Verifying your credentials...</CardDescription>
+            <CardTitle className="text-3xl font-bold tracking-tight">Superior Admin Access</CardTitle>
+            <CardDescription className="text-lg mt-2 text-muted-foreground">Verifying credentials...</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+          <CardContent className="space-y-4 p-6">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -142,38 +140,37 @@ export default function SuperiorAdminPage() {
 
   if (!currentUser || currentUser.uid !== OWNER_UID) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
-        <Card className="w-full max-w-lg shadow-2xl border-destructive">
-          <CardHeader>
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <TriangleAlert size={48} />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background p-6 text-center">
+        <Card className="w-full max-w-lg shadow-2xl border-t-4 border-destructive">
+          <CardHeader className="py-8">
+            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert size={60} />
             </div>
-            <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
-            <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You do not have permission to access this page.
+            <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
+            <CardDescription className="text-xl mt-3 text-muted-foreground">
               This area is restricted to the Superior Administrator.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {currentUser && ( 
-              <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full">
-                <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Wrong User'})
+              <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full text-lg py-3">
+                <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Restricted User'})
               </Button>
             )}
             {!currentUser && (
-                 <p className="text-sm text-muted-foreground mt-4">
-                    Please <Link href="/auth/login" className="text-primary hover:underline">log in</Link> with the superior admin account.
+                 <p className="text-md text-muted-foreground mt-4">
+                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account.
                  </p>
             )}
           </CardContent>
-          <CardFooter className="flex-col gap-4">
+          <CardFooter className="flex-col gap-4 p-6 pt-2">
             <Link href="/" legacyBehavior passHref>
-              <Button variant="outline" className="w-full">
-                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              <Button variant="outline" className="w-full text-md py-3">
+                <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
               </Button>
             </Link>
-            <p className="text-xs text-muted-foreground">
-              If you believe this is an error, please contact support or ensure you are logged in with the correct account.
+            <p className="text-xs text-muted-foreground mt-4">
+              If you believe this is an error, please verify your login credentials or contact system support.
             </p>
           </CardFooter>
         </Card>
@@ -182,41 +179,43 @@ export default function SuperiorAdminPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/30 to-background">
+      <header className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-lg shadow-sm">
         <div className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <ShieldAlert className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Superior Admin Dashboard
-            </h1>
+            <ShieldAlert className="h-10 w-10 text-primary" />
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                Superior Admin Panel
+                </h1>
+                <p className="text-xs text-green-600 dark:text-green-400">
+                    Authenticated as: {currentUser.email}
+                </p>
+            </div>
           </div>
-          <Button variant="outline" onClick={handleSuperAdminLogout} size="lg">
+          <Button variant="outline" onClick={handleSuperAdminLogout} size="lg" className="text-md">
             <LogOut className="mr-2 h-5 w-5" />
             Logout
           </Button>
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 p-6 bg-card border rounded-xl shadow-lg">
-          <h2 className="text-3xl font-semibold mb-2 text-foreground">Welcome, Superior Administrator!</h2>
-          <p className="text-lg text-muted-foreground">
-            You have master control over the MUN Attendance Tracker system.
-          </p>
-           <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-            Authenticated as: {currentUser.email || currentUser.uid}
+      <main className="flex-1 container mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div className="mb-10 p-8 bg-card border border-primary/20 rounded-xl shadow-lg">
+          <h2 className="text-4xl font-semibold mb-3 text-foreground">Welcome, System Owner!</h2>
+          <p className="text-xl text-muted-foreground">
+            You have master control over the MUN Attendance Tracker. Manage system lists, user access, and global settings.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {/* Manage Schools Card */}
-          <Card className="hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Manage Schools</CardTitle>
-              <Landmark className="h-6 w-6 text-primary" />
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-primary">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Manage Schools</CardTitle>
+              <Landmark className="h-7 w-7 text-primary" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <div className="space-y-4">
                 <div className="flex gap-2">
                   <Input
@@ -227,38 +226,38 @@ export default function SuperiorAdminPage() {
                     disabled={isPending}
                     className="flex-grow"
                   />
-                  <Button onClick={handleAddSchool} disabled={isPending || !newSchoolName.trim()}>
+                  <Button onClick={handleAddSchool} disabled={isPending || !newSchoolName.trim()} className="bg-primary hover:bg-primary/90">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add
                   </Button>
                 </div>
                 <Separator />
-                <h4 className="text-sm font-medium text-muted-foreground">Existing Schools:</h4>
+                <h4 className="text-md font-medium text-muted-foreground">Existing Schools:</h4>
                 {isLoadingSchools ? (
-                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-32 w-full rounded-md" />
                 ) : systemSchools.length > 0 ? (
-                  <ScrollArea className="h-48 w-full rounded-md border p-2">
-                    <ul className="space-y-1">
+                  <ScrollArea className="h-48 w-full rounded-md border bg-muted/30 p-3">
+                    <ul className="space-y-1.5">
                       {systemSchools.map((school) => (
-                        <li key={school} className="text-sm p-1.5 hover:bg-muted rounded-sm">
+                        <li key={school} className="text-sm p-2 bg-background rounded-md shadow-sm hover:bg-accent/10">
                           {school}
                         </li>
                       ))}
                     </ul>
                   </ScrollArea>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">No schools added yet.</p>
+                  <p className="text-sm text-muted-foreground italic py-4 text-center">No schools registered in the system yet.</p>
                 )}
               </div>
             </CardContent>
           </Card>
 
           {/* Manage Committees Card */}
-          <Card className="hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Manage Committees</CardTitle>
-              <BookMarked className="h-6 w-6 text-primary" />
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-accent">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Manage Committees</CardTitle>
+              <BookOpenText className="h-7 w-7 text-accent" /> 
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <div className="space-y-4">
                 <div className="flex gap-2">
                   <Input
@@ -269,106 +268,123 @@ export default function SuperiorAdminPage() {
                     disabled={isPending}
                     className="flex-grow"
                   />
-                  <Button onClick={handleAddCommittee} disabled={isPending || !newCommitteeName.trim()}>
+                  <Button onClick={handleAddCommittee} disabled={isPending || !newCommitteeName.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add
                   </Button>
                 </div>
                 <Separator />
-                <h4 className="text-sm font-medium text-muted-foreground">Existing Committees:</h4>
+                <h4 className="text-md font-medium text-muted-foreground">Existing Committees:</h4>
                 {isLoadingCommittees ? (
-                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-32 w-full rounded-md" />
                 ) : systemCommittees.length > 0 ? (
-                  <ScrollArea className="h-48 w-full rounded-md border p-2">
-                    <ul className="space-y-1">
+                  <ScrollArea className="h-48 w-full rounded-md border bg-muted/30 p-3">
+                    <ul className="space-y-1.5">
                       {systemCommittees.map((committee) => (
-                        <li key={committee} className="text-sm p-1.5 hover:bg-muted rounded-sm">
+                        <li key={committee} className="text-sm p-2 bg-background rounded-md shadow-sm hover:bg-primary/10">
                           {committee}
                         </li>
                       ))}
                     </ul>
                   </ScrollArea>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">No committees added yet.</p>
+                  <p className="text-sm text-muted-foreground italic py-4 text-center">No committees registered in the system yet.</p>
                 )}
               </div>
             </CardContent>
           </Card>
         
-          <Card className="hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Global Participant Data</CardTitle>
-              <DatabaseZap className="h-6 w-6 text-primary" />
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-blue-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Global Participant Data</CardTitle>
+              <DatabaseZap className="h-7 w-7 text-blue-500" />
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                View, edit, and manage all participant records from the main dashboard.
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                View, edit, and manage all participant records directly from the main admin dashboard.
               </p>
             </CardContent>
             <CardFooter>
               <Link href="/" passHref legacyBehavior>
-                <Button className="w-full" variant="secondary">
+                <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white">
                   <ExternalLink className="mr-2 h-4 w-4" /> Go to Participant Dashboard
                 </Button>
               </Link>
             </CardFooter>
           </Card>
-        </div>
         
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mt-6">
-          <Card className="hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">System Settings</CardTitle>
-              <Settings2 className="h-6 w-6 text-primary" />
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-purple-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">System Settings</CardTitle>
+              <Settings2 className="h-7 w-7 text-purple-500" />
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Configure application-wide settings and operational parameters.
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure application-wide settings and operational parameters, like default attendance status.
               </p>
             </CardContent>
             <CardFooter>
               <Link href="/superior-admin/system-settings" passHref legacyBehavior>
-                <Button className="w-full" variant="secondary">
+                <Button className="w-full bg-purple-500 hover:bg-purple-600 text-white">
                    <Settings className="mr-2 h-4 w-4" /> Configure System Settings
                 </Button>
               </Link>
             </CardFooter>
           </Card>
 
-          <Card className="hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Admin Account Management</CardTitle>
-              <UserPlus className="h-6 w-6 text-primary" />
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-teal-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Admin Account Management</CardTitle>
+              <UserPlus className="h-7 w-7 text-teal-500" />
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Create, modify, and manage accounts for regular administrators.
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                Grant or revoke admin privileges for existing application users.
               </p>
             </CardContent>
             <CardFooter>
               <Link href="/superior-admin/admin-management" passHref legacyBehavior>
-                <Button className="w-full" variant="secondary">
+                <Button className="w-full bg-teal-500 hover:bg-teal-600 text-white">
                     <Users className="mr-2 h-4 w-4" /> Manage Admin Accounts
                 </Button>
               </Link>
             </CardFooter>
           </Card>
+           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-gray-500 md:col-span-2 lg:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">View System Logs</CardTitle>
+              <ScrollText className="h-7 w-7 text-gray-500" />
+            </CardHeader>
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                (Placeholder) Access detailed system and audit logs for monitoring and troubleshooting.
+              </p>
+            </CardContent>
+            <CardFooter>
+                <Button className="w-full" variant="secondary" disabled>
+                    <ExternalLink className="mr-2 h-4 w-4" /> View Logs (Not Implemented)
+                </Button>
+            </CardFooter>
+          </Card>
         </div>
         
-        <div className="mt-8 p-4 bg-green-600/10 border border-green-600/30 rounded-lg text-center">
-          <p className="font-medium text-green-700 dark:text-green-500">
-            Security Notice: Access to this panel is restricted by Firebase Authentication to the designated Owner UID. Ensure your account remains secure.
+        <div className="mt-12 p-6 bg-green-600/10 border border-green-700/30 rounded-xl text-center">
+          <p className="font-medium text-lg text-green-700 dark:text-green-400">
+            <ShieldAlert className="inline-block mr-2 h-6 w-6 align-middle" />
+            Security Notice: Access to this panel is restricted. Ensure your account credentials remain secure.
           </p>
         </div>
       </main>
 
-      <footer className="py-8 border-t mt-12 bg-background/80">
+      <footer className="py-10 border-t mt-16 bg-background/80">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-md text-muted-foreground">
             MUN Tracker - Superior Administration Panel &copy; {new Date().getFullYear()}
+          </p>
+           <p className="text-xs text-muted-foreground mt-1">
+            UID: {OWNER_UID}
           </p>
         </div>
       </footer>
     </div>
   );
 }
-

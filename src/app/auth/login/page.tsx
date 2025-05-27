@@ -39,9 +39,9 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       toast({
         title: 'Login Successful',
-        description: 'Welcome back!',
+        description: 'Welcome back! Redirecting to dashboard...',
       });
-      router.push('/'); // Redirect to admin dashboard
+      router.push('/'); 
     } catch (e: any) {
       console.error('Login error:', e);
       let errorMessage = 'Failed to log in. Please check your credentials.';
@@ -62,25 +62,27 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="w-full max-w-md shadow-xl">
-      <CardHeader className="text-center">
+    <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
+      <CardHeader className="text-center pt-8">
         <div className="mb-6 flex justify-center">
-          <Logo />
+          <Logo size="lg" />
         </div>
-        <CardTitle className="text-2xl font-bold tracking-tight">Admin Login</CardTitle>
-        <CardDescription>Enter your credentials to access the dashboard.</CardDescription>
+        <CardTitle className="text-3xl font-bold tracking-tight">Admin Portal Access</CardTitle>
+        <CardDescription className="text-md text-muted-foreground">
+          Sign in to manage MUN attendance.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 py-8">
         <form onSubmit={handleLogin} className="space-y-6">
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
+            <Alert variant="destructive" className="bg-destructive/10">
+              <AlertCircle className="h-5 w-5" />
+              <AlertTitle className="font-semibold">Login Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
             <Input
               id="email"
               type="email"
@@ -89,6 +91,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={isLoading}
+              className="py-3 text-base"
             />
           </div>
           <div className="space-y-2">
@@ -101,28 +104,26 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
+              className="py-3 text-base"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full py-3 text-base font-semibold" disabled={isLoading} size="lg">
             {isLoading ? (
-              'Logging in...'
+              'Authenticating...'
             ) : (
               <>
-                <LogIn className="mr-2 h-4 w-4" /> Login
+                <LogIn className="mr-2 h-5 w-5" /> Secure Login
               </>
             )}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex-col items-center gap-2 text-sm">
-        {/* <Link href="/auth/forgot-password" legacyBehavior>
-          <a className="text-primary hover:underline">Forgot password?</a>
-        </Link> */}
+      <CardFooter className="flex-col items-center gap-3 pb-8 text-sm">
         <p className="text-muted-foreground">
-          Don&apos;t have an admin account? Contact the superior admin.
+          No admin account? Contact the superior administrator.
         </p>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Public view is accessible <Link href="/public" className="text-primary hover:underline">here</Link> without login.
+        <p className="mt-2 text-xs text-muted-foreground">
+          View public attendance data <Link href="/public" className="font-medium text-primary hover:underline">here</Link> (no login required).
         </p>
       </CardFooter>
     </Card>

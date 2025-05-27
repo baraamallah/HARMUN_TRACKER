@@ -15,7 +15,7 @@ import {
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
 import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, UserX } from 'lucide-react'; // Changed UsersX to UserX
+import { ArrowUpDown, UserX, Users } from 'lucide-react'; 
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ParticipantTableProps {
@@ -52,35 +52,35 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
   };
 
   const renderSortIcon = (key: SortKey) => {
-    if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-30 group-hover:opacity-70" />;
     return sortOrder === 'asc' ? 
-      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100" /> : 
-      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 transform rotate-180" />;
+      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 text-primary" /> : 
+      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 text-primary transform rotate-180" />;
   };
   
   if (isLoading) {
     return (
-      <div className="rounded-md border shadow-sm">
+      <div className="rounded-lg border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/50">
             <TableRow>
-              {visibleColumns.avatar && <TableHead className="w-[80px]"><Skeleton className="h-5 w-12" /></TableHead>}
-              {visibleColumns.name && <TableHead><Skeleton className="h-5 w-24" /></TableHead>}
-              {visibleColumns.school && <TableHead><Skeleton className="h-5 w-20" /></TableHead>}
-              {visibleColumns.committee && <TableHead><Skeleton className="h-5 w-20" /></TableHead>}
-              {visibleColumns.status && <TableHead><Skeleton className="h-5 w-20" /></TableHead>}
-              {visibleColumns.actions && <TableHead className="text-right w-[100px]"><Skeleton className="h-5 w-10 ml-auto" /></TableHead>}
+              {visibleColumns.avatar && <TableHead className="w-[70px]"><Skeleton className="h-5 w-12" /></TableHead>}
+              {visibleColumns.name && <TableHead><Skeleton className="h-5 w-32" /></TableHead>}
+              {visibleColumns.school && <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-28" /></TableHead>}
+              {visibleColumns.committee && <TableHead className="hidden lg:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
+              {visibleColumns.status && <TableHead><Skeleton className="h-5 w-24" /></TableHead>}
+              {visibleColumns.actions && <TableHead className="text-right w-[80px]"><Skeleton className="h-5 w-10 ml-auto" /></TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {[...Array(5)].map((_, i) => (
-              <TableRow key={`skel-row-${i}`}>
+              <TableRow key={`skel-row-${i}`} className="bg-background">
                 {visibleColumns.avatar && <TableCell><Skeleton className="h-10 w-10 rounded-full" /></TableCell>}
-                {visibleColumns.name && <TableCell><Skeleton className="h-5 w-32" /></TableCell>}
-                {visibleColumns.school && <TableCell><Skeleton className="h-5 w-24" /></TableCell>}
-                {visibleColumns.committee && <TableCell><Skeleton className="h-5 w-20" /></TableCell>}
+                {visibleColumns.name && <TableCell><Skeleton className="h-5 w-40" /></TableCell>}
+                {visibleColumns.school && <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-32" /></TableCell>}
+                {visibleColumns.committee && <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-28" /></TableCell>}
                 {visibleColumns.status && <TableCell><Skeleton className="h-6 w-28 rounded-full" /></TableCell>}
-                {visibleColumns.actions && <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>}
+                {visibleColumns.actions && <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded-md" /></TableCell>}
               </TableRow>
             ))}
           </TableBody>
@@ -91,72 +91,74 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
 
   if (participants.length === 0 && !isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 border rounded-md shadow-sm bg-card p-6 text-center">
-        <UserX className="h-20 w-20 text-muted-foreground mb-4 opacity-70" data-ai-hint="no users" /> 
-        <h3 className="text-xl font-semibold text-muted-foreground">No Participants Found</h3>
-        <p className="text-muted-foreground">Try adjusting your filters or add new participants.</p>
+      <div className="flex flex-col items-center justify-center min-h-[400px] border rounded-lg shadow-sm bg-card p-10 text-center">
+        <Users className="h-24 w-24 text-muted-foreground/50 mb-6" data-ai-hint="no users group" /> 
+        <h3 className="text-2xl font-semibold text-foreground mb-2">No Participants Found</h3>
+        <p className="text-lg text-muted-foreground">
+          Try adjusting your search filters or add new participants to the list.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border shadow-sm bg-card">
+    <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
-        <TableHeader>
+        <TableHeader className="bg-muted/50">
           <TableRow>
-            {visibleColumns.avatar && <TableHead className="w-[80px]">Avatar</TableHead>}
+            {visibleColumns.avatar && <TableHead className="w-[70px] pl-6">Avatar</TableHead>}
             {visibleColumns.name && (
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('name')} className="px-1">
+              <TableHead className="min-w-[150px]">
+                <Button variant="ghost" onClick={() => handleSort('name')} className="px-1 group">
                   Name {renderSortIcon('name')}
                 </Button>
               </TableHead>
             )}
             {visibleColumns.school && (
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('school')} className="px-1">
+              <TableHead className="hidden md:table-cell min-w-[150px]">
+                <Button variant="ghost" onClick={() => handleSort('school')} className="px-1 group">
                   School {renderSortIcon('school')}
                 </Button>
               </TableHead>
             )}
             {visibleColumns.committee && (
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('committee')} className="px-1">
+              <TableHead className="hidden lg:table-cell min-w-[150px]">
+                <Button variant="ghost" onClick={() => handleSort('committee')} className="px-1 group">
                   Committee {renderSortIcon('committee')}
                 </Button>
               </TableHead>
             )}
             {visibleColumns.status && (
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('status')} className="px-1">
+              <TableHead className="min-w-[120px]">
+                <Button variant="ghost" onClick={() => handleSort('status')} className="px-1 group">
                   Status {renderSortIcon('status')}
                 </Button>
               </TableHead>
             )}
-            {visibleColumns.actions && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+            {visibleColumns.actions && <TableHead className="text-right w-[80px] pr-6">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedParticipants.map((participant) => (
-            <TableRow key={participant.id} className="hover:bg-muted/50 transition-colors">
+            <TableRow key={participant.id} className="hover:bg-muted/30 transition-colors">
               {visibleColumns.avatar && (
-                <TableCell>
-                  <Avatar className="h-10 w-10">
+                <TableCell className="pl-6">
+                  <Avatar className="h-10 w-10 border">
                     <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
                     <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                 </TableCell>
               )}
-              {visibleColumns.name && <TableCell className="font-medium">{participant.name}</TableCell>}
-              {visibleColumns.school && <TableCell>{participant.school}</TableCell>}
-              {visibleColumns.committee && <TableCell>{participant.committee}</TableCell>}
+              {visibleColumns.name && <TableCell className="font-medium text-foreground">{participant.name}</TableCell>}
+              {visibleColumns.school && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.school}</TableCell>}
+              {visibleColumns.committee && <TableCell className="hidden lg:table-cell text-muted-foreground">{participant.committee}</TableCell>}
               {visibleColumns.status && (
                 <TableCell>
                   <AttendanceStatusBadge status={participant.status} />
                 </TableCell>
               )}
               {visibleColumns.actions && (
-                <TableCell className="text-right">
+                <TableCell className="text-right pr-6">
                   <ParticipantActions participant={participant} onEdit={onEditParticipant} />
                 </TableCell>
               )}
