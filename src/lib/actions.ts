@@ -51,13 +51,15 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
     await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
     revalidatePath('/superior-admin/system-settings');
-    // Potentially revalidate other paths if new participant forms might be open elsewhere
-    revalidatePath('/'); // Revalidate dashboard where new participants might be added
+    revalidatePath('/'); 
     return { success: true };
   } catch (error) {
     console.error("Error updating default attendance status setting: ", error);
-    const errorMessage = error instanceof Error ? error.message : 'Could not update setting.';
-    return { success: false, error: `Failed to update setting: ${errorMessage}` };
+    let detailedMessage = 'Could not update setting.';
+    if (error instanceof Error) {
+        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_config'.`;
+    }
+    return { success: false, error: detailedMessage };
   }
 }
 
@@ -79,10 +81,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       queryConstraints.push(where('status', '==', filters.status));
     }
     
-    // Always order by name.
-    // If there are 'where' filters on other fields, Firestore will likely require a composite index.
-    // Example: If filtering by school, an index on (school ASC, name ASC) would be needed.
-    // The Firestore error message in the browser console usually provides a link to create this index.
     q = query(participantsCol, ...queryConstraints, orderBy('name'));
     
     const querySnapshot = await getDocs(q);
@@ -108,7 +106,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       "Underlying error:", 
       error
     );
-    // Construct a more informative error message
     let detailedMessage = "Failed to fetch participants from Firestore.";
     if (error instanceof Error && (error.message.includes('firestore/failed-precondition') || error.message.includes('requires an index') || error.message.includes('The query requires an index'))) {
       detailedMessage += " This often indicates a missing Firestore index. Please check your browser's developer console for a Firestore error message that might include a link to create the required index in your Firebase project console.";
@@ -134,7 +131,7 @@ export async function addParticipant(participantData: Omit<Participant, 'id' | '
     const docRef = await addDoc(collection(db, PARTICIPANTS_COLLECTION), newParticipantData);
     revalidatePath('/');
     revalidatePath('/public');
-    return { id: docRef.id, ...newParticipantData, status: defaultStatus, imageUrl: newParticipantData.imageUrl };
+    return { id: docRef.id, ...newParticipantData, status: defaultStatus, imageUrl: newParticipantData.imageUrl, createdAt: Timestamp.now() };
   } catch (error) {
     console.error("Error adding participant: ", error);
     throw new Error("Failed to add participant.");
@@ -147,7 +144,7 @@ export async function updateParticipant(participantId: string, participantData: 
     await updateDoc(participantRef, {...participantData, updatedAt: serverTimestamp()});
     revalidatePath('/');
     revalidatePath('/public');
-    const updatedDocSnap = await getDoc(participantRef); // Fetch the updated document to return complete data
+    const updatedDocSnap = await getDoc(participantRef); 
     if (updatedDocSnap.exists()) {
       return { id: updatedDocSnap.id, ...updatedDocSnap.data() } as Participant;
     }
@@ -216,8 +213,11 @@ export async function addSystemSchool(schoolName: string): Promise<{success: boo
     return {success: true, id: docRef.id};
   } catch (error) {
     console.error("Error adding system school: ", error);
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-    return {success: false, error: `Failed to add system school: ${errorMessage}`};
+    let detailedMessage = "Failed to add system school.";
+    if (error instanceof Error) {
+        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_schools'.`;
+    }
+    return {success: false, error: detailedMessage};
   }
 }
 
@@ -250,8 +250,11 @@ export async function addSystemCommittee(committeeName: string): Promise<{succes
     return {success: true, id: docRef.id};
   } catch (error) {
     console.error("Error adding system committee: ", error);
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-    return {success: false, error: `Failed to add system committee: ${errorMessage}`};
+    let detailedMessage = "Failed to add system committee.";
+     if (error instanceof Error) {
+        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_committees'.`;
+    }
+    return {success: false, error: detailedMessage};
   }
 }
 
@@ -262,8 +265,6 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
   let errorCount = 0;
   let newSchoolsCount = 0;
   let newCommitteesCount = 0;
-  // skippedLines is already passed by the caller, so not needed to be returned again unless it's a different kind of skip.
-  // Let's assume the caller's skippedLines is for malformed CSV lines. Here we might have other errors.
 
   const batch = writeBatch(db);
   const defaultStatus = await getDefaultAttendanceStatusSetting();
@@ -314,10 +315,7 @@ export async function importParticipants(parsedParticipants: Omit<Participant, '
     await batch.commit();
   } catch (error) {
     console.error("Error committing batch import: ", error);
-    // If batch fails, all operations are rolled back.
-    // Return counts based on what was attempted.
     return { count: 0, errors: parsedParticipants.length, newSchools: 0, newCommittees: 0, skippedLines: 0 };
-    // throw new Error("Batch import failed. Some participants or new schools/committees might not have been added.");
   }
 
   if (importedCount > 0 || newSchoolsCount > 0 || newCommitteesCount > 0) {
@@ -400,7 +398,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           role: 'admin',
           email: updatedFields.email,
           displayName: updatedFields.displayName,
-          // updatedAt will be a server timestamp, not immediately a JS Date here.
+          updatedAt: Timestamp.now(), // Represent server timestamp for immediate return
         };
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to ${email} (UID: ${authUid}).`, admin: updatedAdminForReturn };
@@ -432,7 +430,8 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const createdAdmin: AdminManagedUser = {
         id: authUid, 
         ...newAdminDataFields,
-        // Timestamps will be server-generated
+        createdAt: Timestamp.now(), // Represent server timestamp for immediate return
+        updatedAt: Timestamp.now(), // Represent server timestamp for immediate return
       };
       
       revalidatePath('/superior-admin/admin-management');
@@ -441,8 +440,11 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
   } catch (error) {
     console.error('Error granting admin role:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Could not grant admin role.';
-    return { success: false, message: `Failed to grant admin role: ${errorMessage}` };
+    let detailedMessage = 'Failed to grant admin role.';
+    if (error instanceof Error) {
+      detailedMessage += ` Details: ${error.message}. Check Firestore rules for the 'users' collection.`;
+    }
+    return { success: false, message: detailedMessage };
   }
 }
 
@@ -465,8 +467,12 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
   } catch (error) {
     console.error('Error revoking admin role:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Could not revoke admin role.';
-    return { success: false, message: `Failed to revoke admin role: ${errorMessage}` };
+    let detailedMessage = 'Could not revoke admin role.';
+    if (error instanceof Error) {
+      detailedMessage += ` Details: ${error.message}. Check Firestore rules for the 'users' collection.`;
+    }
+    return { success: false, message: detailedMessage };
   }
 }
     
+

@@ -62,6 +62,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Go to the "Sign-in method" tab.
     *   **Enable the Email/Password provider.** This is required for the current login page.
     *   Go to the "Users" tab and **add at least one user** (e.g., your admin account that will be the Superior Admin). Note the UID of this user. This UID will be used as the `OWNER_UID`.
+    *   **For other users you intend to make 'admin' via the Superior Admin panel**: These users must *also* exist in Firebase Authentication (e.g., they can sign up via your app if you implement a sign-up flow, or you can add them manually in the Firebase Console). The Superior Admin panel grants them an *application role* in Firestore; it does not create their Firebase Authentication account.
 
 ### Project Setup
 
@@ -164,7 +165,7 @@ Before deploying this application to a live environment, ensure you address the 
     *   **THIS IS THE MOST IMPORTANT STEP FOR SECURITY.**
     *   In the Firebase Console, go to "Firestore Database" -> "Rules".
     *   The default "test mode" rules are **INSECURE** for production.
-    *   Define rules to control who can access and modify data. See [Firestore Security Rules Examples](#firestore-security-rules-examples) below. **Test them thoroughly** using the Firebase Rules Playground.
+    *   Deploy the rules provided in the [Firestore Security Rules Examples](#firestore-security-rules-examples) section below. **Test them thoroughly** using the Firebase Rules Playground.
     *   **If you see "Missing or insufficient permissions" errors in your application, it's almost always because your Firestore security rules are not correctly configured to allow the operation for the currently authenticated user.**
 
 2.  🔑 **Environment Variables for Firebase Config**:
@@ -174,9 +175,9 @@ Before deploying this application to a live environment, ensure you address the 
 3.  🚪 **Firebase Authentication Setup & Admin Roles**:
     *   **Enable Email/Password Provider**: In Firebase Console > Authentication > Sign-in method, enable the "Email/Password" provider.
     *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and ensure it matches `OWNER_UID` in `src/lib/constants.ts`.
+    *   **Admin Users**: Users who are granted 'admin' role via the Superior Admin panel must *also* exist as users in Firebase Authentication (e.g., by signing up or being manually added in the Firebase console). The Superior Admin panel assigns an application role in Firestore, not the Firebase Auth account itself.
     *   The login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to attempt login.
     *   Access to the main admin dashboard (`/`) is granted if they are logged in. True admin access (beyond just being logged in) should ideally be verified by checking their role in the `users` Firestore collection. The example Firestore rules for `/participants` demonstrate this.
-    *   The Superior Admin panel allows granting 'admin' roles to existing Firebase Auth users. Ensure these users also exist in Firebase Authentication.
 
 4.  🛠️ **Build-time Error Checks (`next.config.ts`)**:
     *   The `next.config.ts` file has been updated to set `typescript.ignoreBuildErrors = false` and `eslint.ignoreDuringBuilds = false`. This is good practice for production as it ensures TypeScript and ESLint errors are caught during the build process.
@@ -269,7 +270,8 @@ service cloud.firestore {
     *   Verify that your `NEXT_PUBLIC_FIREBASE_...` **environment variables** are correctly set up in your hosting provider's settings (e.g., Vercel, Netlify). These must match your Firebase project configuration.
 *   **Login Problems**:
     *   Ensure the **Email/Password Sign-in Provider** is enabled in your Firebase project's Authentication settings.
-    *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication.
+    *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication. If granting 'admin' roles, ensure those users also exist in Firebase Auth.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
+
 
