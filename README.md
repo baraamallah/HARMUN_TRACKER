@@ -95,7 +95,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
-    *   Ensure the `OWNER_UID` constant matches the Firebase UID of the user who should have superior admin access (the one you noted in Firebase Setup Step 5). The current value is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
+    *   The `OWNER_UID` constant in this file defines who has superior admin access. The current value is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
+    *   **If you change this UID, you MUST also update it in the Firestore Security Rules (see [Changing the Owner UID](#changing-the-owner-uid) and [Firestore Security Rules Examples](#firestore-security-rules-examples)).**
 
 ### Running the Application Locally
 
@@ -188,7 +189,7 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-**The `OWNER_UID` used in these rules is `JZgMG6xdwAYInXsdciaGj6qNAsG2` (as defined in `src/lib/constants.ts`). If your Owner UID is different, you MUST update it in these rules before publishing.**
+The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If your Owner UID in that file is different, you **MUST** update it in these rules before publishing. The current `OWNER_UID` in `src/lib/constants.ts` is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
@@ -269,14 +270,39 @@ service cloud.firestore {
 
 ## Customization
 
-*   **Owner UID**: Change the `OWNER_UID` in `src/lib/constants.ts` (if you did, you MUST update it in the Firestore Security Rules as well).
+*   **Owner UID**: See [Changing the Owner UID](#changing-the-owner-uid).
 *   **Attendance Statuses**: Modify the `AttendanceStatus` type in `src/types/index.ts` and update `src/components/participants/AttendanceStatusBadge.tsx` and `src/components/participants/ParticipantActions.tsx` accordingly. The default status for new participants can be configured in the Superior Admin panel.
 *   **Styling**: Adjust Tailwind CSS classes and the theme variables in `src/app/globals.css`.
+
+## Changing the Owner UID
+
+The Superior Administrator of the application is identified by a specific Firebase Authentication User ID (UID), which is stored in `src/lib/constants.ts` as `OWNER_UID`.
+
+If you need to change who the owner is:
+
+1.  **Identify the New Owner's Firebase Auth UID**:
+    *   The new owner must have an existing user account in your Firebase Authentication system.
+    *   You can find a user's UID in the Firebase Console (Authentication -> Users tab).
+2.  **Update `src/lib/constants.ts`**:
+    *   Open the file `src/lib/constants.ts`.
+    *   Change the value of the `OWNER_UID` constant to the new owner's Firebase Auth UID.
+    *   Example: `export const OWNER_UID = "newFirebaseUserUID";`
+3.  **Update Firestore Security Rules (CRITICAL)**:
+    *   Open your Firebase project in the Firebase Console.
+    *   Navigate to Firestore Database -> Rules.
+    *   In your security rules, find **all instances** where the old `OWNER_UID` is used (e.g., `request.auth.uid == 'oldOwnerUID'`).
+    *   Replace these instances with the new `OWNER_UID`. Refer to the examples in [Firestore Security Rules Examples](#firestore-security-rules-examples) and ensure the UID used there matches your new `OWNER_UID` from `constants.ts`.
+    *   **Publish** your updated security rules.
+4.  **Update `README.md` (Optional but Recommended)**:
+    *   If you plan to share this codebase or for your own future reference, update the `OWNER_UID` mentioned in this `README.md` (e.g., in the "Set Superior Admin UID" section and within the security rule examples) to reflect the new UID.
+5.  **Re-deploy**: If your application is already deployed, you'll need to rebuild and re-deploy it for the changes in `src/lib/constants.ts` to take effect.
+
+**Failure to update the Firestore Security Rules to match the new `OWNER_UID` in `constants.ts` will result in the new owner not having the necessary permissions to access superior admin features or perform owner-specific actions.**
 
 ## Troubleshooting Deployment
 
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
-    *   This **almost always points to an issue with your Firestore Security Rules.** The error message "PERMISSION_DENIED: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details." is very specific.
+    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details.`) is very specific.
     *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`).
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
@@ -289,4 +315,3 @@ service cloud.firestore {
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication. If granting 'admin' roles, ensure those users also exist in Firebase Auth.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-
