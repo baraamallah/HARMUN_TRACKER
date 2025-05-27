@@ -6,26 +6,25 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 ## Features
 
 *   **Admin Dashboard (`/`)**:
-    *   Requires login.
+    *   Requires login (Email/Password via Firebase Authentication).
     *   View, add, edit, and delete participants.
-    *   Mark participant attendance status (Present, Absent, In Break, etc.).
-    *   Import participants from a CSV file.
+    *   Mark participant attendance status (Present, Absent, In Break, Restroom Break, Technical Issue, Stepped Out, Present On Account).
+    *   Import participants from a CSV file. New schools/committees found in CSV are automatically added to system lists.
     *   Export participant data to a CSV file.
-    *   Filter participants by school, committee, status, or search term.
+    *   Filter participants by school, committee, status (All, Present, Absent), or search term.
     *   Toggle visibility of table columns (Avatar, Name, School, Committee, Status, Actions).
 *   **Login Page (`/auth/login`)**:
     *   Allows administrators to log in using Firebase Authentication (Email/Password).
 *   **Public View (`/public`)**:
     *   Read-only list of participants.
-    *   Filter participants by school, committee, status, or search term.
+    *   Filter participants by school, committee, status (All, Present, Absent), or search term.
     *   Toggle visibility of table columns (Avatar, Name, School, Committee, Status).
     *   Does not require login.
 *   **Superior Admin Panel (`/superior-admin`)**:
     *   Restricted access to a designated Owner UID via Firebase Authentication.
-    *   Placeholder for advanced controls:
-        *   Global data management.
-        *   System-wide settings.
-        *   Admin account management (future).
+    *   Manage system-wide lists of Schools and Committees.
+    *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users).
+    *   Links to placeholder pages for System Settings.
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
 *   **Theme Toggling**:
     *   User-selectable Light, Dark, or System theme preference.
@@ -40,7 +39,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **ShadCN UI Components**: Re-usable UI components.
 *   **Tailwind CSS**: Utility-first CSS framework for styling.
 *   **Firebase**:
-    *   **Firestore**: NoSQL database for storing participant data.
+    *   **Firestore**: NoSQL database for storing participant data, system schools, system committees, and user roles.
     *   **Firebase Authentication**: For user authentication (admin and superior admin).
 *   **Lucide React**: Library for icons.
 *   **Genkit (for AI)**: Configured but not actively used in current core features.
@@ -57,18 +56,18 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables.
-4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started) before deploying to production.
+4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) before deploying to production.
 5.  **Enable Firebase Authentication**: In the Firebase Console, go to "Authentication".
     *   Go to the "Sign-in method" tab.
-    *   Enable the **Email/Password** provider. This is required for the current login page. You can enable other providers (like Google) later if you wish.
-    *   Go to the "Users" tab and add at least one user (e.g., your admin account). Note the UID of the user you want to be the "Superior Admin".
+    *   Enable the **Email/Password** provider. This is required for the current login page.
+    *   Go to the "Users" tab and add at least one user (e.g., your admin account that will be the Superior Admin). Note the UID of this user.
 
 ### Project Setup
 
 1.  **Clone the Repository (or get the code)**:
     ```bash
-    git clone <your-repository-url>
-    cd mun-attendance-tracker
+    # git clone <your-repository-url>
+    # cd mun-attendance-tracker
     ```
 2.  **Install Dependencies**:
     ```bash
@@ -94,7 +93,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
-    *   Update the `OWNER_UID` constant with the Firebase UID of the user who should have superior admin access.
+    *   Update the `OWNER_UID` constant with the Firebase UID of the user who should have superior admin access (the one you noted in Firebase Setup Step 5).
     ```typescript
     // src/lib/constants.ts
     export const OWNER_UID = "YOUR_ACTUAL_FIREBASE_OWNER_UID"; // e.g., "JZgMG6xdwAYInXsdciaGj6qNAsG2"
@@ -108,13 +107,13 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     # or
     # yarn dev
     ```
-*   Open [http://localhost:9002](http://localhost:9002) (or the port specified in your `package.json` dev script) in your browser. You will be redirected to `/auth/login`.
+*   Open [http://localhost:9002](http://localhost:9002) (or the port specified in your `package.json` dev script). You will be redirected to `/auth/login`.
 
 ## Usage
 
 ### Admin Access (`/`)
 
-*   **Logging In**: Navigate to `/auth/login` and sign in with an Email/Password account that you've created in your Firebase Authentication users list.
+*   **Logging In**: Navigate to `/auth/login` and sign in with an Email/Password account that you've created in your Firebase Authentication users list and has been granted 'admin' role via the Superior Admin panel.
 *   **Dashboard (`/`)**: Once logged in, you will be redirected to the main admin dashboard to manage participants.
 
 ### Superior Admin Access (`/superior-admin`)
@@ -123,7 +122,10 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **Navigation**:
     *   If you are logged in as the owner, a "Superior Admin" link will appear in the sidebar on the main dashboard.
     *   Alternatively, navigate directly to `/superior-admin` in your browser.
-*   **Functionality**: This panel is for system-wide controls, currently with placeholders.
+*   **Functionality**:
+    *   Manage system-wide lists of Schools and Committees.
+    *   Manage administrator accounts (grant/revoke admin privileges for existing Firebase Authentication users by providing their Auth UID).
+    *   Links to other control panels (e.g., System Settings - currently placeholders).
 
 ### Public View (`/public`)
 
@@ -132,11 +134,13 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 ## Key Files & Project Structure
 
 *   `src/app/`: Contains page routes (App Router).
-    *   `page.tsx`: Admin Dashboard (protected).
+    *   `page.tsx`: Admin Dashboard (protected by login).
     *   `auth/login/page.tsx`: Admin login page.
     *   `auth/layout.tsx`: Layout for authentication pages.
     *   `public/page.tsx`: Public participant view.
-    *   `superior-admin/page.tsx`: Superior Admin panel (protected by UID).
+    *   `superior-admin/page.tsx`: Superior Admin dashboard.
+    *   `superior-admin/admin-management/page.tsx`: Page for managing admin accounts.
+    *   `superior-admin/system-settings/page.tsx`: Placeholder page for system settings.
     *   `layout.tsx`: Root layout for the application.
     *   `globals.css`: Global styles and Tailwind CSS theme variables.
 *   `src/components/`: Reusable React components.
@@ -144,53 +148,92 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   `layout/`: Layout components (`AppLayoutClientShell`, `PublicLayout`).
     *   `participants/`: Components related to participant management (Table, Form, Actions, etc.).
     *   `shared/`: General shared components (Logo, Theme Toggle).
+    *   `superior-admin/`: Components specific to the superior admin panel (e.g., `AddAdminDialog`).
 *   `src/lib/`: Core logic and utilities.
     *   `actions.ts`: Server Actions for interacting with Firebase Firestore.
     *   `constants.ts`: Application-wide constants like `OWNER_UID`.
     *   `firebase.ts`: Firebase initialization and configuration (uses environment variables).
     *   `utils.ts`: Utility functions (like `cn` for classnames).
 *   `src/types/`: TypeScript type definitions.
-*   `src/hooks/`: Custom React hooks.
+*   `src/hooks/`: Custom React hooks (e.g., `useDebounce`, `useToast`).
 *   `.env.local`: (You create this) For storing Firebase credentials locally and securely. **DO NOT COMMIT.**
 
 ## Deployment Checklist (CRITICAL)
 
 Before deploying this application to a live environment, ensure you address the following:
 
-1.  🔐 **Firestore Security Rules**:
+1.  🔐 **Firestore Security Rules (CRITICAL)**:
     *   **THIS IS THE MOST IMPORTANT STEP FOR SECURITY.**
     *   In the Firebase Console, go to "Firestore Database" -> "Rules".
     *   The default "test mode" rules are **INSECURE** for production.
-    *   Define rules to control who can access and modify data. Examples:
-        *   Only authenticated users (admins) can write to the `participants` collection.
-        *   Anyone can read the `participants` collection (for the public view).
-        *   The superior admin might have broader permissions (though typically data access rules are role-based, not UID-specific at the rule level unless carefully managed).
-    *   Refer to the [Firebase Firestore Security Rules documentation](https://firebase.google.com/docs/firestore/security/get-started).
+    *   Define rules to control who can access and modify data. See [Firestore Security Rules Examples](#firestore-security-rules-examples) below.
 
 2.  🔑 **Environment Variables for Firebase Config**:
     *   Ensure your hosting provider is configured with the same `NEXT_PUBLIC_FIREBASE_...` environment variables that you have in your `.env.local` file.
-    *   **DO NOT hardcode Firebase config in `src/lib/firebase.ts` for production builds.** The current setup reads from environment variables.
+    *   **DO NOT hardcode Firebase config in `src/lib/firebase.ts` for production builds.** The current setup correctly reads from environment variables if `.env.local` is configured.
 
-3.  🚪 **Admin Roles & Signup (Future Enhancement)**:
-    *   The current login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to access the main admin dashboard (`/`).
-    *   For more granular control (distinguishing regular admins from other users), you'll need to implement a role system (e.g., store a `role: 'admin'` field in Firestore for users) and check this role after login or in middleware.
-    *   Consider how new admin accounts will be created (e.g., only by the superior admin).
+3.  🚪 **Admin Roles & Signup**:
+    *   The current login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to attempt login. Access to the main admin dashboard (`/`) is then granted if they are logged in.
+    *   True admin access (beyond just being logged in) should ideally be verified by checking their role in the `users` Firestore collection after login or in middleware (this part is not fully implemented for the main dashboard yet, but the Superior Admin panel uses it for managing admins).
+    *   The Superior Admin panel allows granting 'admin' roles to existing Firebase Auth users.
 
-4.  🛠️ **Build-time Error Checks**:
-    *   In `next.config.ts`, consider setting:
-        ```typescript
-        typescript: {
-          ignoreBuildErrors: false, // Set to false for production
-        },
-        eslint: {
-          ignoreDuringBuilds: false, // Set to false for production
-        },
-        ```
-    *   This ensures that TypeScript and ESLint errors are caught during the build process, leading to a more stable application. (These are currently true in your `next.config.ts`, change them for production).
+4.  🛠️ **Build-time Error Checks (`next.config.ts`)**:
+    *   The `next.config.ts` file has been updated to set `typescript.ignoreBuildErrors = false` and `eslint.ignoreDuringBuilds = false`. This is good practice for production as it ensures TypeScript and ESLint errors are caught during the build process.
 
 5.  🚀 **Build and Deploy**:
     *   Build the application: `npm run build`.
     *   Deploy to your chosen hosting provider (e.g., Firebase Hosting, Vercel, Netlify). Follow their specific deployment instructions, especially regarding environment variable setup.
+
+## Firestore Security Rules Examples
+
+**Replace `YOUR_OWNER_UID` with the actual UID of the superior admin.**
+
+These are example rules. You **MUST** review and tailor them to your exact application needs.
+
+```json
+{
+  "rules": {
+    "participants": {
+      // Allow public read for the /public page
+      ".read": "true",
+      // Allow write access only to authenticated users (admins)
+      // You might want to refine this further to check for an 'admin' role if you implement it.
+      ".write": "request.auth != null"
+    },
+    "system_schools": {
+      // Allow public read for filters and forms
+      ".read": "true",
+      // Only the owner can create, update, or delete schools
+      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
+    },
+    "system_committees": {
+      // Allow public read for filters and forms
+      ".read": "true",
+      // Only the owner can create, update, or delete committees
+      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'"
+    },
+    "users": {
+      // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
+      // Documents are keyed by the Firebase Auth UID.
+
+      // Superior Admin (Owner) can read/write/list all user role documents
+      ".read": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'",
+      ".write": "request.auth != null && request.auth.uid == 'YOUR_OWNER_UID'",
+      
+      // Individual users might need to read their own role document if you expand functionality
+      // Example: allow a user to read their own document if the document ID matches their UID
+      // "{userId}": {
+      //   "allow read": "request.auth != null && request.auth.uid == userId"
+      // }
+    }
+  }
+}
+```
+
+**Explanation of User Rules Example:**
+*   The rules for the `users` collection allow the Owner to manage all documents within it.
+*   The commented-out section for `"{userId}"` is an example of how you could allow individual users to read their *own* role document if needed, but for the current admin management (done by Superior Admin), the broader owner-only rule is sufficient.
+*   Granting `list` access on the collection level (`.read` on `users`) is generally needed for the owner to query the collection (e.g., `getAdminUsers`).
 
 ## Customization
 

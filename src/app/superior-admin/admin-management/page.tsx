@@ -60,7 +60,8 @@ export default function AdminManagementPage() {
       const admins = await getAdminUsers();
       setAdminUsers(admins);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to load admin users.', variant: 'destructive' });
+      console.error("Error fetching admins:", error);
+      toast({ title: 'Error', description: 'Failed to load admin users. Please try again.', variant: 'destructive' });
     } finally {
       setIsLoadingAdmins(false);
     }
@@ -96,7 +97,8 @@ export default function AdminManagementPage() {
     if (!userToRevoke) return;
     startTransitionAction(async () => {
       try {
-        const result = await revokeAdminRole(userToRevoke.id);
+        // Assuming userToRevoke.id is the Firestore document ID, which should be the Auth UID
+        const result = await revokeAdminRole(userToRevoke.id); 
         if (result.success) {
           toast({ title: 'Admin Role Revoked', description: result.message });
           fetchAdmins(); // Refresh list
@@ -199,7 +201,7 @@ export default function AdminManagementPage() {
             <CardTitle className="text-2xl">Manage Administrator Accounts</CardTitle>
             <CardDescription>
               Grant or revoke admin privileges for existing Firebase Authentication users.
-              This does not create or delete their main Firebase Auth accounts.
+              This action manages their role within this application; it does not create or delete their main Firebase Auth accounts.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -235,8 +237,8 @@ export default function AdminManagementPage() {
                         <TableRow key={admin.id}>
                           <TableCell>
                             <Avatar className="h-9 w-9">
-                              <AvatarImage src={admin.avatarUrl || `https://placehold.co/40x40.png?text=${admin.email?.[0].toUpperCase() ?? 'A'}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
-                              <AvatarFallback>{admin.displayName?.[0] || admin.email?.[0].toUpperCase() || 'A'}</AvatarFallback>
+                              <AvatarImage src={admin.avatarUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
+                              <AvatarFallback>{(admin.displayName?.[0] || admin.email?.[0] || 'A').toUpperCase()}</AvatarFallback>
                             </Avatar>
                           </TableCell>
                           <TableCell>
@@ -255,6 +257,7 @@ export default function AdminManagementPage() {
                               className="text-destructive hover:text-destructive/80" 
                               onClick={() => confirmRevokeAdmin(admin)}
                               disabled={isPendingAction}
+                              title="Revoke Admin Role"
                             >
                               {isPendingAction && userToRevoke?.id === admin.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               <span className="sr-only">Revoke Admin Role</span>
@@ -272,7 +275,7 @@ export default function AdminManagementPage() {
                     No administrator accounts found.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Click "Grant Admin Role" to assign admin privileges to an existing user.
+                    Click "Grant Admin Role" to assign admin privileges to an existing user who already has a Firebase Authentication account.
                   </p>
                 </div>
               )}
@@ -286,8 +289,8 @@ export default function AdminManagementPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Revoke Admin Role</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to revoke admin privileges for {userToRevoke?.email || 'this user'}?
-              They will no longer have admin access. This does not delete their Firebase Authentication account.
+              Are you sure you want to revoke admin privileges for {userToRevoke?.displayName || userToRevoke?.email || 'this user'} (UID: {userToRevoke?.id})?
+              They will no longer have admin access within this application. This does not delete their Firebase Authentication account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -305,3 +308,4 @@ export default function AdminManagementPage() {
     </div>
   );
 }
+
