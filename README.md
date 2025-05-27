@@ -316,7 +316,7 @@ If you need to change who the owner is:
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`). The `isOwner()` helper function in the rules relies on the correct UID.
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
 *   **Missing Firestore Indexes**:
-    *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index.
+    *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index. The `getParticipants` function is most likely to trigger this if multiple filters are applied.
 *   **Firebase Connection Issues / API Key Errors**:
     *   Verify that your `NEXT_PUBLIC_FIREBASE_...` **environment variables** are correctly set up in your hosting provider's settings (e.g., Vercel, Netlify). These must match your Firebase project configuration.
 *   **Login Problems**:
