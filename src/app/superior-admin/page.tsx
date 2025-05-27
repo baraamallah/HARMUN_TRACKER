@@ -86,7 +86,11 @@ export default function SuperiorAdminPage() {
         setNewSchoolName('');
         fetchSchools(); 
       } else {
-        toast({ title: 'Error Adding School', description: result.error || 'An unexpected error occurred.', variant: 'destructive' });
+        toast({ 
+          title: 'Error Adding School', 
+          description: result.error || 'An unexpected error occurred. Check console for details and ensure Firestore rules are correctly set.', 
+          variant: 'destructive' 
+        });
       }
     });
   };
@@ -103,7 +107,11 @@ export default function SuperiorAdminPage() {
         setNewCommitteeName('');
         fetchCommittees(); 
       } else {
-        toast({ title: 'Error Adding Committee', description: result.error || 'An unexpected error occurred.', variant: 'destructive' });
+        toast({ 
+          title: 'Error Adding Committee', 
+          description: result.error || 'An unexpected error occurred. Check console for details and ensure Firestore rules are correctly set.', 
+          variant: 'destructive' 
+        });
       }
     });
   };
@@ -388,3 +396,5 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
+
+    
