@@ -53,8 +53,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         
         const lines = text.split(/\r\n|\n/).slice(1); // Skip header, handle both CRLF and LF
         const parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl'>[] = [];
+        let skippedLineCount = 0; 
         
-        lines.forEach(line => {
+        lines.forEach((line, index) => {
           if (line.trim() === '') return; // Skip empty lines
           
           // Basic CSV parsing: assumes Name,School,Committee columns in order
@@ -68,11 +69,14 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               school: cleanedValues[1],
               committee: cleanedValues[2],
             });
+          } else if (line.trim()) { 
+            console.warn(`Skipping malformed CSV line ${index + 2}: "${line}" (Expected Name,School,Committee)`);
+            skippedLineCount++;
           }
         });
 
-        if (parsedParticipants.length === 0) {
-          toast({ title: 'No valid data found', description: 'The CSV file might be empty or incorrectly formatted. Expected: Name,School,Committee', variant: 'default' });
+        if (parsedParticipants.length === 0 && skippedLineCount === lines.filter(l => l.trim()).length && lines.filter(l => l.trim()).length > 0) { 
+          toast({ title: 'No valid data found', description: `The CSV file might be empty or incorrectly formatted. ${skippedLineCount > 0 ? `${skippedLineCount} line(s) could not be parsed.` : ''} Expected: Name,School,Committee`, variant: 'default' });
           return;
         }
 
@@ -81,12 +85,15 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           let description = `${result.count} participants processed.`;
           if (result.newSchools > 0) description += ` ${result.newSchools} new schools added.`;
           if (result.newCommittees > 0) description += ` ${result.newCommittees} new committees added.`;
-          if (result.errors > 0) description += ` ${result.errors} participants failed to import. Check console.`;
+          if (result.errors > 0) description += ` ${result.errors} participants failed to import (check console for details).`;
+          if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check console).`;
+
+          const importHadIssues = result.errors > 0 || (parsedParticipants.length === 0 && skippedLineCount > 0 && result.count === 0);
 
           toast({ 
-            title: result.errors > 0 ? 'Import Partially Successful' : 'Import Successful', 
+            title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Successful', 
             description: description,
-            variant: result.errors > 0 ? 'default' : 'default' // Success can also be default
+            variant: importHadIssues ? 'default' : 'default'
           });
 
           setIsOpen(false);
