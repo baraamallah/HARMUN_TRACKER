@@ -56,13 +56,13 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables.
-4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
+4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write for 30 days). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) (see section below) *before* the test mode expires or before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
 5.  **Enable Firebase Authentication**:
     *   In the Firebase Console, go to "Authentication".
     *   Go to the "Sign-in method" tab.
     *   **Enable the Email/Password provider.** This is required for the current login page.
     *   Go to the "Users" tab and **add at least one user** (e.g., your admin account that will be the Superior Admin). Note the UID of this user. This UID will be used as the `OWNER_UID`.
-    *   **For other users you intend to make 'admin' via the Superior Admin panel**: These users must *also* exist in Firebase Authentication (e.g., they can sign up via your app if you implement a sign-up flow, or you can add them manually in the Firebase Console). The Superior Admin panel grants them an *application role* in Firestore; it does not create their Firebase Authentication account.
+    *   **For other users you intend to make 'admin' via the Superior Admin panel**: These users must *also* exist in Firebase Authentication (e.g., they can sign up if you implement a sign-up flow, or you can add them manually in the Firebase Console). The Superior Admin panel grants them an *application role* in Firestore; it does not create their Firebase Authentication account itself.
 
 ### Project Setup
 
@@ -260,8 +260,8 @@ service cloud.firestore {
 ## Troubleshooting Deployment
 
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
-    *   This **almost always points to an issue with your Firestore Security Rules.**
-    *   Check your browser's developer console for errors from Firebase. These often indicate issues with Firestore Security Rules.
+    *   This **almost always points to an issue with your Firestore Security Rules.** The error message "PERMISSION_DENIED: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection. Check README.md for correct rules. Check browser console for more details." is very specific.
+    *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs (e.g., the `OWNER_UID` needs write access to `system_committees`, `system_schools`, `system_config`, and `users`).
     *   Use the Rules Playground in Firebase to test your rules against specific operations and user authentication states.
 *   **Missing Firestore Indexes**:
@@ -273,4 +273,4 @@ service cloud.firestore {
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication. If granting 'admin' roles, ensure those users also exist in Firebase Auth.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-
+```
