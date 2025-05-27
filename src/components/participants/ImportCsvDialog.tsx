@@ -93,7 +93,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           toast({ 
             title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Successful', 
             description: description,
-            variant: importHadIssues ? 'default' : 'default'
+            variant: importHadIssues ? 'default' : 'default' // Kept 'default' variant for partial success as well for better visibility
           });
 
           setIsOpen(false);
@@ -104,8 +104,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           toast({ title: 'Import Failed', description: error.message || 'An error occurred. Check console.', variant: 'destructive' });
         }
       };
-      reader.onerror = () => {
-        toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
+      reader.onerror = () => { // Added onerror handler
+        toast({ title: 'Error reading file', description: 'Could not read the selected file. It might be corrupted or inaccessible.', variant: 'destructive' });
+        console.error("FileReader error:", reader.error);
       }
       reader.readAsText(file);
     });
@@ -148,4 +149,3 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
     </Dialog>
   );
 }
-

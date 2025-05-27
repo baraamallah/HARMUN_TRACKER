@@ -195,47 +195,49 @@ Before deploying this application to a live environment, ensure you address the 
 
 These are example rules. You **MUST** review and tailor them to your exact application needs and **test them thoroughly** using the Firebase Rules Playground.
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+```json
+{
+  "rules": {
+    "participants": {
+      // Allow public read for the /public page and authenticated users for the admin dashboard
+      "allow read": "if true;", 
+      // Allow write access only to authenticated users who have an 'admin' role or are the owner.
+      // This assumes you have a 'users' collection where roles are stored, and documents are keyed by Auth UID.
+      "allow write": "if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');"
+    },
+    "system_schools": {
+      // Allow public read for filters and forms
+      "allow read": "if true;", 
+      // Only the owner can create, update, or delete schools
+      "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
+    },
+    "system_committees": {
+      // Allow public read for filters and forms
+      "allow read": "if true;",
+      // Only the owner can create, update, or delete committees
+      "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
+    },
+    "system_config": {
+      // Only the owner can read and write system configuration
+      "{settingId}": { // e.g., main_settings
+        "allow read, write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';"
+      }
+    },
+    "users": {
+      // The 'users' collection stores roles (e.g., { uid: "...", email: "...", role: "admin" })
+      // Documents are keyed by the Firebase Auth UID.
 
-    // Participants Collection
-    match /participants/{participantId} {
-      allow read: if true; // Allows public read for /public page
-      allow write: if request.auth != null &&
-                   (get(path("/databases/$(database)/documents/users/$(request.auth.uid)")).data.role == 'admin' ||
-                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'); // Admins or Owner can write
-    }
-
-    // System Schools Collection
-    match /system_schools/{schoolId} {
-      allow read: if true; // Allows public read for filters/forms
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write
-    }
-
-    // System Committees Collection
-    match /system_committees/{committeeId} {
-      allow read: if true; // Allows public read for filters/forms
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write
-    }
-
-    // System Configuration Collection
-    match /system_config/{settingId} { // e.g., settingId could be 'main_settings'
-      allow read, write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can read/write
-    }
-
-    // Users Collection (for roles - documents are keyed by Auth UID)
-    // Rule to allow owner to list users for admin management page
-    match /users {
-        allow list: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
-    }
-    match /users/{userId} {
-      allow read: if request.auth != null && (
-                    request.auth.uid == userId || // User can read their own role
-                    request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2' // Owner can read any role
-                  );
-      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2'; // Only Owner can write (grant/revoke roles)
+      // Allow the owner to list/read all user documents for the admin management page
+      "allow list": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';",
+      
+      // Individual user documents:
+      "{userId}": {
+        // Allow the owner to create, update, delete any user role document
+        "allow write": "if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';",
+        // Allow authenticated users to read their own role document (if needed for client-side checks)
+        // Also allow owner to read any user document
+        "allow read": "if request.auth != null && (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');"
+      }
     }
   }
 }
