@@ -166,7 +166,7 @@ Before deploying this application to a live environment, ensure you address the 
     *   In the Firebase Console, go to "Firestore Database" -> "Rules".
     *   The default "test mode" rules are **INSECURE** for production.
     *   Deploy the rules provided in the [Firestore Security Rules Examples](#firestore-security-rules-examples) section below. **Test them thoroughly** using the Firebase Rules Playground.
-    *   **If you see "Missing or insufficient permissions" errors in your application, it's almost always because your Firestore security rules are not correctly configured to allow the operation for the currently authenticated user.**
+    *   **If you see "Missing or insufficient permissions" errors in your application, it's almost always because your Firestore security rules are not correctly configured to allow the operation for the currently authenticated user.** This error means Firebase on the server-side has blocked an action because the rules didn't permit it.
 
 2.  🔑 **Environment Variables for Firebase Config**:
     *   Ensure your hosting provider is configured with the same `NEXT_PUBLIC_FIREBASE_...` environment variables that you have in your `.env.local` file.
@@ -273,6 +273,4 @@ service cloud.firestore {
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication. If granting 'admin' roles, ensure those users also exist in Firebase Auth.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-
-
 
