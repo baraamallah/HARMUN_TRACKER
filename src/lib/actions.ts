@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { OWNER_UID } from './constants'; // Import OWNER_UID
 
 
 const PARTICIPANTS_COLLECTION = 'participants';
@@ -57,7 +58,7 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
     console.error("Error updating default attendance status setting: ", error);
     let detailedMessage = 'Could not update setting.';
     if (error instanceof Error) {
-        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_config'.`;
+        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner (UID: ${OWNER_UID}) to write to 'system_config/${APP_SETTINGS_DOC_ID}'.`;
     }
     return { success: false, error: detailedMessage };
   }
@@ -215,7 +216,7 @@ export async function addSystemSchool(schoolName: string): Promise<{success: boo
     console.error("Error adding system school: ", error);
     let detailedMessage = "Failed to add system school.";
     if (error instanceof Error) {
-        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_schools'.`;
+        detailedMessage += ` Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_schools' collection. The README.md has the correct rules.`;
     }
     return {success: false, error: detailedMessage};
   }
@@ -252,7 +253,7 @@ export async function addSystemCommittee(committeeName: string): Promise<{succes
     console.error("Error adding system committee: ", error);
     let detailedMessage = "Failed to add system committee.";
      if (error instanceof Error) {
-        detailedMessage += ` Details: ${error.message}. Ensure Firestore rules allow the Owner to write to 'system_committees'.`;
+        detailedMessage += ` Firebase Error Code: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'system_committees' collection. The README.md has the correct rules.`;
     }
     return {success: false, error: detailedMessage};
   }
@@ -442,7 +443,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
     console.error('Error granting admin role:', error);
     let detailedMessage = 'Failed to grant admin role.';
     if (error instanceof Error) {
-      detailedMessage += ` Details: ${error.message}. Check Firestore rules for the 'users' collection.`;
+      detailedMessage += ` Firebase Error: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the 'users' collection for the document ID '${authUid}'. The README.md has the correct rules.`;
     }
     return { success: false, message: detailedMessage };
   }
@@ -469,7 +470,7 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     console.error('Error revoking admin role:', error);
     let detailedMessage = 'Could not revoke admin role.';
     if (error instanceof Error) {
-      detailedMessage += ` Details: ${error.message}. Check Firestore rules for the 'users' collection.`;
+      detailedMessage += ` Firebase Error: ${ (error as any).code || 'Unknown'}. Message: ${error.message}. CRITICAL: This is likely a Firestore Security Rules issue. Go to your Firebase project console -> Firestore Database -> Rules. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to delete documents from the 'users' collection. The README.md has the correct rules.`;
     }
     return { success: false, message: detailedMessage };
   }
