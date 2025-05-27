@@ -23,7 +23,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **Superior Admin Panel (`/superior-admin`)**:
     *   Restricted access to a designated Owner UID via Firebase Authentication.
     *   Manage system-wide lists of Schools and Committees.
-    *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users).
+    *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
     *   Links to placeholder pages for System Settings.
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
 *   **Theme Toggling**:
@@ -51,16 +51,17 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   Node.js (v18 or later recommended)
 *   npm or yarn
 
-### Firebase Setup
+### Firebase Setup (CRITICAL for Functionality & Deployment)
 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
 3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables.
 4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical) before deploying to production.
-5.  **Enable Firebase Authentication**: In the Firebase Console, go to "Authentication".
+5.  **Enable Firebase Authentication**:
+    *   In the Firebase Console, go to "Authentication".
     *   Go to the "Sign-in method" tab.
-    *   Enable the **Email/Password** provider. This is required for the current login page.
-    *   Go to the "Users" tab and add at least one user (e.g., your admin account that will be the Superior Admin). Note the UID of this user.
+    *   **Enable the Email/Password provider.** This is required for the current login page.
+    *   Go to the "Users" tab and **add at least one user** (e.g., your admin account that will be the Superior Admin). Note the UID of this user. This UID will be used as the `OWNER_UID`.
 
 ### Project Setup
 
@@ -172,7 +173,9 @@ Before deploying this application to a live environment, ensure you address the 
     *   Ensure your hosting provider is configured with the same `NEXT_PUBLIC_FIREBASE_...` environment variables that you have in your `.env.local` file.
     *   **DO NOT hardcode Firebase config in `src/lib/firebase.ts` for production builds.** The current setup correctly reads from environment variables if `.env.local` is configured.
 
-3.  🚪 **Admin Roles & Signup**:
+3.  🚪 **Firebase Authentication Setup & Admin Roles**:
+    *   **Enable Email/Password Provider**: In Firebase Console > Authentication > Sign-in method, enable the "Email/Password" provider.
+    *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and set it as `OWNER_UID` in `src/lib/constants.ts`.
     *   The current login (`/auth/login`) allows any user created in Firebase Auth (Email/Password provider) to attempt login. Access to the main admin dashboard (`/`) is then granted if they are logged in.
     *   True admin access (beyond just being logged in) should ideally be verified by checking their role in the `users` Firestore collection after login or in middleware (this part is not fully implemented for the main dashboard yet, but the Superior Admin panel uses it for managing admins).
     *   The Superior Admin panel allows granting 'admin' roles to existing Firebase Auth users.
@@ -186,7 +189,7 @@ Before deploying this application to a live environment, ensure you address the 
 
 ## Firestore Security Rules Examples
 
-**Replace `YOUR_OWNER_UID` with the actual UID of the superior admin.**
+**Replace `YOUR_OWNER_UID` with the actual UID of the superior admin (from `src/lib/constants.ts`).**
 
 These are example rules. You **MUST** review and tailor them to your exact application needs.
 
@@ -231,8 +234,8 @@ These are example rules. You **MUST** review and tailor them to your exact appli
 ```
 
 **Explanation of User Rules Example:**
-*   The rules for the `users` collection allow the Owner to manage all documents within it.
-*   The commented-out section for `"{userId}"` is an example of how you could allow individual users to read their *own* role document if needed, but for the current admin management (done by Superior Admin), the broader owner-only rule is sufficient.
+*   The rules for the `users` collection allow the Owner to manage all documents within it (granting/revoking admin roles).
+*   The commented-out section for `"{userId}"` is an example of how you could allow individual users to read their *own* role document if needed.
 *   Granting `list` access on the collection level (`.read` on `users`) is generally needed for the owner to query the collection (e.g., `getAdminUsers`).
 
 ## Customization
