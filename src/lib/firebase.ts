@@ -18,7 +18,7 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "harmun-tracker.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "harmun-tracker",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "harmun-tracker.appspot.com",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "harmun-tracker.firebasestorage.app", // Updated to user-provided value
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "920897622876",
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:920897622876:web:39df153705816e4345e799",
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-2GC9MRVG8Q"
@@ -27,20 +27,20 @@ const firebaseConfig = {
 // Developer-facing check for placeholder or default API key during development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   const isUsingHardcodedDefaultApiKey = firebaseConfig.apiKey === "AIzaSyCUIRYm2CbeA0TVJndd5GEa_fDlO0QdeFU";
-  const isEnvVarMissing = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const isEnvVarMissingOrApiKeyIsPlaceholder = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY === "YOUR_API_KEY";
 
-  if (isUsingHardcodedDefaultApiKey && isEnvVarMissing) {
+  if (isUsingHardcodedDefaultApiKey && isEnvVarMissingOrApiKeyIsPlaceholder) {
     console.warn(
       "%cFirebase Initialization Warning: Using a hardcoded default Firebase API key from an example. " +
       "This is okay for initial local testing with a generic demo project, but to connect to YOUR Firebase project, " +
-      "ensure you have a .env.local file with your Firebase project credentials (e.g., NEXT_PUBLIC_FIREBASE_API_KEY). " +
-      "Refer to src/lib/firebase.ts and README.md for details. Without your project's .env.local, your app might not connect correctly.",
+      "ensure you have a .env.local file with your Firebase project credentials (e.g., NEXT_PUBLIC_FIREBASE_API_KEY), or that your hosting environment variables are set. " +
+      "Refer to src/lib/firebase.ts and README.md for details. Without your project's .env.local or correct hosting variables, your app might not connect correctly.",
       "color: orange; font-weight: bold; font-size: 1.1em;"
     );
   } else if (firebaseConfig.apiKey === "YOUR_API_KEY") { 
      console.error(
       "%cFirebase Initialization Error: API Key is still the placeholder 'YOUR_API_KEY'. " +
-      "Please replace it with your actual Firebase project API key using environment variables (NEXT_PUBLIC_FIREBASE_API_KEY in .env.local).",
+      "Please replace it with your actual Firebase project API key using environment variables (NEXT_PUBLIC_FIREBASE_API_KEY in .env.local or hosting provider settings).",
       "color: red; font-weight: bold; font-size: 1.1em;"
     );
   }
