@@ -339,6 +339,7 @@ If you need to change who the owner is:
     *   **Verify `NEXT_PUBLIC_FIREBASE_PROJECT_ID`**: If using `.env.local`, ensure this variable correctly points to the Firebase project ID where your rules and authentication are set up. If using hardcoded values in `src/lib/firebase.ts`, ensure `firebaseConfig.projectId` is correct. A mismatch means your app talks to one project, but your rules are in another. Check the browser console for `[Firebase Setup] Attempting to connect to Firebase project ID: ...` log when the app loads.
 *   **Missing Firestore Indexes**:
     *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index. The `getParticipants` function is most likely to trigger this if multiple filters are applied.
+    *   **Production Note (e.g., Vercel):** If you see a generic 500 error or "Server Component Render Error" on your deployed site, and suspect a Firestore index issue, check your hosting provider's serverless function logs (e.g., Vercel "Logs" tab). The detailed Firestore error message (including the index creation link) will likely be visible there, even if it's hidden from the client-side browser console in production.
 *   **CSV Import Issues**:
     *   The CSV import functionality adds participants to the system. However, it does **not** automatically create new schools or committees if they are found in the CSV but do not already exist in the system lists (managed via the Superior Admin panel).
     *   Ensure all schools and committees in your CSV file are pre-registered in the system before importing participants for those schools/committees. The import dialog will notify you if new, unregistered schools or committees are detected.
@@ -350,3 +351,5 @@ If you need to change who the owner is:
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
+
+```
