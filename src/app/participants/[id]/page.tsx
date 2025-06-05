@@ -10,19 +10,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
-import { ParticipantForm } from '@/components/participants/ParticipantForm'; // Import the form
+import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CalendarDays, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser } from 'lucide-react'; // Added BookUser for Class/Grade
 import { format, parseISO, isValid } from 'date-fns';
-import { db } from '@/lib/firebase'; // For client-side updates
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,10 +23,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuPortal
 } from '@/components/ui/dropdown-menu';
 
 
@@ -97,12 +86,10 @@ export default function ParticipantProfilePage() {
     if (!participant) return;
     setIsSubmitting(true);
     try {
-      // Prefer server action for revalidation if possible, fallback to client update if needed
       const updatedParticipant = await serverMarkAttendance(participant.id, status);
       if (updatedParticipant) {
-         setParticipant(updatedParticipant); // Update with fresh data from server
+         setParticipant(updatedParticipant); 
       } else {
-        // Fallback: update client state optimistically if server action returns null or fails subtly
         setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
       }
       toast({
@@ -115,7 +102,6 @@ export default function ParticipantProfilePage() {
         description: 'Failed to update attendance.',
         variant: 'destructive',
       });
-       // Optionally re-fetch to ensure data consistency on error
        fetchParticipantData();
     } finally {
       setIsSubmitting(false);
@@ -167,10 +153,6 @@ export default function ParticipantProfilePage() {
     );
   }
   
-  const displayBirthday = participant.birthday && isValid(parseISO(participant.birthday)) 
-    ? format(parseISO(participant.birthday), 'MMMM d, yyyy') 
-    : 'Not set';
-
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
        <Button asChild variant="outline" className="mb-6">
@@ -200,8 +182,8 @@ export default function ParticipantProfilePage() {
                 <span className="text-right">{participant.committee}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">Birthday:</span>
-                <span className="text-right">{displayBirthday}</span>
+                <span className="font-medium text-muted-foreground">Class/Grade:</span>
+                <span className="text-right">{participant.classGrade || 'Not set'}</span>
               </div>
                <div className="flex justify-between">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>

@@ -13,24 +13,37 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox'; // Added Checkbox
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
 import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, UserX, Users } from 'lucide-react';
+import { ArrowUpDown, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 
 interface ParticipantTableProps {
   participants: Participant[];
   isLoading: boolean;
   onEditParticipant: (participant: Participant) => void;
   visibleColumns: VisibleColumns;
+  selectedParticipants: string[];
+  onSelectParticipant: (participantId: string, isSelected: boolean) => void;
+  onSelectAll: (isSelected: boolean) => void;
+  isAllSelected: boolean;
 }
 
 type SortKey = keyof Pick<Participant, 'name' | 'school' | 'committee' | 'status'>;
 type SortOrder = 'asc' | 'desc';
 
-export function ParticipantTable({ participants, isLoading, onEditParticipant, visibleColumns }: ParticipantTableProps) {
+export function ParticipantTable({ 
+  participants, 
+  isLoading, 
+  onEditParticipant, 
+  visibleColumns,
+  selectedParticipants,
+  onSelectParticipant,
+  onSelectAll,
+  isAllSelected
+}: ParticipantTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
   const [sortOrder, setSortOrder] = React.useState<SortOrder>('asc');
 
@@ -66,6 +79,7 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
+              {visibleColumns.selection && <TableHead className="w-[50px] pl-4"><Skeleton className="h-5 w-5" /></TableHead>}
               {visibleColumns.avatar && <TableHead className="w-[70px]"><Skeleton className="h-5 w-12" /></TableHead>}
               {visibleColumns.name && <TableHead><Skeleton className="h-5 w-32" /></TableHead>}
               {visibleColumns.school && <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-28" /></TableHead>}
@@ -77,6 +91,7 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={`skel-row-${i}`} className="bg-background">
+                {visibleColumns.selection && <TableCell className="pl-4"><Skeleton className="h-5 w-5" /></TableCell>}
                 {visibleColumns.avatar && <TableCell><Skeleton className="h-10 w-10 rounded-full" /></TableCell>}
                 {visibleColumns.name && <TableCell><Skeleton className="h-5 w-40" /></TableCell>}
                 {visibleColumns.school && <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-32" /></TableCell>}
@@ -108,7 +123,17 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow>
-            {visibleColumns.avatar && <TableHead className="w-[70px] pl-6">Avatar</TableHead>}
+            {visibleColumns.selection && (
+              <TableHead className="w-[50px] pl-4">
+                <Checkbox
+                  checked={isAllSelected && sortedParticipants.length > 0}
+                  onCheckedChange={(checked) => onSelectAll(Boolean(checked))}
+                  aria-label="Select all participants"
+                  disabled={sortedParticipants.length === 0}
+                />
+              </TableHead>
+            )}
+            {visibleColumns.avatar && <TableHead className="pl-2 pr-2 md:pl-6 w-[60px] md:w-[70px]">Avatar</TableHead>}
             {visibleColumns.name && (
               <TableHead className="min-w-[150px]">
                 <Button variant="ghost" onClick={() => handleSort('name')} className="px-1 group">
@@ -137,14 +162,27 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
                 </Button>
               </TableHead>
             )}
-            {visibleColumns.actions && <TableHead className="text-right w-[80px] pr-6">Actions</TableHead>}
+            {visibleColumns.actions && <TableHead className="text-right w-[80px] pr-4 md:pr-6">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedParticipants.map((participant) => (
-            <TableRow key={participant.id} className="hover:bg-muted/30 transition-colors">
+            <TableRow 
+              key={participant.id} 
+              className="hover:bg-muted/30 transition-colors"
+              data-state={selectedParticipants.includes(participant.id) ? 'selected' : undefined}
+            >
+              {visibleColumns.selection && (
+                <TableCell className="pl-4">
+                  <Checkbox
+                    checked={selectedParticipants.includes(participant.id)}
+                    onCheckedChange={(checked) => onSelectParticipant(participant.id, Boolean(checked))}
+                    aria-label={`Select participant ${participant.name}`}
+                  />
+                </TableCell>
+              )}
               {visibleColumns.avatar && (
-                <TableCell className="pl-6">
+                <TableCell className="pl-2 pr-2 md:pl-6">
                    <Link href={`/participants/${participant.id}`} aria-label={`View profile of ${participant.name}`}>
                     <Avatar className="h-10 w-10 border hover:ring-2 hover:ring-primary transition-all">
                       <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
@@ -168,7 +206,7 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
                 </TableCell>
               )}
               {visibleColumns.actions && (
-                <TableCell className="text-right pr-6">
+                <TableCell className="text-right pr-4 md:pr-6">
                   <ParticipantActions participant={participant} onEdit={onEditParticipant} />
                 </TableCell>
               )}

@@ -35,12 +35,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
-import { format, parseISO, isValid } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 const participantFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -48,7 +43,7 @@ const participantFormSchema = z.object({
   committee: z.string().min(1, 'Committee is required.'),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   additionalDetails: z.string().max(1000, 'Details must be at most 1000 characters.').optional().default(''),
-  birthday: z.date().optional().nullable(), // Use z.date() for react-day-picker
+  classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''), // Changed from birthday
 });
 
 type ParticipantFormData = z.infer<typeof participantFormSchema>;
@@ -81,27 +76,20 @@ export function ParticipantForm({
       committee: '',
       notes: '',
       additionalDetails: '',
-      birthday: null,
+      classGrade: '', // Changed from birthday
     },
   });
 
   useEffect(() => {
     if (isOpen) {
       if (participantToEdit) {
-        let parsedBirthday = null;
-        if (participantToEdit.birthday) {
-            const dateCandidate = parseISO(participantToEdit.birthday);
-            if(isValid(dateCandidate)) {
-                parsedBirthday = dateCandidate;
-            }
-        }
         form.reset({
           name: participantToEdit.name,
           school: participantToEdit.school,
           committee: participantToEdit.committee,
           notes: participantToEdit.notes || '',
           additionalDetails: participantToEdit.additionalDetails || '',
-          birthday: parsedBirthday,
+          classGrade: participantToEdit.classGrade || '', // Changed from birthday
         });
       } else {
         form.reset({
@@ -110,7 +98,7 @@ export function ParticipantForm({
           committee: committees.length > 0 ? committees[0] : '',
           notes: '',
           additionalDetails: '',
-          birthday: null,
+          classGrade: '', // Changed from birthday
         });
       }
     }
@@ -125,7 +113,7 @@ export function ParticipantForm({
           committee: data.committee.trim(),
           notes: data.notes?.trim() || '',
           additionalDetails: data.additionalDetails?.trim() || '',
-          birthday: data.birthday ? format(data.birthday, 'yyyy-MM-dd') : null,
+          classGrade: data.classGrade?.trim() || '', // Changed from birthday
           updatedAt: serverTimestamp(),
         };
 
@@ -137,7 +125,7 @@ export function ParticipantForm({
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           const newParticipantData = {
             ...submissionData,
-            status: 'Absent' as const,
+            status: 'Absent' as const, 
             imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
             createdAt: serverTimestamp(),
           };
@@ -158,20 +146,16 @@ export function ParticipantForm({
   };
   
   const handleDialogClose = () => {
-    // This specific reset call inside handleDialogClose might not be strictly necessary
-    // if onOpenChange(false) triggers the useEffect which already has reset logic.
-    // However, explicit reset on cancel is harmless.
     form.reset({ 
         name: '', 
         school: schools.length > 0 ? schools[0] : '', 
         committee: committees.length > 0 ? committees[0] : '',
         notes: '',
         additionalDetails: '',
-        birthday: null,
+        classGrade: '', // Changed from birthday
     });
     onOpenChange(false);
   }
-
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -263,10 +247,23 @@ export function ParticipantForm({
             />
             <FormField
               control={form.control}
+              name="classGrade" // New field
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-classGrade">Class/Grade (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="form-classGrade" placeholder="e.g., 10th Grade, Year 12" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-notes">Notes</FormLabel>
+                  <FormLabel htmlFor="form-notes">Notes (Optional)</FormLabel>
                   <FormControl>
                     <Textarea
                       id="form-notes"
@@ -286,7 +283,7 @@ export function ParticipantForm({
               name="additionalDetails"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-additionalDetails">Additional Details</FormLabel>
+                  <FormLabel htmlFor="form-additionalDetails">Additional Details (Optional)</FormLabel>
                   <FormControl>
                     <Textarea
                       id="form-additionalDetails"
@@ -297,49 +294,6 @@ export function ParticipantForm({
                       rows={3}
                     />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="birthday"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel htmlFor="form-birthday">Birthday (Optional)</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          id="form-birthday"
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          disabled={isPending}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value ?? undefined}
-                        onSelect={(date) => field.onChange(date ?? null)}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}

@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { PlusCircle, ListFilter, CheckSquare, Square, Loader2 } from 'lucide-react';
+import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,6 +23,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent
 } from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
@@ -30,11 +34,21 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getParticipants, getSystemSchools, getSystemCommittees } from '@/lib/actions';
+import { getParticipants, getSystemSchools, getSystemCommittees, bulkMarkAttendance } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+
+const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
+    { status: 'Present', label: 'Present', icon: CheckCircle },
+    { status: 'Absent', label: 'Absent', icon: XCircle },
+    { status: 'Present On Account', label: 'Present (On Account)', icon: AlertOctagon },
+    { status: 'In Break', label: 'In Break', icon: Coffee },
+    { status: 'Restroom Break', label: 'Restroom Break', icon: UserRound },
+    { status: 'Technical Issue', label: 'Technical Issue', icon: Wrench },
+    { status: 'Stepped Out', label: 'Stepped Out', icon: LogOutIcon },
+];
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -58,6 +72,7 @@ export default function AdminDashboardPage() {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const [visibleColumns, setVisibleColumns] = React.useState<VisibleColumns>({
+    selection: true, // Added selection column
     avatar: true,
     name: true,
     school: true,
@@ -67,6 +82,7 @@ export default function AdminDashboardPage() {
   });
 
   const columnLabels: Record<keyof VisibleColumns, string> = {
+    selection: 'Select',
     avatar: 'Avatar',
     name: 'Name',
     school: 'School',
@@ -74,6 +90,10 @@ export default function AdminDashboardPage() {
     status: 'Status',
     actions: 'Actions',
   };
+
+  const [selectedParticipantIds, setSelectedParticipantIds] = React.useState<string[]>([]);
+  const [isBulkUpdating, setIsBulkUpdating] = React.useState(false);
+
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -105,6 +125,7 @@ export default function AdminDashboardPage() {
       setParticipants(participantsData);
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
+      setSelectedParticipantIds([]); // Clear selection on data refresh
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast({title: "Error", description: "Failed to load dashboard data.", variant: "destructive"})
@@ -132,7 +153,12 @@ export default function AdminDashboardPage() {
   const toggleAllColumns = (show: boolean) => {
     setVisibleColumns(prev => 
       Object.keys(prev).reduce((acc, key) => {
-        acc[key as keyof VisibleColumns] = show;
+        // Ensure 'selection' column cannot be hidden if actions are visible, or vice-versa if needed
+        if (key === 'selection' && !show && prev.actions) { // Example: don't hide selection if actions visible
+           acc[key as keyof VisibleColumns] = true; // Or handle as per specific UX decision
+        } else {
+           acc[key as keyof VisibleColumns] = show;
+        }
         return acc;
       }, {} as VisibleColumns)
     );
@@ -143,6 +169,45 @@ export default function AdminDashboardPage() {
     { label: 'Present', value: 'Present' },
     { label: 'Absent', value: 'Absent' },
   ];
+
+  const handleSelectParticipant = (participantId: string, isSelected: boolean) => {
+    setSelectedParticipantIds(prevSelected => 
+      isSelected 
+        ? [...prevSelected, participantId]
+        : prevSelected.filter(id => id !== participantId)
+    );
+  };
+
+  const handleSelectAll = (isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedParticipantIds(participants.map(p => p.id));
+    } else {
+      setSelectedParticipantIds([]);
+    }
+  };
+  
+  const isAllSelected = participants.length > 0 && selectedParticipantIds.length === participants.length;
+
+  const handleBulkStatusUpdate = async (status: AttendanceStatus) => {
+    if (selectedParticipantIds.length === 0) {
+      toast({ title: "No participants selected", description: "Please select participants to update.", variant: "default" });
+      return;
+    }
+    setIsBulkUpdating(true);
+    try {
+      const result = await bulkMarkAttendance(selectedParticipantIds, status);
+      toast({
+        title: "Bulk Update Successful",
+        description: `${result.successCount} participant(s) updated to ${status}. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
+      });
+      fetchData(); // Refresh data and clear selection
+    } catch (error: any) {
+      toast({ title: "Bulk Update Failed", description: error.message || "An error occurred.", variant: "destructive" });
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
 
   if (isAuthLoading) {
     return (
@@ -216,6 +281,7 @@ export default function AdminDashboardPage() {
                     onCheckedChange={(checked) =>
                       setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
                     }
+                     disabled={key === 'selection' && visibleColumns.actions} // Example: keep selection if actions are on
                   >
                     {columnLabels[key]}
                   </DropdownMenuCheckboxItem>
@@ -228,42 +294,40 @@ export default function AdminDashboardPage() {
           </div>
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
             placeholder="Search by name, school, committee..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow"
           />
-          <div className="flex gap-2 flex-shrink-0">
-            <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((school) => (
-                  <SelectItem key={school} value={school}>
-                    {school}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by committee" />
-              </SelectTrigger>
-              <SelectContent>
-                {committees.map((committee) => (
-                  <SelectItem key={committee} value={committee}>
-                    {committee}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by school" />
+            </SelectTrigger>
+            <SelectContent>
+              {schools.map((school) => (
+                <SelectItem key={school} value={school}>
+                  {school}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by committee" />
+            </SelectTrigger>
+            <SelectContent>
+              {committees.map((committee) => (
+                <SelectItem key={committee} value={committee}>
+                  {committee}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
             {statusFilterOptions.map(opt => (
               <Button
                 key={opt.value}
@@ -274,6 +338,27 @@ export default function AdminDashboardPage() {
                 {opt.label}
               </Button>
             ))}
+            {selectedParticipantIds.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" disabled={isBulkUpdating}>
+                    <Layers className="mr-2 h-4 w-4" />
+                    Update {selectedParticipantIds.length} Selected
+                    {isBulkUpdating && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Set status for selected to:</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => (
+                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating}>
+                      <opt.icon className="mr-2 h-4 w-4" />
+                      {opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
         </div>
 
         <ParticipantTable
@@ -281,6 +366,10 @@ export default function AdminDashboardPage() {
           isLoading={isLoadingData}
           onEditParticipant={handleEditParticipant}
           visibleColumns={visibleColumns}
+          selectedParticipants={selectedParticipantIds}
+          onSelectParticipant={handleSelectParticipant}
+          onSelectAll={handleSelectAll}
+          isAllSelected={isAllSelected}
         />
       </div>
 

@@ -17,9 +17,9 @@ export interface Participant {
   imageUrl?: string;
   notes?: string;
   additionalDetails?: string;
-  birthday?: string | null; // Store as ISO string (YYYY-MM-DD) or null
-  createdAt?: string | any; // Can be Firebase Timestamp client-side or ISO string from server
-  updatedAt?: string | any; // Can be Firebase Timestamp client-side or ISO string from server
+  classGrade?: string; // Changed from birthday
+  createdAt?: string | any; 
+  updatedAt?: string | any; 
 }
 
 export interface School {
@@ -39,15 +39,15 @@ export interface VisibleColumns {
   committee: boolean;
   status: boolean;
   actions: boolean;
+  selection?: boolean; // Added for upcoming bulk selection
 }
 
-// Used for managing admin users in the superior admin panel
 export interface AdminManagedUser {
-  id: string; // Firestore document ID (this IS the Auth UID)
+  id: string; 
   email: string;
   displayName?: string | null;
   role: 'admin' | string; 
-  createdAt?: string | any; // Firebase Timestamp or ISO string
-  updatedAt?: string | any; // Firebase Timestamp or ISO string
-  avatarUrl?: string; // Optional avatar URL
+  createdAt?: string | any; 
+  updatedAt?: string | any; 
+  avatarUrl?: string; 
 }
