@@ -90,14 +90,6 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     }
   };
 
-  const handlePlaceholderClick = (featureName: string) => {
-    toast({
-      title: 'Coming Soon!',
-      description: `${featureName} page is not yet implemented.`,
-      variant: 'default',
-    });
-  };
-
   const getAvatarFallback = () => {
     if (loggedInUser?.email) {
       return loggedInUser.email.substring(0, 2).toUpperCase();
@@ -187,13 +179,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                   {loggedInUser.displayName || loggedInUser.email || "My Account"}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handlePlaceholderClick('Profile')}> 
-                  <UserCog className="mr-2 h-4 w-4" /> Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handlePlaceholderClick('Settings')}> 
-                  <SettingsIcon className="mr-2 h-4 w-4" /> Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {/* Removed Profile and Settings placeholder menu items */}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
                 </DropdownMenuItem>

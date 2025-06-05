@@ -372,22 +372,7 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-gray-500 md:col-span-2 lg:col-span-1">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">View System Logs</CardTitle>
-              <ScrollText className="h-7 w-7 text-gray-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                (Placeholder) Access detailed system and audit logs for monitoring and troubleshooting.
-              </p>
-            </CardContent>
-            <CardFooter>
-                <Button className="w-full" variant="secondary" disabled>
-                    <ExternalLink className="mr-2 h-4 w-4" /> View Logs (Not Implemented)
-                </Button>
-            </CardFooter>
-          </Card>
+           {/* Removed System Logs Card */}
         </div>
         
         <div className="mt-12 p-6 bg-green-600/10 border border-green-700/30 rounded-xl text-center">
