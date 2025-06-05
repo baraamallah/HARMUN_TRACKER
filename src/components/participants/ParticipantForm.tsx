@@ -32,8 +32,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { addParticipant, updateParticipant } from '@/lib/actions';
+// Remove server action imports
+// import { addParticipant, updateParticipant } from '@/lib/actions'; 
 import { useEffect, useTransition } from 'react';
+import { db } from '@/lib/firebase'; // Import client-side db
+import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Import Firestore functions
 
 const participantFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -47,9 +50,9 @@ interface ParticipantFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   participantToEdit?: Participant | null;
-  schools: string[]; // These are now system-managed schools
-  committees: string[]; // These are now system-managed committees
-  onFormSubmitSuccess?: () => void; // Callback to refresh data on parent page
+  schools: string[]; 
+  committees: string[]; 
+  onFormSubmitSuccess?: () => void; 
 }
 
 export function ParticipantForm({
@@ -73,7 +76,7 @@ export function ParticipantForm({
   });
 
   useEffect(() => {
-    if (isOpen) { // Only reset/populate form when dialog opens
+    if (isOpen) { 
       if (participantToEdit) {
         form.reset({
           name: participantToEdit.name,
@@ -83,8 +86,8 @@ export function ParticipantForm({
       } else {
         form.reset({ 
             name: '', 
-            school: schools.length > 0 ? schools[0] : '', // Pre-select if available
-            committee: committees.length > 0 ? committees[0] : '' // Pre-select if available
+            school: schools.length > 0 ? schools[0] : '', 
+            committee: committees.length > 0 ? committees[0] : '' 
         });
       }
     }
@@ -94,19 +97,36 @@ export function ParticipantForm({
     startTransition(async () => {
       try {
         if (participantToEdit) {
-          await updateParticipant(participantToEdit.id, data);
+          // Client-side update
+          const participantRef = doc(db, 'participants', participantToEdit.id);
+          await updateDoc(participantRef, {
+            ...data, // name, school, committee from form
+            updatedAt: serverTimestamp(),
+          });
           toast({ title: 'Participant Updated', description: `${data.name} has been updated.` });
         } else {
-          await addParticipant(data);
+          // Client-side add
+          const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
+          const newParticipantData = {
+            ...data,
+            name: data.name.trim(),
+            school: data.school.trim(),
+            committee: data.committee.trim(),
+            status: 'Absent' as const, // Default status for UI additions
+            imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+            createdAt: serverTimestamp(),
+          };
+          await addDoc(collection(db, 'participants'), newParticipantData);
           toast({ title: 'Participant Added', description: `${data.name} has been added.` });
         }
         onOpenChange(false);
         form.reset();
-        onFormSubmitSuccess?.(); // Call the success callback
+        onFormSubmitSuccess?.(); 
       } catch (error: any) {
+        console.error("Error in ParticipantForm onSubmit:", error);
         toast({
           title: 'Error',
-          description: error.message || `Failed to ${participantToEdit ? 'update' : 'add'} participant.`,
+          description: error.message || `Failed to ${participantToEdit ? 'update' : 'add'} participant. Check console for details.`,
           variant: 'destructive',
         });
       }
@@ -158,7 +178,6 @@ export function ParticipantForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {/* Removed: schools.length === 0 && <SelectItem value="" disabled>No schools available</SelectItem> */}
                       {schools.map((school) => (
                         <SelectItem key={school} value={school}>
                           {school}
@@ -188,7 +207,6 @@ export function ParticipantForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {/* Removed: committees.length === 0 && <SelectItem value="" disabled>No committees available</SelectItem> */}
                       {committees.map((committee) => (
                         <SelectItem key={committee} value={committee}>
                           {committee}
