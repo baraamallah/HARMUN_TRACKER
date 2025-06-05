@@ -13,15 +13,22 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2 } from 'lucide-react'; // Updated icons
-import { auth } from '@/lib/firebase'; 
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2 } from 'lucide-react';
+import { auth, db } from '@/lib/firebase'; // Import db
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore'; // Import firestore functions
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { OWNER_UID } from '@/lib/constants'; 
-import { getSystemSchools, addSystemSchool, getSystemCommittees, addSystemCommittee } from '@/lib/actions';
+import { OWNER_UID } from '@/lib/constants';
+// getSystemSchools and getSystemCommittees server actions are still used for fetching initial lists.
+// addSystemSchool and addSystemCommittee server actions are NOT used by this page's direct "Add" buttons anymore.
+import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+
+// Collection names
+const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
+const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 
 export default function SuperiorAdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -41,9 +48,11 @@ export default function SuperiorAdminPage() {
   const fetchSchools = useCallback(async () => {
     setIsLoadingSchools(true);
     try {
-      const schools = await getSystemSchools();
-      setSystemSchools(schools);
+      const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
+      const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
+      setSystemSchools(schoolsSnapshot.docs.map(doc => doc.data().name as string));
     } catch (error) {
+      console.error("Error fetching system schools (client-side): ", error);
       toast({ title: 'Error Fetching Schools', description: 'Failed to load the list of schools.', variant: 'destructive' });
     } finally {
       setIsLoadingSchools(false);
@@ -53,9 +62,11 @@ export default function SuperiorAdminPage() {
   const fetchCommittees = useCallback(async () => {
     setIsLoadingCommittees(true);
     try {
-      const committees = await getSystemCommittees();
-      setSystemCommittees(committees);
+      const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
+      const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
+      setSystemCommittees(committeesSnapshot.docs.map(doc => doc.data().name as string));
     } catch (error) {
+      console.error("Error fetching system committees (client-side): ", error);
       toast({ title: 'Error Fetching Committees', description: 'Failed to load the list of committees.', variant: 'destructive' });
     } finally {
       setIsLoadingCommittees(false);
@@ -64,13 +75,6 @@ export default function SuperiorAdminPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log(
-        "[Superior Admin Page Auth Check] Current User UID:", 
-        user ? user.uid : 'Not Logged In', 
-        "| Required Owner UID:", 
-        OWNER_UID,
-        "| Match:", user ? user.uid === OWNER_UID : false
-      );
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
@@ -81,49 +85,66 @@ export default function SuperiorAdminPage() {
     return () => unsubscribe();
   }, [fetchSchools, fetchCommittees]);
 
-  const handleAddSchool = async () => {
-    const currentAuthUserUid = auth.currentUser?.uid;
-    console.log("[Superior Admin Action] Attempting to add school. Current auth.currentUser?.uid:", currentAuthUserUid, "Required Owner UID:", OWNER_UID);
-    if (!newSchoolName.trim()) {
+  const handleAddSchoolClientSide = async () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) {
+      toast({ title: 'Unauthorized', description: 'Only the owner can perform this action.', variant: 'destructive' });
+      return;
+    }
+    const trimmedSchoolName = newSchoolName.trim();
+    if (!trimmedSchoolName) {
       toast({ title: 'Validation Error', description: 'School name cannot be empty.', variant: 'destructive' });
       return;
     }
+
     startTransition(async () => {
-      const result = await addSystemSchool(newSchoolName);
-      if (result.success) {
-        toast({ title: 'School Added', description: `School "${newSchoolName}" has been successfully added to the system.` });
+      try {
+        const schoolColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
+        await addDoc(schoolColRef, {
+          name: trimmedSchoolName,
+          createdAt: serverTimestamp()
+        });
+        toast({ title: 'School Added', description: `School "${trimmedSchoolName}" has been successfully added.` });
         setNewSchoolName('');
-        fetchSchools(); 
-      } else {
-        toast({ 
-          title: 'Error Adding School', 
-          description: `Failed: ${result.error || 'Unknown error'}. App expected Owner UID: '${OWNER_UID}'. Attempting user UID: '${currentAuthUserUid || 'Not available'}'. Please verify Firestore rules for 'system_schools' allow the Owner to write. Check browser console for more details.`, 
+        fetchSchools(); // Refresh the list
+      } catch (error: any) {
+        console.error(`Error adding system school "${trimmedSchoolName}" (client-side): `, error);
+        toast({
+          title: 'Error Adding School',
+          description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`,
           variant: 'destructive',
-          duration: 15000,
+          duration: 10000,
         });
       }
     });
   };
 
-  const handleAddCommittee = async () => {
-    const currentAuthUserUid = auth.currentUser?.uid;
-    console.log("[Superior Admin Action] Attempting to add committee. Current auth.currentUser?.uid:", currentAuthUserUid, "Required Owner UID:", OWNER_UID);
-    if (!newCommitteeName.trim()) {
+  const handleAddCommitteeClientSide = async () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) {
+      toast({ title: 'Unauthorized', description: 'Only the owner can perform this action.', variant: 'destructive' });
+      return;
+    }
+    const trimmedCommitteeName = newCommitteeName.trim();
+    if (!trimmedCommitteeName) {
       toast({ title: 'Validation Error', description: 'Committee name cannot be empty.', variant: 'destructive' });
       return;
     }
     startTransition(async () => {
-      const result = await addSystemCommittee(newCommitteeName);
-      if (result.success) {
-        toast({ title: 'Committee Added', description: `Committee "${newCommitteeName}" has been successfully added.` });
+      try {
+        const committeeColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
+        await addDoc(committeeColRef, {
+          name: trimmedCommitteeName,
+          createdAt: serverTimestamp()
+        });
+        toast({ title: 'Committee Added', description: `Committee "${trimmedCommitteeName}" has been successfully added.` });
         setNewCommitteeName('');
-        fetchCommittees(); 
-      } else {
-        toast({ 
-          title: 'Error Adding Committee', 
-          description: `Failed: ${result.error || 'Unknown error'}. App expected Owner UID: '${OWNER_UID}'. Attempting user UID: '${currentAuthUserUid || 'Not available'}'. Please verify Firestore rules for 'system_committees' allow the Owner to write. Check browser console for more details.`, 
+        fetchCommittees(); // Refresh the list
+      } catch (error: any) {
+        console.error(`Error adding system committee "${trimmedCommitteeName}" (client-side): `, error);
+        toast({
+          title: 'Error Adding Committee',
+          description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`,
           variant: 'destructive',
-          duration: 15000, 
+          duration: 10000,
         });
       }
     });
@@ -133,6 +154,7 @@ export default function SuperiorAdminPage() {
     try {
       await signOut(auth);
       toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
+      // router.push('/auth/login'); // Or let onAuthStateChanged handle it
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -170,19 +192,17 @@ export default function SuperiorAdminPage() {
             <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-xl mt-3 text-muted-foreground">
               This area is restricted to the Superior Administrator.
-              Current User UID: {currentUser ? `'${currentUser.uid}'` : 'Not Logged In'}. Required Owner UID: '{OWNER_UID}'.
-              {currentUser && currentUser.uid !== OWNER_UID && " (This is NOT the Owner Account)"}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            {currentUser && ( 
+            {currentUser && (
               <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full text-lg py-3">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Restricted User'})
               </Button>
             )}
             {!currentUser && (
                  <p className="text-md text-muted-foreground mt-4">
-                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account ({OWNER_UID}).
+                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account.
                  </p>
             )}
           </CardContent>
@@ -192,9 +212,6 @@ export default function SuperiorAdminPage() {
                 <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
               </Button>
             </Link>
-            <p className="text-xs text-muted-foreground mt-4">
-              If you believe this is an error, please verify your login credentials or contact system support. Ensure your Firestore Security Rules in your Firebase project are correctly published (see README.md).
-            </p>
           </CardFooter>
         </Card>
       </div>
@@ -249,7 +266,7 @@ export default function SuperiorAdminPage() {
                     disabled={isPending}
                     className="flex-grow"
                   />
-                  <Button onClick={handleAddSchool} disabled={isPending || !newSchoolName.trim()} className="bg-primary hover:bg-primary/90">
+                  <Button onClick={handleAddSchoolClientSide} disabled={isPending || !newSchoolName.trim()} className="bg-primary hover:bg-primary/90">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add
                   </Button>
                 </div>
@@ -278,7 +295,7 @@ export default function SuperiorAdminPage() {
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-accent">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">Manage Committees</CardTitle>
-              <BookOpenText className="h-7 w-7 text-accent" /> 
+              <BookOpenText className="h-7 w-7 text-accent" />
             </CardHeader>
             <CardContent className="pt-2">
               <div className="space-y-4">
@@ -291,7 +308,7 @@ export default function SuperiorAdminPage() {
                     disabled={isPending}
                     className="flex-grow"
                   />
-                  <Button onClick={handleAddCommittee} disabled={isPending || !newCommitteeName.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                  <Button onClick={handleAddCommitteeClientSide} disabled={isPending || !newCommitteeName.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add
                   </Button>
                 </div>
@@ -315,7 +332,7 @@ export default function SuperiorAdminPage() {
               </div>
             </CardContent>
           </Card>
-        
+
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-blue-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">Global Participant Data</CardTitle>
@@ -334,7 +351,7 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-        
+
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">System Settings</CardTitle>
@@ -372,9 +389,8 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-           {/* Removed System Logs Card */}
         </div>
-        
+
         <div className="mt-12 p-6 bg-green-600/10 border border-green-700/30 rounded-xl text-center">
           <p className="font-medium text-lg text-green-700 dark:text-green-400">
             <ShieldAlert className="inline-block mr-2 h-6 w-6 align-middle" />
@@ -396,6 +412,5 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
-    
 
     
