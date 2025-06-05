@@ -2,11 +2,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
-import { PublicLayout } from '@/components/layout/PublicLayout';
-import { PlusCircle, ListFilter, CheckSquare, Square, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -14,6 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,13 +18,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { ListFilter, Square, CheckSquare, Eye } from 'lucide-react'; // Removed unused CheckSquare, Square
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
+import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants, getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
-import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,8 +42,8 @@ export default function PublicViewPage() {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // For public page, actions column is never relevant for direct interaction
-  const [visibleColumns, setVisibleColumns] = React.useState<Omit<VisibleColumns, 'actions'>>({
+  // Public page doesn't need 'actions' or 'selection' columns to be configurable for visibility
+  const [visibleColumns, setVisibleColumns] = React.useState<Omit<VisibleColumns, 'actions' | 'selection'>>({
     avatar: true,
     name: true,
     school: true,
@@ -54,14 +51,14 @@ export default function PublicViewPage() {
     status: true,
   });
 
-  const columnLabels: Record<keyof Omit<VisibleColumns, 'actions'>, string> = {
+  // Type for columnLabels should match the keys of the visibleColumns state for this page
+  const columnLabels: Record<keyof typeof visibleColumns, string> = {
     avatar: 'Avatar',
     name: 'Name',
     school: 'School',
     committee: 'Committee',
     status: 'Status',
   };
-
 
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
@@ -88,57 +85,59 @@ export default function PublicViewPage() {
   }, [selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
 
   React.useEffect(() => {
-      fetchData();
+    fetchData();
   }, [fetchData]);
-  
+
   const toggleAllColumns = (show: boolean) => {
     setVisibleColumns(prev => 
       Object.keys(prev).reduce((acc, key) => {
-        acc[key as keyof Omit<VisibleColumns, 'actions'>] = show;
+        acc[key as keyof typeof visibleColumns] = show;
         return acc;
-      }, {} as Omit<VisibleColumns, 'actions'>)
+      }, {} as Omit<VisibleColumns, 'actions' | 'selection'>)
     );
   };
-
+  
   const statusFilterOptions: { label: string; value: AttendanceStatus | 'All' }[] = [
     { label: 'All Participants', value: 'All' },
     { label: 'Present', value: 'Present' },
     { label: 'Absent', value: 'Absent' },
   ];
 
-
   return (
     <PublicLayout>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Public Attendance View</h1>
-            <p className="text-muted-foreground">View current participant attendance status.</p>
+            <h1 className="text-3xl font-bold tracking-tight flex items-center">
+              <Eye className="mr-3 h-8 w-8 text-primary" /> Public Attendance View
+            </h1>
+            <p className="text-muted-foreground">View current participant attendance status (read-only).</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" aria-label="Toggle column visibility">
+                <Button variant="outline">
                   <ListFilter className="mr-2 h-4 w-4" /> Columns
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
+                 <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
                   <CheckSquare className="mr-2 h-4 w-4" /> Show All
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
-                  <Square className="mr-2 h-4 w-4" /> Hide All
+                  <Square className="mr-2 h-4 w-4" /> Hide All (except Name)
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {(Object.keys(visibleColumns) as Array<keyof Omit<VisibleColumns, 'actions'>>).map((key) => (
+                {(Object.keys(visibleColumns) as Array<keyof typeof visibleColumns>).map((key) => (
                   <DropdownMenuCheckboxItem
                     key={key}
                     checked={visibleColumns[key]}
                     onCheckedChange={(checked) =>
                       setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
                     }
+                    disabled={key === 'name'} // Ensure 'Name' column cannot be hidden
                   >
                     {columnLabels[key]}
                   </DropdownMenuCheckboxItem>
@@ -148,50 +147,45 @@ export default function PublicViewPage() {
           </div>
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
             placeholder="Search by name, school, committee..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow"
-            aria-label="Search participants"
           />
-          <div className="flex gap-2 flex-shrink-0">
-            <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-              <SelectTrigger className="w-full md:w-[180px]" aria-label="Filter by school">
-                <SelectValue placeholder="Filter by school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((school) => (
-                  <SelectItem key={school} value={school}>
-                    {school}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
-              <SelectTrigger className="w-full md:w-[180px]" aria-label="Filter by committee">
-                <SelectValue placeholder="Filter by committee" />
-              </SelectTrigger>
-              <SelectContent>
-                {committees.map((committee) => (
-                  <SelectItem key={committee} value={committee}>
-                    {committee}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by school" />
+            </SelectTrigger>
+            <SelectContent>
+              {schools.map((school) => (
+                <SelectItem key={school} value={school}>
+                  {school}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by committee" />
+            </SelectTrigger>
+            <SelectContent>
+              {committees.map((committee) => (
+                <SelectItem key={committee} value={committee}>
+                  {committee}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex gap-2 mb-4">
+         <div className="flex flex-wrap gap-2 mb-4 items-center">
             {statusFilterOptions.map(opt => (
               <Button
                 key={opt.value}
                 variant={quickStatusFilter === opt.value ? "default" : "outline"}
                 onClick={() => setQuickStatusFilter(opt.value)}
-                className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2 dark:ring-offset-background")}
-                aria-label={`Filter by status: ${opt.label}`}
               >
                 {opt.label}
               </Button>
@@ -201,9 +195,13 @@ export default function PublicViewPage() {
         <ParticipantTable
           participants={participants}
           isLoading={isLoadingData}
-          onEditParticipant={() => { /* No edit action on public page */ }}
-          // Ensure the visibleColumns prop matches the expected type for ParticipantTable, including 'actions'
-          visibleColumns={{...visibleColumns, actions: false}} 
+          onEditParticipant={() => {}} // No-op for public page
+          visibleColumns={{ ...visibleColumns, actions: false, selection: false }} // Ensure actions and selection are always false for public table
+          // Props not needed for public view related to selection
+          selectedParticipants={[]}
+          onSelectParticipant={() => {}}
+          onSelectAll={() => {}}
+          isAllSelected={false}
         />
       </div>
     </PublicLayout>
