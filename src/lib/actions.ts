@@ -35,10 +35,10 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default status.`);
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - getDefaultAttendanceStatusSetting] auth.currentUser from firebase.ts:`, auth.currentUser);
+  // console.log(`[Server Action - getDefaultAttendanceStatusSetting] auth.currentUser from firebase.ts:`, auth.currentUser); // This might be null or not available server-side without Admin SDK
   try {
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    console.log(`Attempting to read from Firestore path: ${configDocRef.path}`);
+    console.log(`[Action: getDefaultAttendanceStatusSetting] Attempting to read from Firestore path: ${configDocRef.path}`);
     const docSnap = await getDoc(configDocRef);
     if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
       return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
@@ -54,10 +54,10 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
 export async function updateDefaultAttendanceStatusSetting(newStatus: AttendanceStatus): Promise<{success: boolean, error?: string}> {
   console.log(`[Server Action - updateDefaultAttendanceStatusSetting] Attempting to update default status to: ${newStatus}.`);
   console.log(`[Server Action - updateDefaultAttendanceStatusSetting] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - updateDefaultAttendanceStatusSetting] auth.currentUser from firebase.ts:`, auth.currentUser);
+  // console.log(`[Server Action - updateDefaultAttendanceStatusSetting] auth.currentUser from firebase.ts:`, auth.currentUser); // This might be null or not available server-side without Admin SDK
   try {
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    console.log(`Attempting to write to Firestore path: ${configDocRef.path}`);
+    console.log(`[Action: updateDefaultAttendanceStatusSetting] Attempting to write to Firestore path: ${configDocRef.path}`);
     await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
     revalidatePath('/superior-admin/system-settings');
     revalidatePath('/');
@@ -93,20 +93,23 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     }
 
     q = query(participantsColRef, ...queryConstraints, orderBy('name'));
-    console.log(`Attempting to read from Firestore path: ${participantsColRef.path} with filters/orderBy`);
+    console.log(`[Action: getParticipants] Attempting to read from Firestore path: ${participantsColRef.path} with filters/orderBy`);
 
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
-      // Convert Timestamps to ISO strings for serialization
-      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt;
-      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt;
-      
       return {
         id: docSnap.id,
-        ...data,
-        createdAt,
-        updatedAt,
+        name: data.name || '',
+        school: data.school || '',
+        committee: data.committee || '',
+        status: data.status || 'Absent',
+        imageUrl: data.imageUrl,
+        notes: data.notes,
+        additionalDetails: data.additionalDetails,
+        birthday: data.birthday, // Keep as is, could be string or null
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
     });
 
@@ -140,11 +143,44 @@ export async function getParticipants(filters?: { school?: string; committee?: s
   }
 }
 
-// This server action is no longer directly called by ParticipantForm.tsx
+export async function getParticipantById(id: string): Promise<Participant | null> {
+  console.log(`[Action: getParticipantById] Attempting to fetch participant with ID: ${id}`);
+  try {
+    const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
+    console.log(`[Action: getParticipantById] Attempting to read from Firestore path: ${participantRef.path}`);
+    const docSnap = await getDoc(participantRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        name: data.name || '',
+        school: data.school || '',
+        committee: data.committee || '',
+        status: data.status || 'Absent',
+        imageUrl: data.imageUrl,
+        notes: data.notes,
+        additionalDetails: data.additionalDetails,
+        birthday: data.birthday,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as Participant;
+    }
+    console.warn(`[Action: getParticipantById] Participant with ID ${id} not found.`);
+    return null;
+  } catch (error) {
+    console.error(`Error fetching participant by ID ${id}: `, error);
+    console.error("Full Firebase Error details for getParticipantById:", error);
+    throw new Error(`Failed to fetch participant. Check Firestore rules and connectivity.`);
+  }
+}
+
+
+// This server action is no longer directly called by ParticipantForm.tsx for add/update
 // It's kept for potential future server-side use (e.g. if importParticipants needed it AND had Admin SDK context)
+// Or if we want to switch back from client-side writes for the form.
 export async function addParticipant(participantData: Omit<Participant, 'id' | 'status' | 'imageUrl'>): Promise<Participant | null> {
   console.log(`[Server Action - addParticipant] Attempting to add participant: ${participantData.name}.`);
-  console.log(`[Server Action - addParticipant] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
+  // console.log(`[Server Action - addParticipant] auth.currentUser from firebase.ts:`, auth?.currentUser); // Likely null
   try {
     const defaultStatus = await getDefaultAttendanceStatusSetting();
     const nameInitial = (participantData.name.trim() || 'P').substring(0,2).toUpperCase();
@@ -155,21 +191,24 @@ export async function addParticipant(participantData: Omit<Participant, 'id' | '
       committee: participantData.committee.trim(),
       status: defaultStatus,
       imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+      notes: participantData.notes || '',
+      additionalDetails: participantData.additionalDetails || '',
+      birthday: participantData.birthday || null,
       createdAt: serverTimestamp()
     };
     const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-    console.log(`Attempting to write to Firestore path: ${participantsColRef.path} (addParticipant)`);
+    console.log(`[Action: addParticipant] Attempting to write to Firestore path: ${participantsColRef.path}`);
     const docRef = await addDoc(participantsColRef, newParticipantData);
     revalidatePath('/');
     revalidatePath('/public');
-    // For server actions, we'd construct the return value, assuming serverTimestamp resolves
-    // However, client-side add will handle its own object creation.
+    revalidatePath(`/participants/${docRef.id}`);
+
     const savedData = (await getDoc(docRef)).data();
     if (!savedData) return null;
 
-    return { 
-      id: docRef.id, 
-      ...savedData, 
+    return {
+      id: docRef.id,
+      ...savedData,
       createdAt: savedData.createdAt instanceof Timestamp ? savedData.createdAt.toDate().toISOString() : savedData.createdAt,
       updatedAt: savedData.updatedAt instanceof Timestamp ? savedData.updatedAt.toDate().toISOString() : savedData.updatedAt,
     } as Participant;
@@ -181,22 +220,21 @@ export async function addParticipant(participantData: Omit<Participant, 'id' | '
   }
 }
 
-// This server action is no longer directly called by ParticipantForm.tsx
-// It's kept for potential future server-side use.
 export async function updateParticipant(participantId: string, participantData: Partial<Omit<Participant, 'id'>>): Promise<Participant | null> {
   console.log(`[Server Action - updateParticipant] Attempting to update participant: ${participantId}.`);
-   console.log(`[Server Action - updateParticipant] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
+  // console.log(`[Server Action - updateParticipant] auth.currentUser from firebase.ts:`, auth?.currentUser); // Likely null
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    console.log(`Attempting to write to Firestore path: ${participantRef.path} (updateParticipant)`);
+    console.log(`[Action: updateParticipant] Attempting to write to Firestore path: ${participantRef.path}`);
     await updateDoc(participantRef, {...participantData, updatedAt: serverTimestamp()});
     revalidatePath('/');
     revalidatePath('/public');
+    revalidatePath(`/participants/${participantId}`);
     const updatedDocSnap = await getDoc(participantRef);
     if (updatedDocSnap.exists()) {
       const data = updatedDocSnap.data();
-      return { 
-        id: updatedDocSnap.id, 
+      return {
+        id: updatedDocSnap.id,
         ...data,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
@@ -214,13 +252,14 @@ export async function updateParticipant(participantId: string, participantData: 
 export async function deleteParticipant(participantId: string): Promise<{ success: boolean }> {
   console.log(`[Server Action - deleteParticipant] Attempting to delete participant: ${participantId}.`);
   console.log(`[Server Action - deleteParticipant] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - deleteParticipant] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - deleteParticipant] auth.currentUser from firebase.ts:`, auth.currentUser); // This is client SDK, might be populated if action called by client
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    console.log(`Attempting to write to Firestore path: ${participantRef.path} (deleteParticipant)`);
+    console.log(`[Action: deleteParticipant] Attempting to write to Firestore path: ${participantRef.path}`);
     await deleteDoc(participantRef);
     revalidatePath('/');
     revalidatePath('/public');
+    revalidatePath(`/participants/${participantId}`); // Might not exist anymore, but good to reval
     return { success: true };
   } catch (error) {
     console.error("Error deleting participant: ", error);
@@ -233,18 +272,19 @@ export async function deleteParticipant(participantId: string): Promise<{ succes
 export async function markAttendance(participantId: string, status: AttendanceStatus): Promise<Participant | null> {
   console.log(`[Server Action - markAttendance] Attempting to mark attendance for: ${participantId} to ${status}.`);
   console.log(`[Server Action - markAttendance] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - markAttendance] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - markAttendance] auth.currentUser from firebase.ts:`, auth.currentUser);  // This is client SDK, might be populated if action called by client
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    console.log(`Attempting to write to Firestore path: ${participantRef.path} (markAttendance)`);
+    console.log(`[Action: markAttendance] Attempting to write to Firestore path: ${participantRef.path}`);
     await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
     revalidatePath('/');
     revalidatePath('/public');
+    revalidatePath(`/participants/${participantId}`);
      const updatedDocSnap = await getDoc(participantRef);
     if (updatedDocSnap.exists()) {
       const data = updatedDocSnap.data();
-      return { 
-        id: updatedDocSnap.id, 
+      return {
+        id: updatedDocSnap.id,
         ...data,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
@@ -263,7 +303,7 @@ export async function markAttendance(participantId: string, status: AttendanceSt
 export async function getSystemSchools(): Promise<string[]> {
   try {
     const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-    console.log(`Attempting to read from Firestore path: ${schoolsColRef.path} (getSystemSchools)`);
+    console.log(`[Action: getSystemSchools] Attempting to read from Firestore path: ${schoolsColRef.path}`);
     const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
     return schoolsSnapshot.docs.map(doc => doc.data().name as string);
   } catch (error) {
@@ -276,13 +316,13 @@ export async function getSystemSchools(): Promise<string[]> {
 export async function addSystemSchool(schoolName: string): Promise<{success: boolean, id?: string, error?: string}> {
   const trimmedSchoolName = schoolName.trim();
   console.log(`[Server Action - addSystemSchool] Attempting to add school: ${trimmedSchoolName}.`);
-  console.log(`[Server Action - addSystemSchool] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - addSystemSchool] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
+  // console.log(`[Server Action - addSystemSchool] Auth object from firebase.ts:`, auth);
+  // console.log(`[Server Action - addSystemSchool] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
   if (!trimmedSchoolName) {
     return {success: false, error: "School name cannot be empty."};
   }
   const schoolColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-  console.log(`Attempting to write to Firestore path: ${schoolColRef.path} (addSystemSchool) with name: ${trimmedSchoolName}`);
+  console.log(`[Action: addSystemSchool] Attempting to write to Firestore path: ${schoolColRef.path} with name: ${trimmedSchoolName}`);
   try {
     const docRef = await addDoc(schoolColRef, {
       name: trimmedSchoolName,
@@ -309,7 +349,7 @@ export async function addSystemSchool(schoolName: string): Promise<{success: boo
 export async function getSystemCommittees(): Promise<string[]> {
   try {
     const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-    console.log(`Attempting to read from Firestore path: ${committeesColRef.path} (getSystemCommittees)`);
+    console.log(`[Action: getSystemCommittees] Attempting to read from Firestore path: ${committeesColRef.path}`);
     const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
     return committeesSnapshot.docs.map(doc => doc.data().name as string);
   } catch (error) {
@@ -322,13 +362,13 @@ export async function getSystemCommittees(): Promise<string[]> {
 export async function addSystemCommittee(committeeName: string): Promise<{success: boolean, id?: string, error?: string}> {
   const trimmedCommitteeName = committeeName.trim();
   console.log(`[Server Action - addSystemCommittee] Attempting to add committee: ${trimmedCommitteeName}.`);
-  console.log(`[Server Action - addSystemCommittee] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - addSystemCommittee] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
+  // console.log(`[Server Action - addSystemCommittee] Auth object from firebase.ts:`, auth);
+  // console.log(`[Server Action - addSystemCommittee] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
   if (!trimmedCommitteeName) {
     return {success: false, error: "Committee name cannot be empty."};
   }
   const committeeColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-  console.log(`Attempting to write to Firestore path: ${committeeColRef.path} (addSystemCommittee) with name: ${trimmedCommitteeName}`);
+  console.log(`[Action: addSystemCommittee] Attempting to write to Firestore path: ${committeeColRef.path} with name: ${trimmedCommitteeName}`);
   try {
     const docRef = await addDoc(committeeColRef, {
       name: trimmedCommitteeName,
@@ -354,10 +394,10 @@ export async function addSystemCommittee(committeeName: string): Promise<{succes
 
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl'>[]
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'birthday'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
   console.log(`[Server Action - importParticipants] Starting import for ${parsedParticipants.length} participants.`);
-  console.log(`[Server Action - importParticipants] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
+  // console.log(`[Server Action - importParticipants] auth.currentUser from firebase.ts:`, auth?.currentUser); // Likely null
 
   let importedCount = 0;
   let errorCount = 0;
@@ -373,7 +413,7 @@ export async function importParticipants(
     existingSystemSchools = await getSystemSchools();
     existingSystemCommittees = await getSystemCommittees();
   } catch(e) {
-    console.error("Error fetching system schools/committees during import pre-check:", e);
+    console.error("[Action: importParticipants] Error fetching system schools/committees during import pre-check:", e);
   }
 
 
@@ -396,31 +436,34 @@ export async function importParticipants(
         committee: trimmedCommittee,
         status: defaultStatus,
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+        notes: '', // Initialize new fields for CSV import
+        additionalDetails: '',
+        birthday: null,
         createdAt: serverTimestamp(),
       };
       const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipant);
       importedCount++;
     } catch (error) {
-      console.error("Error preparing participant for batch import: ", data, error);
+      console.error("[Action: importParticipants] Error preparing participant for batch import: ", data, error);
       console.error("Full Firebase Error details for preparing batch import:", error);
       errorCount++;
     }
   }
 
   try {
-    console.log(`[Server Action - importParticipants] Attempting to commit batch of ${importedCount} participants.`);
+    console.log(`[Action: importParticipants] Attempting to commit batch of ${importedCount} participants.`);
     await batch.commit();
-    console.log(`[Server Action - importParticipants] Batch commit successful.`);
+    console.log(`[Action: importParticipants] Batch commit successful.`);
   } catch (error) {
-    console.error("Error committing batch import: ", error);
+    console.error("[Action: importParticipants] Error committing batch import: ", error);
     console.error("Full Firebase Error details for batch.commit:", error);
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met for the user context of this server action. Check server logs for 'auth.currentUser' and verify Firestore rules.`;
     console.error(batchCommitError);
     return {
       count: 0,
-      errors: parsedParticipants.length + errorCount, 
+      errors: parsedParticipants.length + errorCount,
       detectedNewSchools: Array.from(detectedNewSchoolNames),
       detectedNewCommittees: Array.from(detectedNewCommitteeNames),
     };
@@ -444,21 +487,18 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
   try {
     const usersColRef = collection(db, USERS_COLLECTION);
     const q = query(usersColRef, where('role', '==', 'admin'), orderBy('email'));
-    console.log(`Attempting to read from Firestore path: ${usersColRef.path} with role='admin' filter (getAdminUsers)`);
+    console.log(`[Action: getAdminUsers] Attempting to read from Firestore path: ${usersColRef.path} with role='admin' filter`);
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
-      // Convert Timestamps to ISO strings
-      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt;
-      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt;
       return {
         id: docSnap.id,
         email: data.email,
         displayName: data.displayName,
         role: data.role,
         avatarUrl: data.avatarUrl,
-        createdAt,
-        updatedAt,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as AdminManagedUser;
     });
   } catch (error) {
@@ -471,8 +511,7 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
 
 export async function grantAdminRole({ email, displayName, authUid }: { email: string; displayName?: string; authUid: string }): Promise<{ success: boolean; message: string; admin?: AdminManagedUser }> {
   console.log(`[Server Action - grantAdminRole] Attempting for UID: ${authUid}, Email: ${email}.`);
-  console.log(`[Server Action - grantAdminRole] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - grantAdminRole] auth.currentUser from firebase.ts:`, auth.currentUser);
+  // console.log(`[Server Action - grantAdminRole] auth.currentUser from firebase.ts:`, auth.currentUser); // Likely null
   if (!email || !authUid) {
     return { success: false, message: 'Email and Auth UID are required.' };
   }
@@ -482,7 +521,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
   }
 
   const userDocRefByUid = doc(db, USERS_COLLECTION, trimmedAuthUid);
-  console.log(`Attempting to write to Firestore path: ${userDocRefByUid.path} (grantAdminRole) for UID: ${trimmedAuthUid}`);
+  console.log(`[Action: grantAdminRole] Attempting to write to Firestore path: ${userDocRefByUid.path} for UID: ${trimmedAuthUid}`);
 
   try {
     const userDocSnapByUid = await getDoc(userDocRefByUid);
@@ -492,7 +531,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
     if (userDocSnapByUid.exists()) {
       const dataFields = userDocSnapByUid.data();
-      const existingAdminObject: AdminManagedUser = { 
+      const existingAdminObject: AdminManagedUser = {
         id: userDocSnapByUid.id,
         email: dataFields.email,
         displayName: dataFields.displayName,
@@ -513,10 +552,10 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           updates.displayName = currentDisplayName;
           changed = true;
         }
-        
+
         if (changed) {
           await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()});
-          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() }; // Use ISO string
+          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() };
           revalidatePath('/superior-admin/admin-management');
           return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: updatedAdmin };
         }
@@ -534,7 +573,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         const updatedAdminForReturn: AdminManagedUser = {
           ...existingAdminObject,
           ...updatedFields,
-          updatedAt: new Date().toISOString(), // Use ISO string
+          updatedAt: new Date().toISOString(),
         };
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: updatedAdminForReturn };
@@ -561,8 +600,8 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const createdAdmin: AdminManagedUser = {
         id: trimmedAuthUid,
         ...newAdminDataFields,
-        createdAt: new Date().toISOString(), // Use ISO string
-        updatedAt: new Date().toISOString(), // Use ISO string
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       revalidatePath('/superior-admin/admin-management');
@@ -585,13 +624,12 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
 export async function revokeAdminRole(adminId: string): Promise<{ success: boolean; message: string }> {
   console.log(`[Server Action - revokeAdminRole] Attempting for UID: ${adminId}.`);
-  console.log(`[Server Action - revokeAdminRole] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - revokeAdminRole] auth.currentUser from firebase.ts:`, auth.currentUser);
+  // console.log(`[Server Action - revokeAdminRole] auth.currentUser from firebase.ts:`, auth.currentUser); // Likely null
   if (!adminId) {
     return { success: false, message: 'Admin Auth UID (adminId) is required.' };
   }
   const adminDocRef = doc(db, USERS_COLLECTION, adminId);
-  console.log(`Attempting to write to Firestore path: ${adminDocRef.path} (revokeAdminRole) for UID: ${adminId}`);
+  console.log(`[Action: revokeAdminRole] Attempting to write to Firestore path: ${adminDocRef.path} for UID: ${adminId}`);
   try {
     const adminDocSnap = await getDoc(adminDocRef);
 
@@ -615,4 +653,3 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
     };
   }
 }
-    

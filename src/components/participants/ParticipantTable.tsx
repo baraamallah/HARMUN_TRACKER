@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import type { Participant, VisibleColumns } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -15,8 +16,9 @@ import {
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
 import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, UserX, Users } from 'lucide-react'; 
+import { ArrowUpDown, UserX, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface ParticipantTableProps {
   participants: Participant[];
@@ -53,11 +55,11 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
 
   const renderSortIcon = (key: SortKey) => {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-30 group-hover:opacity-70" />;
-    return sortOrder === 'asc' ? 
-      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 text-primary" /> : 
+    return sortOrder === 'asc' ?
+      <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 text-primary" /> :
       <ArrowUpDown className="ml-2 h-4 w-4 opacity-100 text-primary transform rotate-180" />;
   };
-  
+
   if (isLoading) {
     return (
       <div className="rounded-lg border shadow-sm overflow-hidden">
@@ -92,7 +94,7 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
   if (participants.length === 0 && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] border rounded-lg shadow-sm bg-card p-10 text-center">
-        <Users className="h-24 w-24 text-muted-foreground/50 mb-6" data-ai-hint="no users group" /> 
+        <Users className="h-24 w-24 text-muted-foreground/50 mb-6" data-ai-hint="no users group" />
         <h3 className="text-2xl font-semibold text-foreground mb-2">No Participants Found</h3>
         <p className="text-lg text-muted-foreground">
           Try adjusting your search filters or add new participants to the list.
@@ -143,13 +145,21 @@ export function ParticipantTable({ participants, isLoading, onEditParticipant, v
             <TableRow key={participant.id} className="hover:bg-muted/30 transition-colors">
               {visibleColumns.avatar && (
                 <TableCell className="pl-6">
-                  <Avatar className="h-10 w-10 border">
-                    <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
-                    <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
+                   <Link href={`/participants/${participant.id}`} aria-label={`View profile of ${participant.name}`}>
+                    <Avatar className="h-10 w-10 border hover:ring-2 hover:ring-primary transition-all">
+                      <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
+                      <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </Link>
                 </TableCell>
               )}
-              {visibleColumns.name && <TableCell className="font-medium text-foreground">{participant.name}</TableCell>}
+              {visibleColumns.name && (
+                <TableCell className="font-medium text-foreground">
+                  <Link href={`/participants/${participant.id}`} className="hover:underline text-primary">
+                    {participant.name}
+                  </Link>
+                </TableCell>
+              )}
               {visibleColumns.school && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.school}</TableCell>}
               {visibleColumns.committee && <TableCell className="hidden lg:table-cell text-muted-foreground">{participant.committee}</TableCell>}
               {visibleColumns.status && (
