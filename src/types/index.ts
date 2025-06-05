@@ -17,9 +17,28 @@ export interface Participant {
   imageUrl?: string;
   notes?: string;
   additionalDetails?: string;
-  classGrade?: string; // Changed from birthday
+  classGrade?: string; 
   createdAt?: string | any; 
   updatedAt?: string | any; 
+}
+
+export type StaffAttendanceStatus =
+  | "On Duty"
+  | "Off Duty"
+  | "On Break"
+  | "Away";
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: string; // e.g., "Director", "Volunteer", "Security"
+  department?: string; // e.g., "Logistics", "Press", "Crisis"
+  contactInfo?: string; // e.g., phone or email
+  status: StaffAttendanceStatus;
+  notes?: string;
+  imageUrl?: string;
+  createdAt?: string | any;
+  updatedAt?: string | any;
 }
 
 export interface School {
@@ -39,8 +58,21 @@ export interface VisibleColumns {
   committee: boolean;
   status: boolean;
   actions: boolean;
-  selection?: boolean; // Added for upcoming bulk selection
+  selection?: boolean; 
 }
+
+// Specific for Staff Table, if columns differ significantly or for clarity
+export interface StaffVisibleColumns {
+  avatar: boolean;
+  name: boolean;
+  role: boolean;
+  department: boolean;
+  contactInfo: boolean;
+  status: boolean;
+  actions: boolean;
+  // No selection for staff initially
+}
+
 
 export interface AdminManagedUser {
   id: string; 
@@ -51,3 +83,4 @@ export interface AdminManagedUser {
   updatedAt?: string | any; 
   avatarUrl?: string; 
 }
+

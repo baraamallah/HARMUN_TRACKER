@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -18,11 +19,12 @@ import {
   getDoc,
   setDoc
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser } from '@/types';
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, StaffAttendanceStatus } from '@/types';
 import { OWNER_UID } from './constants';
 
 
 const PARTICIPANTS_COLLECTION = 'participants';
+const STAFF_MEMBERS_COLLECTION = 'staff_members'; // New collection for staff
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const USERS_COLLECTION = 'users';
@@ -35,7 +37,6 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default status.`);
   try {
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    console.log(`[Action: getDefaultAttendanceStatusSetting] Attempting to read from Firestore path: ${configDocRef.path}`);
     const docSnap = await getDoc(configDocRef);
     if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
       return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
@@ -43,7 +44,6 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
     return 'Absent'; 
   } catch (error) {
     console.error("Error fetching default attendance status setting: ", error);
-    console.error("Full Firebase Error details for getDefaultAttendanceStatusSetting:", error);
     return 'Absent'; 
   }
 }
@@ -52,15 +52,14 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
   console.log(`[Server Action - updateDefaultAttendanceStatusSetting] Attempting to update default status to: ${newStatus}.`);
   try {
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    console.log(`[Action: updateDefaultAttendanceStatusSetting] Attempting to write to Firestore path: ${configDocRef.path}`);
     await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
     revalidatePath('/superior-admin/system-settings');
     revalidatePath('/');
     revalidatePath('/public');
+    revalidatePath('/staff'); // Revalidate staff page if default status affects it
     return { success: true };
   } catch (error) {
     console.error("Error updating default attendance status setting: ", error);
-    console.error("Full Firebase Error details for updateDefaultAttendanceStatusSetting:", error);
     const firebaseError = error as { code?: string; message?: string };
     return {
         success: false,
@@ -88,8 +87,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     }
 
     q = query(participantsColRef, ...queryConstraints, orderBy('name'));
-    console.log(`[Action: getParticipants] Attempting to read from Firestore path: ${participantsColRef.path} with filters/orderBy`);
-
+    
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
@@ -102,7 +100,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
-        classGrade: data.classGrade, // Added classGrade
+        classGrade: data.classGrade,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
@@ -125,7 +123,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         "Underlying error:",
         error
       );
-      console.error("Full Firebase Error details for getParticipants:", error);
       const firebaseError = error as { code?: string; message?: string };
       let detailedMessage = `Failed to fetch participants from Firestore. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
 
@@ -139,10 +136,8 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 }
 
 export async function getParticipantById(id: string): Promise<Participant | null> {
-  console.log(`[Action: getParticipantById] Attempting to fetch participant with ID: ${id}`);
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
-    console.log(`[Action: getParticipantById] Attempting to read from Firestore path: ${participantRef.path}`);
     const docSnap = await getDoc(participantRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
@@ -155,32 +150,22 @@ export async function getParticipantById(id: string): Promise<Participant | null
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
-        classGrade: data.classGrade, // Added classGrade
+        classGrade: data.classGrade, 
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
     }
-    console.warn(`[Action: getParticipantById] Participant with ID ${id} not found.`);
     return null;
   } catch (error) {
     console.error(`Error fetching participant by ID ${id}: `, error);
-    console.error("Full Firebase Error details for getParticipantById:", error);
     throw new Error(`Failed to fetch participant. Check Firestore rules and connectivity.`);
   }
 }
 
 
-// Note: addParticipant and updateParticipant server actions are no longer directly used by ParticipantForm.tsx.
-// Their logic is now client-side in ParticipantForm.tsx.
-// They are kept here in case they are needed for other server-side operations like import (though import has its own auth complexities).
-
 export async function deleteParticipant(participantId: string): Promise<{ success: boolean }> {
-  console.log(`[Server Action - deleteParticipant] Attempting to delete participant: ${participantId}.`);
-  console.log(`[Server Action - deleteParticipant] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - deleteParticipant] auth.currentUser from firebase.ts:`, auth.currentUser); 
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    console.log(`[Action: deleteParticipant] Attempting to write to Firestore path: ${participantRef.path}`);
     await deleteDoc(participantRef);
     revalidatePath('/');
     revalidatePath('/public');
@@ -188,19 +173,14 @@ export async function deleteParticipant(participantId: string): Promise<{ succes
     return { success: true };
   } catch (error) {
     console.error("Error deleting participant: ", error);
-    console.error("Full Firebase Error details for deleteParticipant:", error);
     const firebaseError = error as { code?: string; message?: string };
     throw new Error(`Failed to delete participant. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`);
   }
 }
 
 export async function markAttendance(participantId: string, status: AttendanceStatus): Promise<Participant | null> {
-  console.log(`[Server Action - markAttendance] Attempting to mark attendance for: ${participantId} to ${status}.`);
-  console.log(`[Server Action - markAttendance] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - markAttendance] auth.currentUser from firebase.ts:`, auth.currentUser);  
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    console.log(`[Action: markAttendance] Attempting to write to Firestore path: ${participantRef.path}`);
     await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
     revalidatePath('/');
     revalidatePath('/public');
@@ -218,7 +198,6 @@ export async function markAttendance(participantId: string, status: AttendanceSt
     return null;
   } catch (error) {
     console.error("Error marking attendance: ", error);
-    console.error("Full Firebase Error details for markAttendance:", error);
     const firebaseError = error as { code?: string; message?: string };
     throw new Error(`Failed to mark attendance. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`);
   }
@@ -228,12 +207,10 @@ export async function markAttendance(participantId: string, status: AttendanceSt
 export async function getSystemSchools(): Promise<string[]> {
   try {
     const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-    console.log(`[Action: getSystemSchools] Attempting to read from Firestore path: ${schoolsColRef.path}`);
     const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
     return schoolsSnapshot.docs.map(doc => doc.data().name as string);
   } catch (error) {
     console.error("Error fetching system schools: ", error);
-    console.error("Full Firebase Error details for getSystemSchools:", error);
     throw new Error("Failed to fetch system schools. Check Firestore rules and connectivity.");
   }
 }
@@ -242,23 +219,18 @@ export async function getSystemSchools(): Promise<string[]> {
 export async function getSystemCommittees(): Promise<string[]> {
   try {
     const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-    console.log(`[Action: getSystemCommittees] Attempting to read from Firestore path: ${committeesColRef.path}`);
     const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
     return committeesSnapshot.docs.map(doc => doc.data().name as string);
   } catch (error) {
     console.error("Error fetching system committees: ", error);
-    console.error("Full Firebase Error details for getSystemCommittees:", error);
     throw new Error("Failed to fetch system committees. Check Firestore rules and connectivity.");
   }
 }
 
-
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade'>[] // classGrade removed from Omit
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade'>[] 
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
-  console.log(`[Server Action - importParticipants] Starting import for ${parsedParticipants.length} participants.`);
-
   let importedCount = 0;
   let errorCount = 0;
   const detectedNewSchoolNames: Set<string> = new Set();
@@ -275,7 +247,6 @@ export async function importParticipants(
   } catch(e) {
     console.error("[Action: importParticipants] Error fetching system schools/committees during import pre-check:", e);
   }
-
 
   for (const data of parsedParticipants) {
     try {
@@ -298,26 +269,23 @@ export async function importParticipants(
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
         notes: '', 
         additionalDetails: '',
-        classGrade: '', // Initialize classGrade for CSV import
+        classGrade: '', 
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipant);
       importedCount++;
     } catch (error) {
       console.error("[Action: importParticipants] Error preparing participant for batch import: ", data, error);
-      console.error("Full Firebase Error details for preparing batch import:", error);
       errorCount++;
     }
   }
 
   try {
-    console.log(`[Action: importParticipants] Attempting to commit batch of ${importedCount} participants.`);
     await batch.commit();
-    console.log(`[Action: importParticipants] Batch commit successful.`);
   } catch (error) {
     console.error("[Action: importParticipants] Error committing batch import: ", error);
-    console.error("Full Firebase Error details for batch.commit:", error);
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met for the user context of this server action. Check server logs for 'auth.currentUser' and verify Firestore rules.`;
     console.error(batchCommitError);
@@ -342,12 +310,10 @@ export async function importParticipants(
 }
 
 // Admin Management Actions (Superior Admin)
-
 export async function getAdminUsers(): Promise<AdminManagedUser[]> {
   try {
     const usersColRef = collection(db, USERS_COLLECTION);
     const q = query(usersColRef, where('role', '==', 'admin'), orderBy('email'));
-    console.log(`[Action: getAdminUsers] Attempting to read from Firestore path: ${usersColRef.path} with role='admin' filter`);
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
@@ -363,14 +329,12 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
     });
   } catch (error) {
     console.error('Error fetching admin users:', error);
-    console.error("Full Firebase Error details for getAdminUsers:", error);
     const firebaseError = error as { code?: string; message?: string };
     throw new Error(`Failed to fetch admin users. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${USERS_COLLECTION}'. Ensure owner (UID: ${OWNER_UID}) has list permission.`);
   }
 }
 
 export async function grantAdminRole({ email, displayName, authUid }: { email: string; displayName?: string; authUid: string }): Promise<{ success: boolean; message: string; admin?: AdminManagedUser }> {
-  console.log(`[Server Action - grantAdminRole] Attempting for UID: ${authUid}, Email: ${email}.`);
   if (!email || !authUid) {
     return { success: false, message: 'Email and Auth UID are required.' };
   }
@@ -380,11 +344,9 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
   }
 
   const userDocRefByUid = doc(db, USERS_COLLECTION, trimmedAuthUid);
-  console.log(`[Action: grantAdminRole] Attempting to write to Firestore path: ${userDocRefByUid.path} for UID: ${trimmedAuthUid}`);
 
   try {
     const userDocSnapByUid = await getDoc(userDocRefByUid);
-
     const currentEmail = email.toLowerCase().trim();
     const currentDisplayName = displayName?.trim() || null;
 
@@ -403,39 +365,20 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       if (existingAdminObject.role === 'admin') {
         const updates: Partial<AdminManagedUser> = {};
         let changed = false;
-        if (currentEmail !== existingAdminObject.email) {
-          updates.email = currentEmail;
-          changed = true;
-        }
-        if (currentDisplayName !== existingAdminObject.displayName) {
-          updates.displayName = currentDisplayName;
-          changed = true;
-        }
-
+        if (currentEmail !== existingAdminObject.email) { updates.email = currentEmail; changed = true; }
+        if (currentDisplayName !== existingAdminObject.displayName) { updates.displayName = currentDisplayName; changed = true; }
         if (changed) {
           await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()});
-          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() };
           revalidatePath('/superior-admin/admin-management');
-          return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: updatedAdmin };
+          return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() } };
         }
         return { success: true, message: `User ${trimmedAuthUid} is already an admin. No changes made.`, admin: existingAdminObject };
       } else {
         const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-        const updatedFields = {
-          email: currentEmail,
-          displayName: currentDisplayName,
-          role: 'admin' as const,
-          avatarUrl: dataFields.avatarUrl || `https://placehold.co/40x40.png?text=${firstLetter}`,
-          updatedAt: serverTimestamp(),
-        };
+        const updatedFields = { email: currentEmail, displayName: currentDisplayName, role: 'admin' as const, avatarUrl: dataFields.avatarUrl || `https://placehold.co/40x40.png?text=${firstLetter}`, updatedAt: serverTimestamp() };
         await updateDoc(userDocRefByUid, updatedFields);
-        const updatedAdminForReturn: AdminManagedUser = {
-          ...existingAdminObject,
-          ...updatedFields,
-          updatedAt: new Date().toISOString(),
-        };
         revalidatePath('/superior-admin/admin-management');
-        return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: updatedAdminForReturn };
+        return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: { ...existingAdminObject, ...updatedFields, updatedAt: new Date().toISOString() } };
       }
     } else {
       const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
@@ -444,86 +387,44 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           const conflictingUserDoc = emailQuerySnapshot.docs[0];
           return { success: false, message: `Error: Email ${currentEmail} is already associated with a different admin (UID: ${conflictingUserDoc.id}). Please use a unique email or resolve the conflict.` };
       }
-
       const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-      const newAdminDataFields = {
-        email: currentEmail,
-        displayName: currentDisplayName,
-        role: 'admin' as const,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`
-      };
+      const newAdminDataFields = { email: currentEmail, displayName: currentDisplayName, role: 'admin' as const, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`};
       await setDoc(userDocRefByUid, newAdminDataFields);
-
-      const createdAdmin: AdminManagedUser = {
-        id: trimmedAuthUid,
-        ...newAdminDataFields,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
       revalidatePath('/superior-admin/admin-management');
-      return { success: true, message: `User ${trimmedAuthUid} granted admin role.`, admin: createdAdmin };
+      return { success: true, message: `User ${trimmedAuthUid} granted admin role.`, admin: { id: trimmedAuthUid, ...newAdminDataFields, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };
     }
-
   } catch (error) {
     console.error(`Error granting admin role to UID ${trimmedAuthUid}:`, error);
-    console.error("Full Firebase Error details for grantAdminRole:", error);
     const firebaseError = error as { code?: string; message?: string };
     const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${trimmedAuthUid}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${USERS_COLLECTION}' collection for document ID '${trimmedAuthUid}'. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
     console.error(detailedError);
-    return {
-        success: false,
-        message: detailedError
-    };
+    return { success: false, message: detailedError };
   }
 }
 
-
 export async function revokeAdminRole(adminId: string): Promise<{ success: boolean; message: string }> {
-  console.log(`[Server Action - revokeAdminRole] Attempting for UID: ${adminId}.`);
-  if (!adminId) {
-    return { success: false, message: 'Admin Auth UID (adminId) is required.' };
-  }
+  if (!adminId) { return { success: false, message: 'Admin Auth UID (adminId) is required.' }; }
   const adminDocRef = doc(db, USERS_COLLECTION, adminId);
-  console.log(`[Action: revokeAdminRole] Attempting to write to Firestore path: ${adminDocRef.path} for UID: ${adminId}`);
   try {
     const adminDocSnap = await getDoc(adminDocRef);
-
-    if (!adminDocSnap.exists()) {
-      return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` };
-    }
-
+    if (!adminDocSnap.exists()) { return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` }; }
     await deleteDoc(adminDocRef);
-
     revalidatePath('/superior-admin/admin-management');
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
   } catch (error) {
     console.error(`Error revoking admin role for UID ${adminId}:`, error);
-    console.error("Full Firebase Error details for revokeAdminRole:", error);
     const firebaseError = error as { code?: string; message?: string };
     const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action for user ${adminId}. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to delete documents from the '${USERS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
     console.error(detailedError);
-    return {
-        success: false,
-        message: detailedError
-    };
+    return { success: false, message: detailedError };
   }
 }
 
-// New server action for bulk attendance update
 export async function bulkMarkAttendance(participantIds: string[], status: AttendanceStatus): Promise<{ successCount: number; errorCount: number }> {
-  console.log(`[Server Action - bulkMarkAttendance] Attempting to update status to '${status}' for ${participantIds.length} participants.`);
-  
-  if (!participantIds || participantIds.length === 0) {
-    return { successCount: 0, errorCount: 0 };
-  }
-
+  if (!participantIds || participantIds.length === 0) { return { successCount: 0, errorCount: 0 }; }
   const batch = writeBatch(db);
   let successCount = 0;
   let errorCount = 0;
-
   participantIds.forEach(id => {
     try {
       const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
@@ -534,21 +435,134 @@ export async function bulkMarkAttendance(participantIds: string[], status: Atten
       errorCount++;
     }
   });
-
   try {
-    console.log(`[Action: bulkMarkAttendance] Attempting to commit batch of ${successCount} updates.`);
     await batch.commit();
-    console.log(`[Action: bulkMarkAttendance] Batch commit successful.`);
     revalidatePath('/');
     revalidatePath('/public');
     participantIds.forEach(id => revalidatePath(`/participants/${id}`));
   } catch (error) {
     console.error("[Action: bulkMarkAttendance] Error committing batch update: ", error);
-    console.error("Full Firebase Error details for bulkMarkAttendance batch.commit:", error);
-    // If batch fails, all attempted successes become errors
     errorCount += successCount;
     successCount = 0;
   }
-
   return { successCount, errorCount };
+}
+
+
+// Staff Member Actions
+export async function getStaffMembers(filters?: { department?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
+  try {
+    const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
+    const queryConstraints = [];
+
+    if (filters?.department && filters.department !== "All Departments") {
+      queryConstraints.push(where('department', '==', filters.department));
+    }
+    if (filters?.status && filters.status !== 'All') {
+      queryConstraints.push(where('status', '==', filters.status));
+    }
+    
+    const q = query(staffColRef, ...queryConstraints, orderBy('name'));
+    const querySnapshot = await getDocs(q);
+    
+    let staffData = querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        name: data.name || '',
+        role: data.role || '',
+        department: data.department,
+        contactInfo: data.contactInfo,
+        status: data.status || 'Off Duty',
+        imageUrl: data.imageUrl,
+        notes: data.notes,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as StaffMember;
+    });
+
+    if (filters?.searchTerm) {
+      const term = filters.searchTerm.toLowerCase();
+      staffData = staffData.filter(s =>
+        s.name.toLowerCase().includes(term) ||
+        (s.role && s.role.toLowerCase().includes(term)) ||
+        (s.department && s.department.toLowerCase().includes(term))
+      );
+    }
+    return staffData;
+  } catch (error) {
+    console.error("Error fetching staff members: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    let detailedMessage = `Failed to fetch staff members. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
+    if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
+      detailedMessage += " This often indicates a missing Firestore index for staff_members.";
+    } else {
+      detailedMessage += ` Details: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`;
+    }
+    throw new Error(detailedMessage);
+  }
+}
+
+export async function getStaffMemberById(id: string): Promise<StaffMember | null> {
+  try {
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, id);
+    const docSnap = await getDoc(staffMemberRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        name: data.name || '',
+        role: data.role || '',
+        department: data.department,
+        contactInfo: data.contactInfo,
+        status: data.status || 'Off Duty',
+        imageUrl: data.imageUrl,
+        notes: data.notes,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as StaffMember;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error fetching staff member by ID ${id}: `, error);
+    throw new Error(`Failed to fetch staff member. Check Firestore rules and connectivity for '${STAFF_MEMBERS_COLLECTION}'.`);
+  }
+}
+
+export async function deleteStaffMember(staffMemberId: string): Promise<{ success: boolean }> {
+  try {
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffMemberId);
+    await deleteDoc(staffMemberRef);
+    revalidatePath('/staff');
+    revalidatePath(`/staff/${staffMemberId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting staff member: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    throw new Error(`Failed to delete staff member. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`);
+  }
+}
+
+export async function markStaffMemberStatus(staffMemberId: string, status: StaffAttendanceStatus): Promise<StaffMember | null> {
+  try {
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffMemberId);
+    await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
+    revalidatePath('/staff');
+    revalidatePath(`/staff/${staffMemberId}`);
+    const updatedDocSnap = await getDoc(staffMemberRef);
+    if (updatedDocSnap.exists()) {
+      const data = updatedDocSnap.data();
+      return {
+        id: updatedDocSnap.id,
+        ...data,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as StaffMember;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error marking staff member status: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    throw new Error(`Failed to mark staff member status. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`);
+  }
 }

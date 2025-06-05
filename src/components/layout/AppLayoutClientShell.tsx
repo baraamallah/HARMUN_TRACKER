@@ -12,6 +12,7 @@ import {
   SettingsIcon, 
   ShieldCheck, 
   LogIn,
+  Users2 // Icon for Staff
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -54,8 +55,9 @@ interface NavItem {
 }
 
 const baseNavItems: NavItem[] = [
-  { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Dashboard' },
-  { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public View' },
+  { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
+  { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
+  { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
 const superiorAdminNavItem: NavItem = {
@@ -120,11 +122,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} legacyBehavior passHref>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))}
                     tooltip={item.tooltip}
                     className={cn(
                       "justify-start",
-                      pathname === item.href && "bg-sidebar-accent text-sidebar-accent-foreground"
+                      (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && "bg-sidebar-accent text-sidebar-accent-foreground"
                     )}
                   >
                     <item.icon className="h-5 w-5" />
@@ -179,7 +181,6 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                   {loggedInUser.displayName || loggedInUser.email || "My Account"}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {/* Removed Profile and Settings placeholder menu items */}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
                 </DropdownMenuItem>
