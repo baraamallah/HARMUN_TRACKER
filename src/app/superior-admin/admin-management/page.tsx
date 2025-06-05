@@ -42,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { format, parseISO } from 'date-fns';
 
 export default function AdminManagementPage() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -114,6 +115,25 @@ export default function AdminManagementPage() {
       }
     });
   };
+
+  const formatDateString = (dateString: string | any): string => {
+    if (!dateString) return 'N/A';
+    try {
+      if (typeof dateString === 'string') {
+        return format(parseISO(dateString), 'PP'); // e.g., Aug 17, 2023
+      }
+      // If it's a Firestore Timestamp-like object (already converted in actions.ts to ISO string or similar)
+      // but somehow still an object, or for direct client-side Timestamp objects (though less likely here)
+      if (typeof dateString === 'object' && dateString.toDate) {
+        return format(dateString.toDate(), 'PP');
+      }
+    } catch (e) {
+      console.warn("Could not parse date:", dateString, e);
+      return 'Invalid Date';
+    }
+    return String(dateString); // Fallback
+  };
+
 
   if (isLoadingAuth) {
     return (
@@ -256,7 +276,7 @@ export default function AdminManagementPage() {
                           <TableCell className="text-xs text-muted-foreground">{admin.id}</TableCell>
                           <TableCell><Badge variant="secondary">{admin.role}</Badge></TableCell>
                            <TableCell className="text-sm text-muted-foreground">
-                            {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                            {formatDateString(admin.createdAt)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button 
@@ -316,3 +336,4 @@ export default function AdminManagementPage() {
     </div>
   );
 }
+

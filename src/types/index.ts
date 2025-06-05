@@ -15,8 +15,8 @@ export interface Participant {
   committee: string;
   status: AttendanceStatus;
   imageUrl?: string;
-  createdAt?: any; // Can be Firebase Timestamp
-  updatedAt?: any; // Can be Firebase Timestamp
+  createdAt?: string | any; // Can be Firebase Timestamp client-side or ISO string from server
+  updatedAt?: string | any; // Can be Firebase Timestamp client-side or ISO string from server
 }
 
 export interface School {
@@ -44,8 +44,8 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string; 
-  createdAt?: any; // Firebase Timestamp
-  updatedAt?: any; // Firebase Timestamp
+  createdAt?: string | any; // Firebase Timestamp or ISO string
+  updatedAt?: string | any; // Firebase Timestamp or ISO string
   avatarUrl?: string; // Optional avatar URL
 }
 

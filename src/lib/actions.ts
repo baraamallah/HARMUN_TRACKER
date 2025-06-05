@@ -96,10 +96,19 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     console.log(`Attempting to read from Firestore path: ${participantsColRef.path} with filters/orderBy`);
 
     const querySnapshot = await getDocs(q);
-    let participantsData = querySnapshot.docs.map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    } as Participant));
+    let participantsData = querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      // Convert Timestamps to ISO strings for serialization
+      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt;
+      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt;
+      
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt,
+        updatedAt,
+      } as Participant;
+    });
 
     if (filters?.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
@@ -131,10 +140,11 @@ export async function getParticipants(filters?: { school?: string; committee?: s
   }
 }
 
+// This server action is no longer directly called by ParticipantForm.tsx
+// It's kept for potential future server-side use (e.g. if importParticipants needed it AND had Admin SDK context)
 export async function addParticipant(participantData: Omit<Participant, 'id' | 'status' | 'imageUrl'>): Promise<Participant | null> {
   console.log(`[Server Action - addParticipant] Attempting to add participant: ${participantData.name}.`);
-  console.log(`[Server Action - addParticipant] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - addParticipant] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - addParticipant] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
   try {
     const defaultStatus = await getDefaultAttendanceStatusSetting();
     const nameInitial = (participantData.name.trim() || 'P').substring(0,2).toUpperCase();
@@ -152,7 +162,17 @@ export async function addParticipant(participantData: Omit<Participant, 'id' | '
     const docRef = await addDoc(participantsColRef, newParticipantData);
     revalidatePath('/');
     revalidatePath('/public');
-    return { id: docRef.id, ...newParticipantData, createdAt: Timestamp.now() } as Participant;
+    // For server actions, we'd construct the return value, assuming serverTimestamp resolves
+    // However, client-side add will handle its own object creation.
+    const savedData = (await getDoc(docRef)).data();
+    if (!savedData) return null;
+
+    return { 
+      id: docRef.id, 
+      ...savedData, 
+      createdAt: savedData.createdAt instanceof Timestamp ? savedData.createdAt.toDate().toISOString() : savedData.createdAt,
+      updatedAt: savedData.updatedAt instanceof Timestamp ? savedData.updatedAt.toDate().toISOString() : savedData.updatedAt,
+    } as Participant;
   } catch (error) {
     console.error("Error adding participant: ", error);
     console.error("Full Firebase Error details for addParticipant:", error);
@@ -161,10 +181,11 @@ export async function addParticipant(participantData: Omit<Participant, 'id' | '
   }
 }
 
+// This server action is no longer directly called by ParticipantForm.tsx
+// It's kept for potential future server-side use.
 export async function updateParticipant(participantId: string, participantData: Partial<Omit<Participant, 'id'>>): Promise<Participant | null> {
   console.log(`[Server Action - updateParticipant] Attempting to update participant: ${participantId}.`);
-  console.log(`[Server Action - updateParticipant] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - updateParticipant] auth.currentUser from firebase.ts:`, auth.currentUser);
+   console.log(`[Server Action - updateParticipant] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
     console.log(`Attempting to write to Firestore path: ${participantRef.path} (updateParticipant)`);
@@ -173,7 +194,13 @@ export async function updateParticipant(participantId: string, participantData: 
     revalidatePath('/public');
     const updatedDocSnap = await getDoc(participantRef);
     if (updatedDocSnap.exists()) {
-      return { id: updatedDocSnap.id, ...updatedDocSnap.data() } as Participant;
+      const data = updatedDocSnap.data();
+      return { 
+        id: updatedDocSnap.id, 
+        ...data,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as Participant;
     }
     return null;
   } catch (error) {
@@ -215,7 +242,13 @@ export async function markAttendance(participantId: string, status: AttendanceSt
     revalidatePath('/public');
      const updatedDocSnap = await getDoc(participantRef);
     if (updatedDocSnap.exists()) {
-      return { id: updatedDocSnap.id, ...updatedDocSnap.data() } as Participant;
+      const data = updatedDocSnap.data();
+      return { 
+        id: updatedDocSnap.id, 
+        ...data,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+       } as Participant;
     }
     return null;
   } catch (error) {
@@ -240,13 +273,11 @@ export async function getSystemSchools(): Promise<string[]> {
   }
 }
 
-// This server action is NO LONGER CALLED by the Superior Admin UI for adding schools.
-// It might be called by other server actions like importParticipants (if that logic is restored).
-// BEWARE: auth.currentUser will be null in this server action context.
 export async function addSystemSchool(schoolName: string): Promise<{success: boolean, id?: string, error?: string}> {
   const trimmedSchoolName = schoolName.trim();
+  console.log(`[Server Action - addSystemSchool] Attempting to add school: ${trimmedSchoolName}.`);
   console.log(`[Server Action - addSystemSchool] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - addSystemSchool] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - addSystemSchool] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
   if (!trimmedSchoolName) {
     return {success: false, error: "School name cannot be empty."};
   }
@@ -265,7 +296,7 @@ export async function addSystemSchool(schoolName: string): Promise<{success: boo
     console.error(`Error adding system school "${trimmedSchoolName}": `, error);
     console.error("Full Firebase Error details for addSystemSchool:", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to add system school. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This might be because auth.currentUser is null in the server action context. Check server logs. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_SCHOOLS_COLLECTION}' collection.`;
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This might be because auth.currentUser is null in the server action context. Check server logs. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_SCHOOLS_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
     console.error(detailedError);
     return {
         success: false,
@@ -288,13 +319,11 @@ export async function getSystemCommittees(): Promise<string[]> {
   }
 }
 
-// This server action is NO LONGER CALLED by the Superior Admin UI for adding committees.
-// It might be called by other server actions like importParticipants (if that logic is restored).
-// BEWARE: auth.currentUser will be null in this server action context.
 export async function addSystemCommittee(committeeName: string): Promise<{success: boolean, id?: string, error?: string}> {
   const trimmedCommitteeName = committeeName.trim();
+  console.log(`[Server Action - addSystemCommittee] Attempting to add committee: ${trimmedCommitteeName}.`);
   console.log(`[Server Action - addSystemCommittee] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - addSystemCommittee] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - addSystemCommittee] auth.currentUser from firebase.ts:`, auth.currentUser); // This will likely be null if called from another server action
   if (!trimmedCommitteeName) {
     return {success: false, error: "Committee name cannot be empty."};
   }
@@ -313,7 +342,7 @@ export async function addSystemCommittee(committeeName: string): Promise<{succes
     console.error(`Error adding system committee "${trimmedCommitteeName}": `, error);
     console.error("Full Firebase Error details for addSystemCommittee:", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to add system committee. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This might be because auth.currentUser is null in the server action context. Check server logs. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_COMMITTEES_COLLECTION}' collection.`;
+    const detailedError = `CRITICAL PERMISSION_DENIED: Firebase Firestore Security Rules in your project console are blocking this action. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This might be because auth.currentUser is null in the server action context. Check server logs. Ensure the rules PUBLISHED there allow the Owner (UID: ${OWNER_UID}) to write to the '${SYSTEM_COMMITTEES_COLLECTION}' collection. The correct rules are in the README.md. *** YOU MUST FIX THIS IN THE FIREBASE CONSOLE. ***`;
     console.error(detailedError);
     return {
         success: false,
@@ -328,8 +357,7 @@ export async function importParticipants(
   parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
   console.log(`[Server Action - importParticipants] Starting import for ${parsedParticipants.length} participants.`);
-  console.log(`[Server Action - importParticipants] Auth object from firebase.ts:`, auth);
-  console.log(`[Server Action - importParticipants] auth.currentUser from firebase.ts:`, auth.currentUser);
+  console.log(`[Server Action - importParticipants] Auth object from firebase.ts (should be null if called from another server action without special handling):`, auth?.currentUser);
 
   let importedCount = 0;
   let errorCount = 0;
@@ -339,8 +367,6 @@ export async function importParticipants(
   const batch = writeBatch(db);
   const defaultStatus = await getDefaultAttendanceStatusSetting();
 
-  // Fetch existing system schools and committees to compare against
-  // This is a read operation and should be allowed by rules if public read is true or user has access
   let existingSystemSchools: string[] = [];
   let existingSystemCommittees: string[] = [];
   try {
@@ -348,7 +374,6 @@ export async function importParticipants(
     existingSystemCommittees = await getSystemCommittees();
   } catch(e) {
     console.error("Error fetching system schools/committees during import pre-check:", e);
-    // Proceed without this check if it fails, import will likely have issues with participant school/committee data consistency
   }
 
 
@@ -374,7 +399,6 @@ export async function importParticipants(
         createdAt: serverTimestamp(),
       };
       const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION));
-      // console.log(`Batch: adding to Firestore path: ${participantRef.path} (new participant in import)`);
       batch.set(participantRef, newParticipant);
       importedCount++;
     } catch (error) {
@@ -394,10 +418,9 @@ export async function importParticipants(
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed. Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met for the user context of this server action. Check server logs for 'auth.currentUser' and verify Firestore rules.`;
     console.error(batchCommitError);
-    // If batch fails, none were imported successfully via this batch.
     return {
       count: 0,
-      errors: parsedParticipants.length + errorCount, // All participants in this attempt + preparation errors
+      errors: parsedParticipants.length + errorCount, 
       detectedNewSchools: Array.from(detectedNewSchoolNames),
       detectedNewCommittees: Array.from(detectedNewCommitteeNames),
     };
@@ -425,14 +448,17 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
+      // Convert Timestamps to ISO strings
+      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt;
+      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt;
       return {
         id: docSnap.id,
         email: data.email,
         displayName: data.displayName,
         role: data.role,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        avatarUrl: data.avatarUrl
+        avatarUrl: data.avatarUrl,
+        createdAt,
+        updatedAt,
       } as AdminManagedUser;
     });
   } catch (error) {
@@ -466,13 +492,13 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
 
     if (userDocSnapByUid.exists()) {
       const dataFields = userDocSnapByUid.data();
-      const existingAdminObject: AdminManagedUser = { // Explicit construction
+      const existingAdminObject: AdminManagedUser = { 
         id: userDocSnapByUid.id,
         email: dataFields.email,
         displayName: dataFields.displayName,
         role: dataFields.role,
-        createdAt: dataFields.createdAt,
-        updatedAt: dataFields.updatedAt,
+        createdAt: dataFields.createdAt instanceof Timestamp ? dataFields.createdAt.toDate().toISOString() : dataFields.createdAt,
+        updatedAt: dataFields.updatedAt instanceof Timestamp ? dataFields.updatedAt.toDate().toISOString() : dataFields.updatedAt,
         avatarUrl: dataFields.avatarUrl,
       };
 
@@ -490,7 +516,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         
         if (changed) {
           await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()});
-          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: Timestamp.now() };
+          const updatedAdmin: AdminManagedUser = {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() }; // Use ISO string
           revalidatePath('/superior-admin/admin-management');
           return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: updatedAdmin };
         }
@@ -508,13 +534,12 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
         const updatedAdminForReturn: AdminManagedUser = {
           ...existingAdminObject,
           ...updatedFields,
-          updatedAt: Timestamp.now(),
+          updatedAt: new Date().toISOString(), // Use ISO string
         };
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: updatedAdminForReturn };
       }
     } else {
-      // Check if another admin already has this email - this is a business logic rule, not a Firestore one
       const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
       const emailQuerySnapshot = await getDocs(qEmail);
       if (!emailQuerySnapshot.empty) {
@@ -536,8 +561,8 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
       const createdAdmin: AdminManagedUser = {
         id: trimmedAuthUid,
         ...newAdminDataFields,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        createdAt: new Date().toISOString(), // Use ISO string
+        updatedAt: new Date().toISOString(), // Use ISO string
       };
 
       revalidatePath('/superior-admin/admin-management');
