@@ -9,7 +9,10 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Requires login (Email/Password via Firebase Authentication).
     *   View, add, edit, and delete participants.
     *   Mark participant attendance status (Present, Absent, In Break, Restroom Break, Technical Issue, Stepped Out, Present On Account).
-    *   Import participants from a CSV file. New schools/committees found in CSV are automatically added to system lists.
+    *   **Import participants from a CSV file.**
+        *   Columns must be: `Name`, `School`, `Committee`.
+        *   Participants from the CSV will be added to the system.
+        *   **Important:** Schools and committees listed in the CSV file **must already exist** in the system (added via the Superior Admin panel). The import process will detect new schools/committees but will **not** automatically create them in the system lists. The user will be notified of any such new entities found.
     *   Export participant data to a CSV file.
     *   Filter participants by school, committee, status (All, Present, Absent), or search term.
     *   Toggle visibility of table columns (Avatar, Name, School, Committee, Status, Actions).
@@ -22,7 +25,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Does not require login.
 *   **Superior Admin Panel (`/superior-admin`)**:
     *   Restricted access to a designated Owner UID via Firebase Authentication.
-    *   Manage system-wide lists of Schools and Committees.
+    *   Manage system-wide lists of Schools and Committees (add new ones).
     *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
     *   Manage System Settings (e.g., Default Attendance Status for new participants).
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
@@ -55,7 +58,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 1.  **Create a Firebase Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2.  **Add a Web App**: In your Firebase project, add a new Web application.
-3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object. You'll need this for the environment variables (or to hardcode in `src/lib/firebase.ts` as per current setup).
+3.  **Copy Firebase Config**: During the web app setup, Firebase will provide you with a `firebaseConfig` object.
 4.  **Enable Firestore**: In the Firebase Console, go to "Firestore Database" and create a database. Start in **Test Mode** for initial development (allows open read/write for 30 days). **CRITICAL**: You MUST set up proper [Firestore Security Rules](#firestore-security-rules-critical-step-by-step) (see section below) *before* the test mode expires or before deploying to production. If you encounter "Missing or insufficient permissions" errors, it's almost certainly due to your Firestore rules not allowing the operation.
 5.  **Enable Firebase Authentication**:
     *   In the Firebase Console, go to "Authentication".
@@ -78,8 +81,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     # yarn install
     ```
 3.  **Configure Firebase Credentials**:
-    *   The file `src/lib/firebase.ts` is currently configured to use **hardcoded Firebase credentials**. Ensure these match your Firebase project.
-    *   If you wish to switch to using environment variables (recommended for production flexibility):
+    *   The file `src/lib/firebase.ts` is currently configured to use **hardcoded Firebase credentials** based on what you last provided. Ensure these match your Firebase project if they ever change.
+    *   If you wish to switch to using environment variables (generally recommended for production flexibility if credentials change often or across environments):
         *   Create a new file named `.env.local` in the root of your project.
         *   Add your Firebase project configuration:
             ```env
@@ -91,7 +94,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
             NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
             NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id" # Optional
             ```
-        *   Then, update `src/lib/firebase.ts` to read these environment variables (this was the original setup).
+        *   Then, update `src/lib/firebase.ts` to read these environment variables (this was part of its original setup).
 
 4.  **Set Superior Admin UID**:
     *   Open `src/lib/constants.ts`.
@@ -146,13 +149,13 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   `src/components/`: Reusable React components.
     *   `ui/`: ShadCN UI components.
     *   `layout/`: Layout components (`AppLayoutClientShell`, `PublicLayout`).
-    *   `participants/`: Components related to participant management (Table, Form, Actions, etc.).
+    *   `participants/`: Components related to participant management (Table, Form, Actions, Import/Export, etc.).
     *   `shared/`: General shared components (Logo, Theme Toggle).
     *   `superior-admin/`: Components specific to the superior admin panel (e.g., `AddAdminDialog`).
 *   `src/lib/`: Core logic and utilities.
     *   `actions.ts`: Server Actions for interacting with Firebase Firestore.
     *   `constants.ts`: Application-wide constants like `OWNER_UID`.
-    *   `firebase.ts`: Firebase initialization and configuration (currently hardcoded, can be switched to environment variables).
+    *   `firebase.ts`: Firebase initialization and configuration.
     *   `utils.ts`: Utility functions (like `cn` for classnames).
 *   `src/types/`: TypeScript type definitions.
 *   `src/hooks/`: Custom React hooks (e.g., `useDebounce`, `useToast`).
@@ -170,12 +173,12 @@ Before deploying this application to a live environment, ensure you address the 
     *   **If you see "Missing or insufficient permissions" errors in your application, it's almost always because your Firestore security rules are not correctly configured to allow the operation for the currently authenticated user.** This error means Firebase on the server-side has blocked an action because the rules didn't permit it.
 
 2.  🔑 **Firebase Config (Environment Variables vs. Hardcoded)**:
-    *   Currently, `src/lib/firebase.ts` uses hardcoded Firebase configuration.
-    *   For better security and flexibility in production, switch to using `NEXT_PUBLIC_FIREBASE_...` environment variables from a `.env.local` file (for local development) and configure these in your hosting provider.
+    *   Currently, `src/lib/firebase.ts` uses hardcoded Firebase configuration based on values you provided.
+    *   For better security and flexibility in production, consider switching to using `NEXT_PUBLIC_FIREBASE_...` environment variables from a `.env.local` file (for local development) and configure these in your hosting provider if your credentials change frequently or differ across environments.
 
 3.  🚪 **Firebase Authentication Setup & Admin Roles**:
     *   **Enable Email/Password Provider**: In Firebase Console > Authentication > Sign-in method, enable the "Email/Password" provider.
-    *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and ensure it matches `OWNER_UID` in `src/lib/constants.ts` (`JZgMG6xdwAYInXsdciaGj6qNAsG2`).
+    *   **Create Initial Superior Admin User**: In Firebase Console > Authentication > Users, add the user who will be the superior admin. Note their UID and ensure it matches `OWNER_UID` in `src/lib/constants.ts` (currently `JZgMG6xdwAYInXsdciaGj6qNAsG2`).
     *   **Admin Users**: Users who are granted 'admin' role via the Superior Admin panel must *also* exist as users in Firebase Authentication.
 
 4.  🛠️ **Build-time Error Checks (`next.config.ts`)**:
@@ -234,6 +237,8 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts`. If you
         }
 
         // Allow Owner to list all user documents (for admin management page)
+        // This requires a composite index on 'role' and 'email' or just being careful with queries.
+        // For getAdminUsers, it queries where role == 'admin'.
         match /users {
            allow list: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner only
         }
@@ -258,8 +263,8 @@ If you are encountering "Missing or insufficient permissions" errors, especially
 5.  **Configure the Simulation**:
     *   **Simulation type / Method**: Select or type `create`. (This simulates adding a new document).
     *   **Location (Path)**: Enter the path to a *new, non-existent* document in the `system_schools` collection. For example:
-        `system_schools/someNewSchoolId`
-        (You can make up `someNewSchoolId`; it doesn't need to exist yet).
+        `/system_schools/someNewSchoolId`
+        (You can make up `someNewSchoolId`; it doesn't need to exist yet. Note the leading `/`).
     *   **Authentication**:
         *   Toggle **Authenticated** to **ON**.
         *   For **Provider**, you can leave it as "anonymous" or select "password" - it doesn't strictly matter for UID-based rules as long as you provide the UID.
@@ -281,13 +286,13 @@ If you are encountering "Missing or insufficient permissions" errors, especially
         *   The condition is `allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";`.
         *   The playground will show you the values of `request.auth.uid` it used for the simulation. Ensure it is `JZgMG6xdwAYInXsdciaGj6qNAsG2`.
     *   If **Allowed**, it means your currently published rules *do* permit the Owner to create a document in `system_schools`. If your app still fails with a permission error for this action, it could indicate:
-        *   The user logged into your app is *not actually* `JZgMG6xdwAYInXsdciaGj6qNAsG2` at the time of the request (check your app's client-side console logs for `auth.currentUser.uid`).
+        *   The user logged into your app is *not actually* authenticated as `JZgMG6xdwAYInXsdciaGj6qNAsG2` at the time of the request on the client-side (check your app's client-side console logs for `auth.currentUser.uid` when the action is performed from the UI).
         *   Your app is trying to write to a different path than `/system_schools/{documentId}`.
-        *   You are connecting to a different Firebase project from your app than the one where you are testing rules. (Check `firebaseConfig.projectId` in `src/lib/firebase.ts` and compare with the project ID in your Firebase console URL).
+        *   You are connecting to a different Firebase project from your app than the one where you are testing rules. (Check `firebaseConfig.projectId` in `src/lib/firebase.ts` and compare with the project ID in your Firebase console URL. Also check the `NEXT_PUBLIC_FIREBASE_PROJECT_ID` in `.env.local` if you are using it).
 
 **Common reasons for denial in the playground when you expect an allow:**
 *   **Typo in the UID**: The UID `JZgMG6xdwAYInXsdciaGj6qNAsG2` in your actual published rules in the Firebase console has a typo (e.g., wrong character, case, extra space).
-*   **Path Mismatch**: The path you are simulating doesn't exactly match a path defined in your rules.
+*   **Path Mismatch**: The path you are simulating (e.g., `system_schools/someNewSchoolId` vs `/system_schools/someNewSchoolId`) doesn't exactly match a path defined in your rules. Ensure leading slashes are used if necessary.
 *   **Incorrect `get()` path or condition**: If a rule relies on `get()` (like the admin check for participants), ensure the path in `get()` is correct and the conditions on the retrieved data are met. (Not directly relevant for the simple `system_schools` owner check, but good to keep in mind).
 *   **Rules not published**: You might be testing against rules that are not the currently active ones. Ensure you've clicked "Publish" in the main rules editor *after* pasting the correct rules.
 
@@ -327,13 +332,17 @@ If you need to change who the owner is:
 ## Troubleshooting Deployment
 
 *   **Permission Denied / Missing Data / "Missing or insufficient permissions"**:
-    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions. Make sure you are logged in as Owner (UID: JZgMG6xdwAYInXsdciaGj6qNAsG2) and that Firestore rules allow the Owner to write to 'system_committees' collection...`) is very specific.
+    *   This **almost always points to an issue with your Firestore Security Rules.** The error message (e.g., `FirebaseError: Missing or insufficient permissions.`) is very specific.
     *   Check your browser's developer console for detailed errors from Firebase. These often indicate issues with Firestore Security Rules.
     *   Ensure your deployed security rules in the Firebase console match the access patterns your application needs.
     *   Use the Rules Playground in Firebase to test your rules. See the [Debugging Firestore Rules with Rules Playground (Step-by-Step)](#debugging-firestore-rules-with-rules-playground-step-by-step) section.
-    *   **Verify `NEXT_PUBLIC_FIREBASE_PROJECT_ID`**: If using `.env.local`, ensure this variable correctly points to the Firebase project ID where your rules and authentication are set up. If hardcoding in `src/lib/firebase.ts`, ensure `firebaseConfig.projectId` is correct. A mismatch means your app talks to one project, but your rules are in another.
+    *   **Verify `NEXT_PUBLIC_FIREBASE_PROJECT_ID`**: If using `.env.local`, ensure this variable correctly points to the Firebase project ID where your rules and authentication are set up. If using hardcoded values in `src/lib/firebase.ts`, ensure `firebaseConfig.projectId` is correct. A mismatch means your app talks to one project, but your rules are in another. Check the browser console for `[Firebase Setup] Attempting to connect to Firebase project ID: ...` log when the app loads.
 *   **Missing Firestore Indexes**:
     *   If data fetching fails with an error message in the browser console mentioning "The query requires an index...", Firestore usually provides a direct link in that error message to create the required composite index. Click it and create the index. The `getParticipants` function is most likely to trigger this if multiple filters are applied.
+*   **CSV Import Issues**:
+    *   The CSV import functionality adds participants to the system. However, it does **not** automatically create new schools or committees if they are found in the CSV but do not already exist in the system lists (managed via the Superior Admin panel).
+    *   Ensure all schools and committees in your CSV file are pre-registered in the system before importing participants for those schools/committees. The import dialog will notify you if new, unregistered schools or committees are detected.
+    *   If participant import fails, check the server console logs (where `npm run dev` output appears or your hosting provider's function logs) for details. This could be due to Firestore rules not allowing the server action to write to the `participants` collection, especially if the `request.auth` context is not correctly passed or evaluated for the server action.
 *   **Firebase Connection Issues / API Key Errors**:
     *   Verify that your Firebase configuration (either in `src/lib/firebase.ts` or via environment variables) is correct for your Firebase project.
 *   **Login Problems**:
@@ -341,5 +350,3 @@ If you need to change who the owner is:
     *   Verify that the user accounts (especially the `OWNER_UID` account) exist in Firebase Authentication.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-
-    
