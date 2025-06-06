@@ -97,7 +97,7 @@ export function StaffMemberForm({
           name: '',
           role: '',
           department: '',
-          team: staffTeams.length > 0 ? '' : '', 
+          team: '', // Default to empty, placeholder will show "Select a team" or "No teams"
           imageUrl: '',
           contactInfo: '',
           notes: '',
@@ -119,22 +119,25 @@ export function StaffMemberForm({
           updatedAt: serverTimestamp(),
         };
         
-        let finalImageUrl = data.imageUrl?.trim();
-        if (!finalImageUrl && !staffMemberToEdit) { 
+        const formImageUrl = data.imageUrl?.trim();
+
+        if (formImageUrl) {
+          submissionData.imageUrl = formImageUrl;
+        } else { // User left the URL field blank or cleared it
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-        } else if (!finalImageUrl && staffMemberToEdit && staffMemberToEdit.imageUrl?.startsWith('https://placehold.co')) {
-          const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-        } else if (!finalImageUrl && staffMemberToEdit) {
-           if (staffMemberToEdit.imageUrl && !staffMemberToEdit.imageUrl.startsWith('https://placehold.co')) {
-             finalImageUrl = ''; 
-           } else { 
-             const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-             finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-           }
+          if (staffMemberToEdit) { // Editing existing staff
+            if (staffMemberToEdit.imageUrl && !staffMemberToEdit.imageUrl.startsWith('https://placehold.co')) {
+              // Old URL was custom, and user cleared it. So, remove it.
+              submissionData.imageUrl = '';
+            } else {
+              // Old URL was a placeholder, or empty. Regenerate placeholder (name might have changed).
+              submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+            }
+          } else { // Adding new staff and URL field is blank
+            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          }
         }
-        submissionData.imageUrl = finalImageUrl;
+
 
         if (staffMemberToEdit) {
           const staffMemberRef = doc(db, 'staff_members', staffMemberToEdit.id);
@@ -189,7 +192,7 @@ export function StaffMemberForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="staff-form-name">Full Name</FormLabel>
+                  <FormLabel htmlFor="staff-form-name">Full Name <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input id="staff-form-name" placeholder="e.g., John Smith" {...field} disabled={isPending} aria-required="true" />
                   </FormControl>
@@ -202,7 +205,7 @@ export function StaffMemberForm({
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="staff-form-role">Role</FormLabel>
+                  <FormLabel htmlFor="staff-form-role">Role <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input id="staff-form-role" placeholder="e.g., Security Chief, Logistics Lead" {...field} disabled={isPending} aria-required="true" />
                   </FormControl>
@@ -233,23 +236,23 @@ export function StaffMemberForm({
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
-                    disabled={isPending || staffTeams.length === 0}
+                    disabled={isPending}
                   >
                     <FormControl>
                       <SelectTrigger id="staff-form-team">
-                        <SelectValue placeholder={staffTeams.length > 0 ? "Select a team" : "No teams defined"} />
+                        <SelectValue placeholder="Select a team" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No Team / Unassigned</SelectItem>
+                      <SelectItem value="">Unassigned / No Team</SelectItem>
                       {staffTeams.map((teamName) => (
                         <SelectItem key={teamName} value={teamName}>
                           {teamName}
                         </SelectItem>
                       ))}
+                      {staffTeams.length === 0 && <SelectItem value="" disabled>No teams available. Add via Superior Admin.</SelectItem>}
                     </SelectContent>
                   </Select>
-                  {staffTeams.length === 0 && <p className="text-xs text-muted-foreground mt-1">Add teams in Superior Admin panel.</p>}
                   <FormMessage />
                 </FormItem>
               )}

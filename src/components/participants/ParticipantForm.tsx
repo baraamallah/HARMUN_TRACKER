@@ -97,8 +97,8 @@ export function ParticipantForm({
       } else {
         form.reset({
           name: '',
-          school: schools.length > 0 ? schools[0] : '',
-          committee: committees.length > 0 ? committees[0] : '',
+          school: '', // Always default to '' for new, let placeholder show
+          committee: '', // Always default to '' for new, let placeholder show
           classGrade: '',
           imageUrl: '',
           notes: '',
@@ -121,31 +121,24 @@ export function ParticipantForm({
           updatedAt: serverTimestamp(),
         };
 
-        let finalImageUrl = data.imageUrl?.trim();
-        if (!finalImageUrl && !participantToEdit) { // Only generate placeholder for new if no URL
+        const formImageUrl = data.imageUrl?.trim();
+
+        if (formImageUrl) {
+          submissionData.imageUrl = formImageUrl;
+        } else { // User left the URL field blank or cleared it
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-        } else if (!finalImageUrl && participantToEdit && participantToEdit.imageUrl?.startsWith('https://placehold.co')) {
-          // If editing and URL cleared, and old was placeholder, regenerate placeholder
-          const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-        } else if (!finalImageUrl && participantToEdit) {
-           // If editing and URL cleared, but old was custom, keep old custom or decide on a policy
-           // For now, let's clear it if explicitly cleared, or keep old if simply not touched and field was empty due to placeholder logic
-           // This means if user clears the field, imageUrl will become empty/null
-           // To ensure placeholder regen if field is empty AND old was custom, we'd need more logic.
-           // Sticking to: if field is empty, try to regen placeholder. If old one was custom and field is now empty, it means they want to remove it.
-           // So, if cleared, and was NOT placeholder, it becomes empty string.
-           // If it was placeholder, it gets regenerated.
-           if (participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-             finalImageUrl = ''; // User actively cleared a custom URL
-           } else { // Was placeholder or empty, regenerate
-             const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-             finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-           }
+          if (participantToEdit) { // Editing existing participant
+            if (participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
+              // Old URL was custom, and user cleared it. So, remove it.
+              submissionData.imageUrl = '';
+            } else {
+              // Old URL was a placeholder, or empty. Regenerate placeholder (name might have changed).
+              submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+            }
+          } else { // Adding new participant and URL field is blank
+            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          }
         }
-        
-        submissionData.imageUrl = finalImageUrl;
 
 
         if (participantToEdit) {
@@ -177,8 +170,8 @@ export function ParticipantForm({
   const handleDialogClose = () => {
     form.reset({ 
         name: '', 
-        school: schools.length > 0 ? schools[0] : '', 
-        committee: committees.length > 0 ? committees[0] : '',
+        school: '', 
+        committee: '',
         classGrade: '',
         imageUrl: '',
         notes: '',
@@ -209,7 +202,7 @@ export function ParticipantForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-name">Full Name</FormLabel>
+                  <FormLabel htmlFor="form-name">Full Name <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input id="form-name" placeholder="e.g., Jane Doe" {...field} disabled={isPending} aria-required="true" />
                   </FormControl>
@@ -222,7 +215,7 @@ export function ParticipantForm({
               name="school"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-school">School</FormLabel>
+                  <FormLabel htmlFor="form-school">School <span className="text-destructive">*</span></FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
@@ -240,6 +233,7 @@ export function ParticipantForm({
                           {school}
                         </SelectItem>
                       ))}
+                      {schools.length === 0 && <SelectItem value="" disabled>No schools available. Add via Superior Admin.</SelectItem>}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -251,7 +245,7 @@ export function ParticipantForm({
               name="committee"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-committee">Committee</FormLabel>
+                  <FormLabel htmlFor="form-committee">Committee <span className="text-destructive">*</span></FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
@@ -269,6 +263,7 @@ export function ParticipantForm({
                           {committee}
                         </SelectItem>
                       ))}
+                       {committees.length === 0 && <SelectItem value="" disabled>No committees available. Add via Superior Admin.</SelectItem>}
                     </SelectContent>
                   </Select>
                   <FormMessage />
