@@ -216,6 +216,26 @@ export async function getSystemSchools(): Promise<string[]> {
   }
 }
 
+export async function deleteSystemSchool(schoolName: string): Promise<{ success: boolean, error?: string }> {
+  if (!schoolName) return { success: false, error: "School name cannot be empty." };
+  try {
+    const q = query(collection(db, SYSTEM_SCHOOLS_COLLECTION), where("name", "==", schoolName));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return { success: false, error: `School "${schoolName}" not found.` };
+    }
+    const schoolDoc = querySnapshot.docs[0];
+    await deleteDoc(doc(db, SYSTEM_SCHOOLS_COLLECTION, schoolDoc.id));
+    revalidatePath('/superior-admin');
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting system school: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    return { success: false, error: `Failed to delete school. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${SYSTEM_SCHOOLS_COLLECTION}'.` };
+  }
+}
+
+
 // System Committee Actions
 export async function getSystemCommittees(): Promise<string[]> {
   try {
@@ -228,7 +248,26 @@ export async function getSystemCommittees(): Promise<string[]> {
   }
 }
 
-// System Staff Teams Actions - NEW
+export async function deleteSystemCommittee(committeeName: string): Promise<{ success: boolean, error?: string }> {
+  if (!committeeName) return { success: false, error: "Committee name cannot be empty." };
+  try {
+    const q = query(collection(db, SYSTEM_COMMITTEES_COLLECTION), where("name", "==", committeeName));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return { success: false, error: `Committee "${committeeName}" not found.` };
+    }
+    const committeeDoc = querySnapshot.docs[0];
+    await deleteDoc(doc(db, SYSTEM_COMMITTEES_COLLECTION, committeeDoc.id));
+    revalidatePath('/superior-admin');
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting system committee: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    return { success: false, error: `Failed to delete committee. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${SYSTEM_COMMITTEES_COLLECTION}'.` };
+  }
+}
+
+// System Staff Teams Actions
 export async function getSystemStaffTeams(): Promise<string[]> {
   try {
     const staffTeamsColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
@@ -237,6 +276,25 @@ export async function getSystemStaffTeams(): Promise<string[]> {
   } catch (error) {
     console.error("Error fetching system staff teams: ", error);
     throw new Error("Failed to fetch system staff teams. Check Firestore rules and connectivity.");
+  }
+}
+
+export async function deleteSystemStaffTeam(teamName: string): Promise<{ success: boolean, error?: string }> {
+  if (!teamName) return { success: false, error: "Team name cannot be empty." };
+  try {
+    const q = query(collection(db, SYSTEM_STAFF_TEAMS_COLLECTION), where("name", "==", teamName));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return { success: false, error: `Staff Team "${teamName}" not found.` };
+    }
+    const teamDoc = querySnapshot.docs[0];
+    await deleteDoc(doc(db, SYSTEM_STAFF_TEAMS_COLLECTION, teamDoc.id));
+    revalidatePath('/superior-admin');
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting system staff team: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    return { success: false, error: `Failed to delete staff team. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${SYSTEM_STAFF_TEAMS_COLLECTION}'.` };
   }
 }
 
