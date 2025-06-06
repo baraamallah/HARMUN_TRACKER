@@ -1,18 +1,19 @@
+
 'use client';
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getStaffMemberById, markStaffMemberStatus as serverMarkStaffStatus } from '@/lib/actions';
+import { getStaffMemberById, markStaffMemberStatus as serverMarkStaffStatus, getSystemStaffTeams } from '@/lib/actions'; // Added getSystemStaffTeams
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge'; 
-import { StaffMemberForm } from '@/components/staff/StaffMemberForm'; 
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2, UserCheck, UserX, Coffee, Plane } from 'lucide-react';
+import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
+import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; // Added Network for Team
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -32,41 +33,47 @@ export default function StaffMemberProfilePage() {
 
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [isSubmittingStatus, setIsSubmittingStatus] = React.useState(false); // Renamed for clarity
-  
-  const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
+  const [isSubmittingStatus, setIsSubmittingStatus] = React.useState(false);
 
-  const fetchStaffData = React.useCallback(async () => {
+  const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
+  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); // State for staff teams
+
+  const fetchStaffDataAndTeams = React.useCallback(async () => { // Renamed function
     if (!id) {
       setIsLoading(false);
       toast({ title: "Error", description: "Staff Member ID is missing.", variant: "destructive" });
-      router.push('/staff'); 
+      router.push('/staff');
       return;
     }
     setIsLoading(true);
     try {
-      const staffData = await getStaffMemberById(id);
+      const [staffData, teamsData] = await Promise.all([ // Fetch staff and teams
+        getStaffMemberById(id),
+        getSystemStaffTeams()
+      ]);
+
       if (staffData) {
         setStaffMember(staffData);
       } else {
         toast({ title: "Not Found", description: "Staff member data could not be found.", variant: "destructive" });
-        router.push('/staff'); 
+        router.push('/staff');
       }
+      setSystemStaffTeams(teamsData); // Set staff teams
     } catch (error) {
-      console.error("Failed to fetch staff member data:", error);
-      toast({ title: "Error Fetching Data", description: (error as Error).message || "Failed to load staff member data.", variant: "destructive" });
+      console.error("Failed to fetch staff member data or teams:", error);
+      toast({ title: "Error Fetching Data", description: (error as Error).message || "Failed to load staff member data or teams.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   }, [id, toast, router]);
 
   React.useEffect(() => {
-    fetchStaffData();
-  }, [fetchStaffData]);
-  
+    fetchStaffDataAndTeams();
+  }, [fetchStaffDataAndTeams]);
+
   const handleFormSubmitSuccess = () => {
-    fetchStaffData(); 
-    setIsStaffFormOpen(false); 
+    fetchStaffDataAndTeams(); // Re-fetch both staff and teams
+    setIsStaffFormOpen(false);
   };
 
   const handleMarkStatus = async (status: StaffAttendanceStatus) => {
@@ -74,12 +81,11 @@ export default function StaffMemberProfilePage() {
     setIsSubmittingStatus(true);
     try {
       const updatedStaffMemberData = await serverMarkStaffStatus(staffMember.id, status);
-      if (updatedStaffMemberData) { // Ensure server action returns the updated object
-         setStaffMember(updatedStaffMemberData); 
+      if (updatedStaffMemberData) {
+         setStaffMember(updatedStaffMemberData);
       } else {
-        // Fallback: this path should ideally not be hit if server action is robust
         setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-        fetchStaffData(); // Re-fetch to ensure consistency if server returned null
+        fetchStaffDataAndTeams();
       }
       toast({
         title: 'Status Updated',
@@ -91,7 +97,7 @@ export default function StaffMemberProfilePage() {
         description: (error as Error).message || 'An unknown error occurred while updating status.',
         variant: 'destructive',
       });
-       fetchStaffData(); // Re-fetch on error to ensure UI consistency
+       fetchStaffDataAndTeams();
     } finally {
       setIsSubmittingStatus(false);
     }
@@ -113,7 +119,7 @@ export default function StaffMemberProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-48 w-full rounded-lg" /> {/* Increased height for more details */}
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -135,7 +141,7 @@ export default function StaffMemberProfilePage() {
       </div>
     );
   }
-  
+
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
        <Button asChild variant="outline" className="mb-6">
@@ -163,6 +169,10 @@ export default function StaffMemberProfilePage() {
               <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><Users2 className="mr-2 h-4 w-4 text-primary/70" />Department:</span>
                 <span className="text-right">{staffMember.department || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Network className="mr-2 h-4 w-4 text-primary/70" />Team:</span>
+                <span className="text-right">{staffMember.team || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><Phone className="mr-2 h-4 w-4 text-primary/70" />Contact:</span>
@@ -236,6 +246,7 @@ export default function StaffMemberProfilePage() {
         onOpenChange={setIsStaffFormOpen}
         staffMemberToEdit={staffMember}
         onFormSubmitSuccess={handleFormSubmitSuccess}
+        staffTeams={systemStaffTeams} // Pass teams to the form
       />
     </div>
   );

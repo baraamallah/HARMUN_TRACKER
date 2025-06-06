@@ -25,6 +25,13 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'; // Added Select
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition } from 'react';
 import { db } from '@/lib/firebase';
@@ -34,6 +41,7 @@ const staffMemberFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
   role: z.string().min(2, 'Role is required.').max(50, 'Role must be at most 50 characters.'),
   department: z.string().max(50, 'Department must be at most 50 characters.').optional().default(''),
+  team: z.string().optional().default(''), // New field for team
   contactInfo: z.string().max(100, 'Contact info must be at most 100 characters.').optional().default(''),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
 });
@@ -45,6 +53,7 @@ interface StaffMemberFormProps {
   onOpenChange: (isOpen: boolean) => void;
   staffMemberToEdit?: StaffMember | null;
   onFormSubmitSuccess?: () => void;
+  staffTeams?: string[]; // Prop to pass available staff teams
 }
 
 export function StaffMemberForm({
@@ -52,6 +61,7 @@ export function StaffMemberForm({
   onOpenChange,
   staffMemberToEdit,
   onFormSubmitSuccess,
+  staffTeams = [], // Default to empty array
 }: StaffMemberFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -62,6 +72,7 @@ export function StaffMemberForm({
       name: '',
       role: '',
       department: '',
+      team: '', // Default for team
       contactInfo: '',
       notes: '',
     },
@@ -74,6 +85,7 @@ export function StaffMemberForm({
           name: staffMemberToEdit.name,
           role: staffMemberToEdit.role,
           department: staffMemberToEdit.department || '',
+          team: staffMemberToEdit.team || '', // Set team if editing
           contactInfo: staffMemberToEdit.contactInfo || '',
           notes: staffMemberToEdit.notes || '',
         });
@@ -82,12 +94,13 @@ export function StaffMemberForm({
           name: '',
           role: '',
           department: '',
+          team: staffTeams.length > 0 ? '' : '', // Default team selection (can be empty for no default)
           contactInfo: '',
           notes: '',
         });
       }
     }
-  }, [staffMemberToEdit, form, isOpen]);
+  }, [staffMemberToEdit, form, isOpen, staffTeams]);
 
   const onSubmit = (data: StaffMemberFormData) => {
     startTransition(async () => {
@@ -96,6 +109,7 @@ export function StaffMemberForm({
           name: data.name.trim(),
           role: data.role.trim(),
           department: data.department?.trim() || '',
+          team: data.team?.trim() || '', // Save team
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
           updatedAt: serverTimestamp(),
@@ -109,7 +123,7 @@ export function StaffMemberForm({
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
           const newStaffMemberData = {
             ...submissionData,
-            status: 'Off Duty' as const, 
+            status: 'Off Duty' as const,
             imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
             createdAt: serverTimestamp(),
           };
@@ -128,9 +142,9 @@ export function StaffMemberForm({
       }
     });
   };
-  
+
   const handleDialogClose = () => {
-    form.reset({ name: '', role: '', department: '', contactInfo: '', notes: '' });
+    form.reset({ name: '', role: '', department: '', team: '', contactInfo: '', notes: '' });
     onOpenChange(false);
   }
 
@@ -186,6 +200,37 @@ export function StaffMemberForm({
                   <FormControl>
                     <Input id="staff-form-department" placeholder="e.g., Operations, Media" {...field} value={field.value ?? ''} disabled={isPending} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="team"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="staff-form-team">Team (Optional)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                    disabled={isPending || staffTeams.length === 0}
+                  >
+                    <FormControl>
+                      <SelectTrigger id="staff-form-team">
+                        <SelectValue placeholder={staffTeams.length > 0 ? "Select a team" : "No teams defined"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No Team / Unassigned</SelectItem>
+                      {staffTeams.map((teamName) => (
+                        <SelectItem key={teamName} value={teamName}>
+                          {teamName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {staffTeams.length === 0 && <p className="text-xs text-muted-foreground mt-1">Add teams in Superior Admin panel.</p>}
                   <FormMessage />
                 </FormItem>
               )}

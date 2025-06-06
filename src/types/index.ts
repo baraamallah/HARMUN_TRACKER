@@ -17,9 +17,9 @@ export interface Participant {
   imageUrl?: string;
   notes?: string;
   additionalDetails?: string;
-  classGrade?: string; 
-  createdAt?: string | any; 
-  updatedAt?: string | any; 
+  classGrade?: string;
+  createdAt?: string | any;
+  updatedAt?: string | any;
 }
 
 export type StaffAttendanceStatus =
@@ -33,6 +33,7 @@ export interface StaffMember {
   name: string;
   role: string; // e.g., "Director", "Volunteer", "Security"
   department?: string; // e.g., "Logistics", "Press", "Crisis"
+  team?: string; // New: e.g., "Logistics Team A", "Security Alpha"
   contactInfo?: string; // e.g., phone or email
   status: StaffAttendanceStatus;
   notes?: string;
@@ -58,7 +59,7 @@ export interface VisibleColumns {
   committee: boolean;
   status: boolean;
   actions: boolean;
-  selection?: boolean; 
+  selection?: boolean;
 }
 
 // Specific for Staff Table, if columns differ significantly or for clarity
@@ -67,6 +68,7 @@ export interface StaffVisibleColumns {
   name: boolean;
   role: boolean;
   department: boolean;
+  team: boolean; // Added team column
   contactInfo: boolean;
   status: boolean;
   actions: boolean;
@@ -75,12 +77,12 @@ export interface StaffVisibleColumns {
 
 
 export interface AdminManagedUser {
-  id: string; 
+  id: string;
   email: string;
   displayName?: string | null;
-  role: 'admin' | string; 
-  createdAt?: string | any; 
-  updatedAt?: string | any; 
-  avatarUrl?: string; 
+  role: 'admin' | string;
+  createdAt?: string | any;
+  updatedAt?: string | any;
+  avatarUrl?: string;
 }
 

@@ -27,7 +27,7 @@ import { StaffMemberTable } from '@/components/staff/StaffMemberTable';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { StaffMember, StaffVisibleColumns, StaffAttendanceStatus } from '@/types';
-import { getStaffMembers } from '@/lib/actions';
+import { getStaffMembers, getSystemStaffTeams } from '@/lib/actions'; // Added getSystemStaffTeams
 import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -49,11 +49,12 @@ export default function StaffDashboardPage() {
 
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
-  
+  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); // State for staff teams
+
   const [searchTerm, setSearchTerm] = React.useState('');
-  // Add department filter if departments become standardized
-  // const [selectedDepartment, setSelectedDepartment] = React.useState('All Departments');
   const [quickStatusFilter, setQuickStatusFilter] = React.useState<StaffAttendanceStatus | 'All'>('All');
+  const [selectedTeamFilter, setSelectedTeamFilter] = React.useState<string>('All Teams');
+
 
   const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
   const [staffToEdit, setStaffToEdit] = React.useState<StaffMember | null>(null);
@@ -65,6 +66,7 @@ export default function StaffDashboardPage() {
     name: true,
     role: true,
     department: true,
+    team: true, // Default to show team
     contactInfo: true,
     status: true,
     actions: true,
@@ -75,6 +77,7 @@ export default function StaffDashboardPage() {
     name: 'Name',
     role: 'Role',
     department: 'Department',
+    team: 'Team',
     contactInfo: 'Contact Info',
     status: 'Status',
     actions: 'Actions',
@@ -86,7 +89,7 @@ export default function StaffDashboardPage() {
         setCurrentUser(user);
       } else {
         setCurrentUser(null);
-        router.push('/auth/login'); 
+        router.push('/auth/login');
       }
       setIsAuthLoading(false);
     });
@@ -94,23 +97,26 @@ export default function StaffDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return; 
+    if (!currentUser) return;
     setIsLoadingData(true);
     try {
-      const staffData = await getStaffMembers({ 
-        // department: selectedDepartment === 'All Departments' ? undefined : selectedDepartment, 
-        searchTerm: debouncedSearchTerm,
-        status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
-      });
+      const [staffData, teamsData] = await Promise.all([
+          getStaffMembers({
+            searchTerm: debouncedSearchTerm,
+            status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
+            team: selectedTeamFilter === 'All Teams' ? undefined : selectedTeamFilter,
+          }),
+          getSystemStaffTeams()
+      ]);
       setStaffMembers(staffData);
-      // Potentially fetch unique departments for filter dropdown
+      setSystemStaffTeams(['All Teams', ...teamsData]);
     } catch (error) {
       console.error("Failed to fetch staff data:", error);
       toast({title: "Error", description: "Failed to load staff data.", variant: "destructive"})
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, debouncedSearchTerm, quickStatusFilter, toast]);
+  }, [currentUser, debouncedSearchTerm, quickStatusFilter, selectedTeamFilter, toast]);
 
   React.useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -127,15 +133,9 @@ export default function StaffDashboardPage() {
     setStaffToEdit(staffMember);
     setIsStaffFormOpen(true);
   };
-  
-  const toggleAllColumns = (show: boolean) => {
-    setVisibleColumns(prev => 
-      Object.keys(prev).reduce((acc, key) => {
-        acc[key as keyof StaffVisibleColumns] = show;
-        return acc;
-      }, {} as StaffVisibleColumns)
-    );
-  };
+
+  // toggleAllColumns function is not present, but not strictly necessary for this page.
+  // If added, it should be similar to the one in Participant dashboard.
 
   if (isAuthLoading) {
     return (
@@ -167,7 +167,7 @@ export default function StaffDashboardPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Staff Management</h1>
-            <p className="text-muted-foreground">Manage staff members and their status.</p>
+            <p className="text-muted-foreground">Manage staff members, their roles, teams, and status.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <DropdownMenu>
@@ -197,10 +197,10 @@ export default function StaffDashboardPage() {
             </Button>
           </div>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
+
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
-            placeholder="Search by name, role, department..."
+            placeholder="Search by name, role, department, team..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow"
@@ -217,7 +217,18 @@ export default function StaffDashboardPage() {
               ))}
             </SelectContent>
           </Select>
-          {/* Add Department Filter here if needed */}
+          <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by team" />
+            </SelectTrigger>
+            <SelectContent>
+              {systemStaffTeams.map((team) => (
+                <SelectItem key={team} value={team}>
+                  {team}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <StaffMemberTable
@@ -233,6 +244,7 @@ export default function StaffDashboardPage() {
         onOpenChange={setIsStaffFormOpen}
         staffMemberToEdit={staffToEdit}
         onFormSubmitSuccess={fetchData}
+        staffTeams={systemStaffTeams.filter(t => t !== 'All Teams')} // Pass actual teams
       />
     </AppLayoutClientShell>
   );

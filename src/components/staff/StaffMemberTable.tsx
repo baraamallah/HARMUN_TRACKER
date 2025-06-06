@@ -23,16 +23,16 @@ interface StaffMemberTableProps {
   staffMembers: StaffMember[];
   isLoading: boolean;
   onEditStaffMember: (staffMember: StaffMember) => void;
-  visibleColumns: StaffVisibleColumns; // Using specific type for clarity
+  visibleColumns: StaffVisibleColumns;
 }
 
-type SortKey = keyof Pick<StaffMember, 'name' | 'role' | 'department' | 'status'>;
+type SortKey = keyof Pick<StaffMember, 'name' | 'role' | 'department' | 'team' | 'status'>;
 type SortOrder = 'asc' | 'desc';
 
-export function StaffMemberTable({ 
-  staffMembers, 
-  isLoading, 
-  onEditStaffMember, 
+export function StaffMemberTable({
+  staffMembers,
+  isLoading,
+  onEditStaffMember,
   visibleColumns
 }: StaffMemberTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
@@ -40,7 +40,7 @@ export function StaffMemberTable({
 
   const sortedStaffMembers = React.useMemo(() => {
     return [...staffMembers].sort((a, b) => {
-      const valA = a[sortKey] || ''; // Handle potentially undefined fields like department
+      const valA = a[sortKey] || '';
       const valB = b[sortKey] || '';
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
@@ -74,6 +74,7 @@ export function StaffMemberTable({
               {visibleColumns.name && <TableHead><Skeleton className="h-5 w-32" /></TableHead>}
               {visibleColumns.role && <TableHead><Skeleton className="h-5 w-28" /></TableHead>}
               {visibleColumns.department && <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
+              {visibleColumns.team && <TableHead className="hidden lg:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
               {visibleColumns.contactInfo && <TableHead className="hidden lg:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
               {visibleColumns.status && <TableHead><Skeleton className="h-5 w-24" /></TableHead>}
               {visibleColumns.actions && <TableHead className="text-right w-[80px]"><Skeleton className="h-5 w-10 ml-auto" /></TableHead>}
@@ -86,6 +87,7 @@ export function StaffMemberTable({
                 {visibleColumns.name && <TableCell><Skeleton className="h-5 w-40" /></TableCell>}
                 {visibleColumns.role && <TableCell><Skeleton className="h-5 w-32" /></TableCell>}
                 {visibleColumns.department && <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-28" /></TableCell>}
+                {visibleColumns.team && <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-28" /></TableCell>}
                 {visibleColumns.contactInfo && <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-28" /></TableCell>}
                 {visibleColumns.status && <TableCell><Skeleton className="h-6 w-28 rounded-full" /></TableCell>}
                 {visibleColumns.actions && <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded-md" /></TableCell>}
@@ -123,16 +125,23 @@ export function StaffMemberTable({
               </TableHead>
             )}
             {visibleColumns.role && (
-              <TableHead className="min-w-[150px]">
+              <TableHead className="min-w-[120px]">
                 <Button variant="ghost" onClick={() => handleSort('role')} className="px-1 group">
                   Role {renderSortIcon('role')}
                 </Button>
               </TableHead>
             )}
             {visibleColumns.department && (
-              <TableHead className="hidden md:table-cell min-w-[150px]">
+              <TableHead className="hidden md:table-cell min-w-[120px]">
                 <Button variant="ghost" onClick={() => handleSort('department')} className="px-1 group">
                   Department {renderSortIcon('department')}
+                </Button>
+              </TableHead>
+            )}
+            {visibleColumns.team && (
+              <TableHead className="hidden lg:table-cell min-w-[120px]">
+                <Button variant="ghost" onClick={() => handleSort('team')} className="px-1 group">
+                  Team {renderSortIcon('team')}
                 </Button>
               </TableHead>
             )}
@@ -167,8 +176,9 @@ export function StaffMemberTable({
                   </Link>
                 </TableCell>
               )}
-              {visibleColumns.role && <TableCell className="text-muted-foreground">{staff.role}</TableCell>}
-              {visibleColumns.department && <TableCell className="hidden md:table-cell text-muted-foreground">{staff.department || 'N/A'}</TableCell>}
+              {visibleColumns.role && <TableCell className="text-muted-foreground text-sm">{staff.role}</TableCell>}
+              {visibleColumns.department && <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{staff.department || 'N/A'}</TableCell>}
+              {visibleColumns.team && <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{staff.team || 'N/A'}</TableCell>}
               {visibleColumns.contactInfo && <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{staff.contactInfo || 'N/A'}</TableCell>}
               {visibleColumns.status && (
                 <TableCell>

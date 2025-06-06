@@ -2,7 +2,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db, auth } from './firebase'; 
+import { db, auth } from './firebase';
 import {
   collection,
   getDocs,
@@ -24,9 +24,10 @@ import { OWNER_UID } from './constants';
 
 
 const PARTICIPANTS_COLLECTION = 'participants';
-const STAFF_MEMBERS_COLLECTION = 'staff_members'; // New collection for staff
+const STAFF_MEMBERS_COLLECTION = 'staff_members';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
+const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams'; // New collection for staff teams
 const USERS_COLLECTION = 'users';
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
@@ -41,10 +42,10 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
     if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
       return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
     }
-    return 'Absent'; 
+    return 'Absent';
   } catch (error) {
     console.error("Error fetching default attendance status setting: ", error);
-    return 'Absent'; 
+    return 'Absent';
   }
 }
 
@@ -56,7 +57,7 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
     revalidatePath('/superior-admin/system-settings');
     revalidatePath('/');
     revalidatePath('/public');
-    revalidatePath('/staff'); // Revalidate staff page if default status affects it
+    revalidatePath('/staff');
     return { success: true };
   } catch (error) {
     console.error("Error updating default attendance status setting: ", error);
@@ -87,7 +88,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     }
 
     q = query(participantsColRef, ...queryConstraints, orderBy('name'));
-    
+
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
@@ -150,7 +151,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
-        classGrade: data.classGrade, 
+        classGrade: data.classGrade,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
@@ -169,7 +170,7 @@ export async function deleteParticipant(participantId: string): Promise<{ succes
     await deleteDoc(participantRef);
     revalidatePath('/');
     revalidatePath('/public');
-    revalidatePath(`/participants/${participantId}`); 
+    revalidatePath(`/participants/${participantId}`);
     return { success: true };
   } catch (error) {
     console.error("Error deleting participant: ", error);
@@ -227,9 +228,22 @@ export async function getSystemCommittees(): Promise<string[]> {
   }
 }
 
+// System Staff Teams Actions - NEW
+export async function getSystemStaffTeams(): Promise<string[]> {
+  try {
+    const staffTeamsColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
+    const staffTeamsSnapshot = await getDocs(query(staffTeamsColRef, orderBy('name')));
+    return staffTeamsSnapshot.docs.map(doc => doc.data().name as string);
+  } catch (error) {
+    console.error("Error fetching system staff teams: ", error);
+    throw new Error("Failed to fetch system staff teams. Check Firestore rules and connectivity.");
+  }
+}
+
+
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade'>[] 
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
   let importedCount = 0;
   let errorCount = 0;
@@ -267,9 +281,9 @@ export async function importParticipants(
         committee: trimmedCommittee,
         status: defaultStatus,
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
-        notes: '', 
+        notes: '',
         additionalDetails: '',
-        classGrade: '', 
+        classGrade: '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -450,7 +464,7 @@ export async function bulkMarkAttendance(participantIds: string[], status: Atten
 
 
 // Staff Member Actions
-export async function getStaffMembers(filters?: { department?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
+export async function getStaffMembers(filters?: { department?: string; team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
   try {
     const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
     const queryConstraints = [];
@@ -458,13 +472,16 @@ export async function getStaffMembers(filters?: { department?: string; searchTer
     if (filters?.department && filters.department !== "All Departments") {
       queryConstraints.push(where('department', '==', filters.department));
     }
+    if (filters?.team && filters.team !== "All Teams") { // New filter for team
+        queryConstraints.push(where('team', '==', filters.team));
+    }
     if (filters?.status && filters.status !== 'All') {
       queryConstraints.push(where('status', '==', filters.status));
     }
-    
+
     const q = query(staffColRef, ...queryConstraints, orderBy('name'));
     const querySnapshot = await getDocs(q);
-    
+
     let staffData = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
       return {
@@ -472,6 +489,7 @@ export async function getStaffMembers(filters?: { department?: string; searchTer
         name: data.name || '',
         role: data.role || '',
         department: data.department,
+        team: data.team, // Include team
         contactInfo: data.contactInfo,
         status: data.status || 'Off Duty',
         imageUrl: data.imageUrl,
@@ -486,7 +504,8 @@ export async function getStaffMembers(filters?: { department?: string; searchTer
       staffData = staffData.filter(s =>
         s.name.toLowerCase().includes(term) ||
         (s.role && s.role.toLowerCase().includes(term)) ||
-        (s.department && s.department.toLowerCase().includes(term))
+        (s.department && s.department.toLowerCase().includes(term)) ||
+        (s.team && s.team.toLowerCase().includes(term)) // Search by team
       );
     }
     return staffData;
@@ -514,6 +533,7 @@ export async function getStaffMemberById(id: string): Promise<StaffMember | null
         name: data.name || '',
         role: data.role || '',
         department: data.department,
+        team: data.team, // Include team
         contactInfo: data.contactInfo,
         status: data.status || 'Off Duty',
         imageUrl: data.imageUrl,
@@ -535,6 +555,7 @@ export async function deleteStaffMember(staffMemberId: string): Promise<{ succes
     await deleteDoc(staffMemberRef);
     revalidatePath('/staff');
     revalidatePath(`/staff/${staffMemberId}`);
+    revalidatePath('/superior-admin'); // Revalidate superior admin page
     return { success: true };
   } catch (error) {
     console.error("Error deleting staff member: ", error);
@@ -549,6 +570,7 @@ export async function markStaffMemberStatus(staffMemberId: string, status: Staff
     await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
     revalidatePath('/staff');
     revalidatePath(`/staff/${staffMemberId}`);
+    revalidatePath('/superior-admin'); // Revalidate superior admin page as it shows staff status
     const updatedDocSnap = await getDoc(staffMemberRef);
     if (updatedDocSnap.exists()) {
       const data = updatedDocSnap.data();
@@ -566,3 +588,4 @@ export async function markStaffMemberStatus(staffMemberId: string, status: Staff
     throw new Error(`Failed to mark staff member status. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`);
   }
 }
+

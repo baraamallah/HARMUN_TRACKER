@@ -22,15 +22,15 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Requires login (Email/Password via Firebase Authentication).
     *   View, add, edit, and delete staff members.
     *   Mark staff member status (e.g., On Duty, Off Duty, On Break, Away).
-    *   Filter staff members by status or search term.
-    *   Toggle visibility of table columns (Avatar, Name, Role, Department, Contact Info, Status, Actions).
+    *   Filter staff members by status, team, or search term.
+    *   Toggle visibility of table columns (Avatar, Name, Role, Department, Team, Contact Info, Status, Actions).
     *   Link to individual staff member profile pages.
 *   **Participant Profile Page (`/participants/[id]`)**:
     *   View detailed participant information (Name, School, Committee, Status, Class/Grade, Notes, Additional Details).
     *   Edit participant details.
     *   Change participant attendance status.
 *   **Staff Member Profile Page (`/staff/[id]`)**:
-    *   View detailed staff member information (Name, Role, Department, Contact Info, Status, Notes).
+    *   View detailed staff member information (Name, Role, Department, Team, Contact Info, Status, Notes).
     *   Edit staff member details.
     *   Change staff member status.
 *   **Login Page (`/auth/login`)**:
@@ -43,7 +43,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Does not require login.
 *   **Superior Admin Panel (`/superior-admin`)**:
     *   Restricted access to a designated Owner UID via Firebase Authentication.
-    *   Manage system-wide lists of Schools and Committees (add new ones).
+    *   Manage system-wide lists of Schools, Committees, and **Staff Teams** (add new ones).
+    *   Manage staff members (add, view list, link to edit, delete).
     *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
     *   Manage System Settings (e.g., Default Attendance Status for new participants).
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
@@ -60,7 +61,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 *   **ShadCN UI Components**: Re-usable UI components.
 *   **Tailwind CSS**: Utility-first CSS framework for styling.
 *   **Firebase**:
-    *   **Firestore**: NoSQL database for storing participant data, staff data, system schools, system committees, user roles, and system configuration.
+    *   **Firestore**: NoSQL database for storing participant data, staff data, system schools, system committees, system staff teams, user roles, and system configuration.
     *   **Firebase Authentication**: For user authentication (admin and superior admin).
 *   **Lucide React**: Library for icons.
 *   **Genkit (for AI)**: Configured but not actively used in current core features.
@@ -114,54 +115,65 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
     service cloud.firestore {
       match /databases/{database}/documents {
 
+        // Helper function to check for admin role
+        function isAdmin() {
+          return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+        }
+
+        // Helper function to check if the user is the Owner
+        function isOwner() {
+          return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Replace with your Owner UID
+        }
+
         // Participants Collection
         match /participants/{participantId} {
           allow read: if true; // Public read for list and profiles
-          allow write: if (request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2") || // Owner
-                         (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"); // Admin
+          allow write: if isOwner() || isAdmin();
         }
 
         // Staff Members Collection
         match /staff_members/{staffMemberId} {
-          // Adjust read access based on privacy needs. Currently admin/owner read.
-          allow read: if (request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2") || 
-                        (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin");
-          allow write: if (request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2") || // Owner
-                         (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"); // Admin
+          // Admin/Owner can read/write.
+          allow read, write: if isOwner() || isAdmin();
         }
 
         // System Schools Collection
         match /system_schools/{schoolId} {
           allow read: if true; // Public read
-          allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner only
+          allow write: if isOwner(); // Owner only
         }
 
         // System Committees Collection
         match /system_committees/{committeeId} {
           allow read: if true; // Public read
-          allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner only
+          allow write: if isOwner(); // Owner only
+        }
+
+        // System Staff Teams Collection - NEW
+        match /system_staff_teams/{teamId} {
+          allow read: if true; // Public read
+          allow write: if isOwner(); // Owner only
         }
 
         // System Configuration Collection
         match /system_config/{settingId} {
-          allow read, write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner only
+          allow read, write: if isOwner(); // Owner only
         }
 
         // Users Collection (for managing admin roles)
         match /users/{userId} {
-          allow write: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner can write/manage roles
-          allow read: if request.auth != null &&
-                      (request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2" || request.auth.uid == userId); // Owner can read any, user can read own
+          allow write: if isOwner(); // Owner can write/manage roles
+          allow read: if isOwner() || (request.auth != null && request.auth.uid == userId); // Owner can read any, user can read own
         }
 
         // Allow Owner to list all user documents (for admin management page)
         match /users {
-           allow list: if request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Owner only
+           allow list: if isOwner(); // Owner only
         }
       }
     }
     ```
-4.  **VERIFY** that the UID `JZgMG6xdwAYInXsdciaGj6qNAsG2` is exactly correct in all places within the rules.
+4.  **VERIFY** that the UID `JZgMG6xdwAYInXsdciaGj6qNAsG2` (or your specific Owner UID) is exactly correct in all places within the rules, especially in the `isOwner()` function.
 5.  Click **PUBLISH**.
 
 ## Debugging Firestore Rules with Rules Playground (Develop and Test)
@@ -194,12 +206,12 @@ If you are encountering "Missing or insufficient permissions" errors, especially
 *   **Permission Denied / "Missing or insufficient permissions"**:
     *   **Almost always a Firestore Security Rules issue.** Use the Rules Playground.
     *   **Verify `NEXT_PUBLIC_FIREBASE_PROJECT_ID`**: Ensure `.env.local` (or hardcoded values in `src/lib/firebase.ts`) correctly points to the Firebase project where your rules and auth are set up. Check browser console for `[Firebase Setup] Attempting to connect to Firebase project ID: ...`.
+    *   **Check Vercel Function Logs**: In production on Vercel, detailed server-side errors (like Firestore rule denials for server actions) are often masked in the browser. Check your Vercel deployment's function logs for the true error.
 *   **Missing Firestore Indexes**:
-    *   If data fetching fails with "The query requires an index...", check the browser console (local dev) or Vercel serverless function logs (production) for a link to create the index.
+    *   If data fetching fails with "The query requires an index...", check the browser console (local dev) or Vercel serverless function logs (production) for a link to create the index. The `getParticipants` and `getStaffMembers` functions are most likely to trigger this if multiple filters are applied.
 *   **CSV Import Issues**:
     *   The CSV import adds participants. It does **not** create new schools or committees. Ensure these exist in the system (via Superior Admin panel) before importing. The import dialog will notify of new entities found.
 *   **Server Component Render Error (500 on Vercel)**:
     *   Often masks a deeper server-side error. Check Vercel function logs. If related to Firestore, it's likely a missing index or a security rule denial for a server action.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-```

@@ -22,13 +22,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; 
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react'; // Added Network for Staff Teams
+import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
-import { getSystemSchools, getSystemCommittees, getStaffMembers, deleteStaffMember as deleteStaffMemberAction } from '@/lib/actions';
+import { getSystemSchools, getSystemCommittees, getStaffMembers, deleteStaffMember as deleteStaffMemberAction, getSystemStaffTeams } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -48,6 +48,7 @@ import {
 
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
+const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams'; // New
 
 export default function SuperiorAdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -63,11 +64,14 @@ export default function SuperiorAdminPage() {
   const [newCommitteeName, setNewCommitteeName] = useState('');
   const [isLoadingCommittees, setIsLoadingCommittees] = useState(false);
 
+  const [systemStaffTeams, setSystemStaffTeams] = useState<string[]>([]); // New state for staff teams
+  const [newStaffTeamName, setNewStaffTeamName] = useState(''); // New state for adding staff team
+  const [isLoadingStaffTeams, setIsLoadingStaffTeams] = useState(false); // New loading state
+
   // Staff Management State
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
   const [isStaffFormOpen, setIsStaffFormOpen] = useState(false);
-  // staffToEdit for the form can remain null as we only add from here. Editing links to profile.
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
   const [isDeleteStaffDialogVisible, setIsDeleteStaffDialogVisible] = useState(false);
 
@@ -100,10 +104,24 @@ export default function SuperiorAdminPage() {
     }
   }, [toast]);
 
+  const fetchStaffTeams = useCallback(async () => { // New function to fetch staff teams
+    setIsLoadingStaffTeams(true);
+    try {
+      const teamsColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
+      const teamsSnapshot = await getDocs(query(teamsColRef, orderBy('name')));
+      setSystemStaffTeams(teamsSnapshot.docs.map(doc => doc.data().name as string));
+    } catch (error) {
+      console.error("Error fetching system staff teams (client-side): ", error);
+      toast({ title: 'Error Fetching Staff Teams', description: 'Failed to load the list of staff teams.', variant: 'destructive' });
+    } finally {
+      setIsLoadingStaffTeams(false);
+    }
+  }, [toast]);
+
   const fetchStaff = useCallback(async () => {
     setIsLoadingStaff(true);
     try {
-      const staffData = await getStaffMembers(); // Using the existing server action
+      const staffData = await getStaffMembers();
       setStaffMembers(staffData);
     } catch (error) {
       console.error("Error fetching staff members: ", error);
@@ -120,11 +138,12 @@ export default function SuperiorAdminPage() {
       if (user && user.uid === OWNER_UID) {
         fetchSchools();
         fetchCommittees();
+        fetchStaffTeams(); // Fetch staff teams
         fetchStaff();
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaff]);
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]);
 
   const handleAddSchoolClientSide = async () => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -142,7 +161,7 @@ export default function SuperiorAdminPage() {
         await addDoc(schoolColRef, { name: trimmedSchoolName, createdAt: serverTimestamp() });
         toast({ title: 'School Added', description: `School "${trimmedSchoolName}" has been successfully added.` });
         setNewSchoolName('');
-        fetchSchools(); 
+        fetchSchools();
       } catch (error: any) {
         console.error(`Error adding system school "${trimmedSchoolName}" (client-side): `, error);
         toast({ title: 'Error Adding School', description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`, variant: 'destructive', duration: 10000 });
@@ -174,6 +193,30 @@ export default function SuperiorAdminPage() {
     });
   };
 
+  const handleAddStaffTeamClientSide = async () => { // New function to add staff team
+    if (!currentUser || currentUser.uid !== OWNER_UID) {
+      toast({ title: 'Unauthorized', description: 'Only the owner can perform this action.', variant: 'destructive' });
+      return;
+    }
+    const trimmedStaffTeamName = newStaffTeamName.trim();
+    if (!trimmedStaffTeamName) {
+      toast({ title: 'Validation Error', description: 'Staff team name cannot be empty.', variant: 'destructive' });
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const teamColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
+        await addDoc(teamColRef, { name: trimmedStaffTeamName, createdAt: serverTimestamp() });
+        toast({ title: 'Staff Team Added', description: `Staff Team "${trimmedStaffTeamName}" has been successfully added.` });
+        setNewStaffTeamName('');
+        fetchStaffTeams();
+      } catch (error: any) {
+        console.error(`Error adding system staff team "${trimmedStaffTeamName}" (client-side): `, error);
+        toast({ title: 'Error Adding Staff Team', description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`, variant: 'destructive', duration: 10000 });
+      }
+    });
+  };
+
   const handleSuperAdminLogout = async () => {
     try {
       await signOut(auth);
@@ -189,7 +232,7 @@ export default function SuperiorAdminPage() {
   };
 
   const handleStaffFormSuccess = () => {
-    fetchStaff(); // Refresh staff list after add/edit
+    fetchStaff();
     setIsStaffFormOpen(false);
   };
 
@@ -387,27 +430,73 @@ export default function SuperiorAdminPage() {
             </CardContent>
           </Card>
 
-          {/* Manage Staff Members Card - NEW */}
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-green-500 md:col-span-2 lg:col-span-1">
+          {/* Manage Staff Teams Card - NEW */}
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-orange-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Manage Staff Teams</CardTitle>
+              <Network className="h-7 w-7 text-orange-500" />
+            </CardHeader>
+            <CardContent className="pt-2">
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="New staff team name"
+                    value={newStaffTeamName}
+                    onChange={(e) => setNewStaffTeamName(e.target.value)}
+                    disabled={isPending}
+                    className="flex-grow"
+                  />
+                  <Button onClick={handleAddStaffTeamClientSide} disabled={isPending || !newStaffTeamName.trim()} className="bg-orange-500 hover:bg-orange-600 text-white">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add
+                  </Button>
+                </div>
+                <Separator />
+                <h4 className="text-md font-medium text-muted-foreground">Existing Staff Teams:</h4>
+                {isLoadingStaffTeams ? (
+                  <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : systemStaffTeams.length > 0 ? (
+                  <ScrollArea className="h-48 w-full rounded-md border bg-muted/30 p-3">
+                    <ul className="space-y-1.5">
+                      {systemStaffTeams.map((team) => (
+                        <li key={team} className="text-sm p-2 bg-background rounded-md shadow-sm hover:bg-orange-500/10">
+                          {team}
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic py-4 text-center">No staff teams registered.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+
+          {/* Manage Staff Members Card */}
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-green-500 md:col-span-3 lg:col-span-3"> {/* Spanning full width on larger screens for better table layout */}
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">Manage Staff Members</CardTitle>
               <StaffIcon className="h-7 w-7 text-green-500" />
             </CardHeader>
             <CardContent className="pt-2">
-              <Button onClick={handleOpenAddStaffForm} className="w-full mb-4 bg-green-500 hover:bg-green-600 text-white">
+              <Button onClick={handleOpenAddStaffForm} className="w-full sm:w-auto mb-4 bg-green-500 hover:bg-green-600 text-white">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Staff Member
               </Button>
               <Separator />
-              <h4 className="text-md font-medium text-muted-foreground mt-4">Existing Staff:</h4>
+              <h4 className="text-md font-medium text-muted-foreground mt-4 mb-2">Existing Staff:</h4>
               {isLoadingStaff ? (
                 <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : staffMembers.length > 0 ? (
-                <ScrollArea className="h-64 w-full rounded-md border bg-muted/30 p-3 mt-2">
+                <ScrollArea className="h-80 w-full rounded-md border bg-muted/30 mt-2">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-[50px]">Avatar</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead className="hidden sm:table-cell">Department</TableHead>
+                        <TableHead className="hidden md:table-cell">Team</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -415,26 +504,26 @@ export default function SuperiorAdminPage() {
                     <TableBody>
                       {staffMembers.map((staff) => (
                         <TableRow key={staff.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-8 w-8 hidden sm:flex">
-                                <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
-                                <AvatarFallback>{staff.name.substring(0,1)}</AvatarFallback>
-                              </Avatar>
-                              {staff.name}
-                            </div>
+                           <TableCell>
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
+                              <AvatarFallback>{staff.name.substring(0,1)}</AvatarFallback>
+                            </Avatar>
                           </TableCell>
+                          <TableCell className="font-medium">{staff.name}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{staff.role}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{staff.department || 'N/A'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{staff.team || 'N/A'}</TableCell>
                           <TableCell><StaffMemberStatusBadge status={staff.status} /></TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" asChild className="text-blue-500 hover:text-blue-600">
+                          <TableCell className="text-right space-x-1">
+                            <Button variant="ghost" size="icon" asChild className="text-blue-500 hover:text-blue-600 h-8 w-8">
                               <Link href={`/staff/${staff.id}`} title={`Edit ${staff.name}`}>
                                 <Edit className="h-4 w-4" />
                                 <span className="sr-only">Edit</span>
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteStaff(staff)} className="text-destructive hover:text-destructive/80" title={`Delete ${staff.name}`}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteStaff(staff)} className="text-destructive hover:text-destructive/80 h-8 w-8" title={`Delete ${staff.name}`}>
+                              {isPending && staffToDelete?.id === staff.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               <span className="sr-only">Delete</span>
                             </Button>
                           </TableCell>
@@ -467,7 +556,7 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-          
+
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">System Settings</CardTitle>
@@ -526,15 +615,14 @@ export default function SuperiorAdminPage() {
         </div>
       </footer>
 
-      {/* Staff Add/Edit Form Dialog */}
       <StaffMemberForm
         isOpen={isStaffFormOpen}
         onOpenChange={setIsStaffFormOpen}
-        staffMemberToEdit={null} // Superior admin only adds, edit is via profile link
+        staffMemberToEdit={null}
         onFormSubmitSuccess={handleStaffFormSuccess}
+        staffTeams={systemStaffTeams} // Pass staff teams to the form
       />
 
-      {/* Delete Staff Confirmation Dialog */}
       <AlertDialog open={isDeleteStaffDialogVisible} onOpenChange={setIsDeleteStaffDialogVisible}>
         <AlertDialogContent>
           <AlertDialogHeader>
