@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown } from 'lucide-react';
+import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,18 +23,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuPortal,
-  DropdownMenuSubContent
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getParticipants, getSystemSchools, getSystemCommittees, bulkMarkAttendance } from '@/lib/actions';
+import { getParticipants, getSystemSchools, getSystemCommittees, bulkMarkAttendance, bulkDeleteParticipants } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -93,6 +99,8 @@ export default function AdminDashboardPage() {
 
   const [selectedParticipantIds, setSelectedParticipantIds] = React.useState<string[]>([]);
   const [isBulkUpdating, setIsBulkUpdating] = React.useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
 
 
   React.useEffect(() => {
@@ -200,6 +208,35 @@ export default function AdminDashboardPage() {
       toast({ title: "Bulk Update Failed", description: error.message || "An error occurred.", variant: "destructive" });
     } finally {
       setIsBulkUpdating(false);
+    }
+  };
+
+  const confirmBulkDelete = () => {
+    if (selectedParticipantIds.length === 0) {
+      toast({ title: "No participants selected", description: "Please select participants to delete.", variant: "default" });
+      return;
+    }
+    setIsBulkDeleteConfirmOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      const result = await bulkDeleteParticipants(selectedParticipantIds);
+      if (result.errorMessage) {
+        toast({ title: "Bulk Delete Failed", description: result.errorMessage, variant: "destructive" });
+      } else {
+        toast({
+          title: "Bulk Delete Successful",
+          description: `${result.successCount} participant(s) deleted. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
+        });
+      }
+      fetchData(); // Refresh data and clears selection
+    } catch (error: any) {
+      toast({ title: "Bulk Delete Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsBulkDeleting(false);
+      setIsBulkDeleteConfirmOpen(false);
     }
   };
 
@@ -335,21 +372,29 @@ export default function AdminDashboardPage() {
             {selectedParticipantIds.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" disabled={isBulkUpdating}>
+                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting}>
                     <Layers className="mr-2 h-4 w-4" />
-                    Update {selectedParticipantIds.length} Selected
-                    {isBulkUpdating && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                    Actions for {selectedParticipantIds.length} Selected
+                    {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuLabel>Set status for selected to:</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
                   {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => (
-                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating}>
+                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating || isBulkDeleting}>
                       <opt.icon className="mr-2 h-4 w-4" />
                       {opt.label}
                     </DropdownMenuItem>
                   ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={confirmBulkDelete}
+                    disabled={isBulkUpdating || isBulkDeleting}
+                    className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -375,6 +420,29 @@ export default function AdminDashboardPage() {
         committees={committees.filter(c => c !== 'All Committees')}
         onFormSubmitSuccess={fetchData}
       />
+
+      <AlertDialog open={isBulkDeleteConfirmOpen} onOpenChange={setIsBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete {selectedParticipantIds.length} selected participant(s)? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isBulkDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : 'Yes, Delete Selected'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </AppLayoutClientShell>
   );
 }

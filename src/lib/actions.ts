@@ -514,10 +514,39 @@ export async function bulkMarkAttendance(participantIds: string[], status: Atten
     participantIds.forEach(id => revalidatePath(`/participants/${id}`));
   } catch (error) {
     console.error("[Action: bulkMarkAttendance] Error committing batch update: ", error);
-    errorCount += successCount;
-    successCount = 0;
+    const firebaseError = error as { code?: string; message?: string };
+    throw new Error(`Failed to bulk mark attendance. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`);
   }
   return { successCount, errorCount };
+}
+
+export async function bulkDeleteParticipants(participantIds: string[]): Promise<{ successCount: number; errorCount: number; errorMessage?: string }> {
+  if (!participantIds || participantIds.length === 0) {
+    return { successCount: 0, errorCount: 0 };
+  }
+  const batch = writeBatch(db);
+  let successCount = 0;
+  participantIds.forEach(id => {
+    const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
+    batch.delete(participantRef);
+    successCount++;
+  });
+
+  try {
+    await batch.commit();
+    revalidatePath('/');
+    revalidatePath('/public');
+    // Individual participant paths are implicitly handled by the dashboard revalidation.
+  } catch (error) {
+    console.error("[Action: bulkDeleteParticipants] Error committing batch delete: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    return {
+      successCount: 0,
+      errorCount: participantIds.length,
+      errorMessage: `Failed to bulk delete participants. Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`
+    };
+  }
+  return { successCount, errorCount: 0 };
 }
 
 
