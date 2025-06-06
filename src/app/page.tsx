@@ -72,7 +72,7 @@ export default function AdminDashboardPage() {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const [visibleColumns, setVisibleColumns] = React.useState<VisibleColumns>({
-    selection: true, // Added selection column
+    selection: true,
     avatar: true,
     name: true,
     school: true,
@@ -125,7 +125,7 @@ export default function AdminDashboardPage() {
       setParticipants(participantsData);
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
-      setSelectedParticipantIds([]); // Clear selection on data refresh
+      setSelectedParticipantIds([]); 
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast({title: "Error", description: "Failed to load dashboard data.", variant: "destructive"})
@@ -153,12 +153,7 @@ export default function AdminDashboardPage() {
   const toggleAllColumns = (show: boolean) => {
     setVisibleColumns(prev => 
       Object.keys(prev).reduce((acc, key) => {
-        // Ensure 'selection' column cannot be hidden if actions are visible, or vice-versa if needed
-        if (key === 'selection' && !show && prev.actions) { // Example: don't hide selection if actions visible
-           acc[key as keyof VisibleColumns] = true; // Or handle as per specific UX decision
-        } else {
-           acc[key as keyof VisibleColumns] = show;
-        }
+        acc[key as keyof VisibleColumns] = show;
         return acc;
       }, {} as VisibleColumns)
     );
@@ -200,7 +195,7 @@ export default function AdminDashboardPage() {
         title: "Bulk Update Successful",
         description: `${result.successCount} participant(s) updated to ${status}. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
       });
-      fetchData(); // Refresh data and clear selection
+      fetchData(); 
     } catch (error: any) {
       toast({ title: "Bulk Update Failed", description: error.message || "An error occurred.", variant: "destructive" });
     } finally {
@@ -281,7 +276,6 @@ export default function AdminDashboardPage() {
                     onCheckedChange={(checked) =>
                       setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
                     }
-                     disabled={key === 'selection' && visibleColumns.actions} // Example: keep selection if actions are on
                   >
                     {columnLabels[key]}
                   </DropdownMenuCheckboxItem>
