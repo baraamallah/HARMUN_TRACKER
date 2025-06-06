@@ -52,8 +52,8 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
         });
       } catch (error) {
         toast({
-          title: 'Error',
-          description: 'Failed to update staff member status.',
+          title: 'Error Updating Status',
+          description: (error as Error).message || 'An unknown error occurred while updating staff status.',
           variant: 'destructive',
         });
       }
@@ -71,8 +71,8 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
         setIsDeleteDialogOpen(false);
       } catch (error) {
         toast({
-          title: 'Error',
-          description: 'Failed to delete staff member.',
+          title: 'Error Deleting Staff Member',
+          description: (error as Error).message || 'An unknown error occurred while deleting staff member.',
           variant: 'destructive',
         });
       }

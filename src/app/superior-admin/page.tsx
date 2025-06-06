@@ -13,20 +13,39 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2 } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; // Import db
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore'; // Import firestore functions
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon } from 'lucide-react';
+import { auth, db } from '@/lib/firebase'; 
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
-// getSystemSchools and getSystemCommittees server actions are still used for fetching initial lists.
-// addSystemSchool and addSystemCommittee server actions are NOT used by this page's direct "Add" buttons anymore.
-import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
+import { getSystemSchools, getSystemCommittees, getStaffMembers, deleteStaffMember as deleteStaffMemberAction } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import type { StaffMember } from '@/types';
+import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
+import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
-// Collection names
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 
@@ -43,6 +62,14 @@ export default function SuperiorAdminPage() {
   const [systemCommittees, setSystemCommittees] = useState<string[]>([]);
   const [newCommitteeName, setNewCommitteeName] = useState('');
   const [isLoadingCommittees, setIsLoadingCommittees] = useState(false);
+
+  // Staff Management State
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [isStaffFormOpen, setIsStaffFormOpen] = useState(false);
+  // staffToEdit for the form can remain null as we only add from here. Editing links to profile.
+  const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
+  const [isDeleteStaffDialogVisible, setIsDeleteStaffDialogVisible] = useState(false);
 
 
   const fetchSchools = useCallback(async () => {
@@ -73,6 +100,19 @@ export default function SuperiorAdminPage() {
     }
   }, [toast]);
 
+  const fetchStaff = useCallback(async () => {
+    setIsLoadingStaff(true);
+    try {
+      const staffData = await getStaffMembers(); // Using the existing server action
+      setStaffMembers(staffData);
+    } catch (error) {
+      console.error("Error fetching staff members: ", error);
+      toast({ title: 'Error Fetching Staff', description: (error as Error).message || 'Failed to load staff members.', variant: 'destructive' });
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -80,10 +120,11 @@ export default function SuperiorAdminPage() {
       if (user && user.uid === OWNER_UID) {
         fetchSchools();
         fetchCommittees();
+        fetchStaff();
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees]);
+  }, [fetchSchools, fetchCommittees, fetchStaff]);
 
   const handleAddSchoolClientSide = async () => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -95,25 +136,16 @@ export default function SuperiorAdminPage() {
       toast({ title: 'Validation Error', description: 'School name cannot be empty.', variant: 'destructive' });
       return;
     }
-
     startTransition(async () => {
       try {
         const schoolColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-        await addDoc(schoolColRef, {
-          name: trimmedSchoolName,
-          createdAt: serverTimestamp()
-        });
+        await addDoc(schoolColRef, { name: trimmedSchoolName, createdAt: serverTimestamp() });
         toast({ title: 'School Added', description: `School "${trimmedSchoolName}" has been successfully added.` });
         setNewSchoolName('');
-        fetchSchools(); // Refresh the list
+        fetchSchools(); 
       } catch (error: any) {
         console.error(`Error adding system school "${trimmedSchoolName}" (client-side): `, error);
-        toast({
-          title: 'Error Adding School',
-          description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`,
-          variant: 'destructive',
-          duration: 10000,
-        });
+        toast({ title: 'Error Adding School', description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`, variant: 'destructive', duration: 10000 });
       }
     });
   };
@@ -131,21 +163,13 @@ export default function SuperiorAdminPage() {
     startTransition(async () => {
       try {
         const committeeColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-        await addDoc(committeeColRef, {
-          name: trimmedCommitteeName,
-          createdAt: serverTimestamp()
-        });
+        await addDoc(committeeColRef, { name: trimmedCommitteeName, createdAt: serverTimestamp() });
         toast({ title: 'Committee Added', description: `Committee "${trimmedCommitteeName}" has been successfully added.` });
         setNewCommitteeName('');
-        fetchCommittees(); // Refresh the list
+        fetchCommittees();
       } catch (error: any) {
         console.error(`Error adding system committee "${trimmedCommitteeName}" (client-side): `, error);
-        toast({
-          title: 'Error Adding Committee',
-          description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`,
-          variant: 'destructive',
-          duration: 10000,
-        });
+        toast({ title: 'Error Adding Committee', description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`, variant: 'destructive', duration: 10000 });
       }
     });
   };
@@ -154,12 +178,42 @@ export default function SuperiorAdminPage() {
     try {
       await signOut(auth);
       toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
-      // router.push('/auth/login'); // Or let onAuthStateChanged handle it
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
     }
   };
+
+  const handleOpenAddStaffForm = () => {
+    setIsStaffFormOpen(true);
+  };
+
+  const handleStaffFormSuccess = () => {
+    fetchStaff(); // Refresh staff list after add/edit
+    setIsStaffFormOpen(false);
+  };
+
+  const confirmDeleteStaff = (staff: StaffMember) => {
+    setStaffToDelete(staff);
+    setIsDeleteStaffDialogVisible(true);
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!staffToDelete) return;
+    startTransition(async () => {
+      try {
+        await deleteStaffMemberAction(staffToDelete.id);
+        toast({ title: 'Staff Member Deleted', description: `${staffToDelete.name} has been removed.` });
+        fetchStaff();
+      } catch (error) {
+        toast({ title: 'Error Deleting Staff', description: (error as Error).message || 'Could not delete staff member.', variant: 'destructive' });
+      } finally {
+        setIsDeleteStaffDialogVisible(false);
+        setStaffToDelete(null);
+      }
+    });
+  };
+
 
   if (isLoadingAuth) {
     return (
@@ -285,7 +339,7 @@ export default function SuperiorAdminPage() {
                     </ul>
                   </ScrollArea>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic py-4 text-center">No schools registered in the system yet.</p>
+                  <p className="text-sm text-muted-foreground italic py-4 text-center">No schools registered.</p>
                 )}
               </div>
             </CardContent>
@@ -327,9 +381,71 @@ export default function SuperiorAdminPage() {
                     </ul>
                   </ScrollArea>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic py-4 text-center">No committees registered in the system yet.</p>
+                  <p className="text-sm text-muted-foreground italic py-4 text-center">No committees registered.</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Manage Staff Members Card - NEW */}
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-green-500 md:col-span-2 lg:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Manage Staff Members</CardTitle>
+              <StaffIcon className="h-7 w-7 text-green-500" />
+            </CardHeader>
+            <CardContent className="pt-2">
+              <Button onClick={handleOpenAddStaffForm} className="w-full mb-4 bg-green-500 hover:bg-green-600 text-white">
+                <PlusCircle className="mr-2 h-4 w-4" /> Add New Staff Member
+              </Button>
+              <Separator />
+              <h4 className="text-md font-medium text-muted-foreground mt-4">Existing Staff:</h4>
+              {isLoadingStaff ? (
+                <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : staffMembers.length > 0 ? (
+                <ScrollArea className="h-64 w-full rounded-md border bg-muted/30 p-3 mt-2">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {staffMembers.map((staff) => (
+                        <TableRow key={staff.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-8 w-8 hidden sm:flex">
+                                <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
+                                <AvatarFallback>{staff.name.substring(0,1)}</AvatarFallback>
+                              </Avatar>
+                              {staff.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{staff.role}</TableCell>
+                          <TableCell><StaffMemberStatusBadge status={staff.status} /></TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" asChild className="text-blue-500 hover:text-blue-600">
+                              <Link href={`/staff/${staff.id}`} title={`Edit ${staff.name}`}>
+                                <Edit className="h-4 w-4" />
+                                <span className="sr-only">Edit</span>
+                              </Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteStaff(staff)} className="text-destructive hover:text-destructive/80" title={`Delete ${staff.name}`}>
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground italic py-4 text-center mt-2">No staff members registered.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -351,7 +467,7 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-
+          
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
               <CardTitle className="text-xl font-semibold">System Settings</CardTitle>
@@ -409,8 +525,36 @@ export default function SuperiorAdminPage() {
           </p>
         </div>
       </footer>
+
+      {/* Staff Add/Edit Form Dialog */}
+      <StaffMemberForm
+        isOpen={isStaffFormOpen}
+        onOpenChange={setIsStaffFormOpen}
+        staffMemberToEdit={null} // Superior admin only adds, edit is via profile link
+        onFormSubmitSuccess={handleStaffFormSuccess}
+      />
+
+      {/* Delete Staff Confirmation Dialog */}
+      <AlertDialog open={isDeleteStaffDialogVisible} onOpenChange={setIsDeleteStaffDialogVisible}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Delete Staff Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {staffToDelete?.name}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStaffToDelete(null)} disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteStaff}
+              disabled={isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isPending ? 'Deleting...' : 'Yes, Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-    

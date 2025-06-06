@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -33,7 +32,7 @@ export default function StaffMemberProfilePage() {
 
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSubmittingStatus, setIsSubmittingStatus] = React.useState(false); // Renamed for clarity
   
   const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
 
@@ -55,7 +54,7 @@ export default function StaffMemberProfilePage() {
       }
     } catch (error) {
       console.error("Failed to fetch staff member data:", error);
-      toast({ title: "Error", description: "Failed to load staff member data.", variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: (error as Error).message || "Failed to load staff member data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -72,13 +71,15 @@ export default function StaffMemberProfilePage() {
 
   const handleMarkStatus = async (status: StaffAttendanceStatus) => {
     if (!staffMember) return;
-    setIsSubmitting(true);
+    setIsSubmittingStatus(true);
     try {
-      const updatedStaffMember = await serverMarkStaffStatus(staffMember.id, status);
-      if (updatedStaffMember) {
-         setStaffMember(updatedStaffMember); 
+      const updatedStaffMemberData = await serverMarkStaffStatus(staffMember.id, status);
+      if (updatedStaffMemberData) { // Ensure server action returns the updated object
+         setStaffMember(updatedStaffMemberData); 
       } else {
+        // Fallback: this path should ideally not be hit if server action is robust
         setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+        fetchStaffData(); // Re-fetch to ensure consistency if server returned null
       }
       toast({
         title: 'Status Updated',
@@ -86,13 +87,13 @@ export default function StaffMemberProfilePage() {
       });
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to update status.',
+        title: 'Error Updating Status',
+        description: (error as Error).message || 'An unknown error occurred while updating status.',
         variant: 'destructive',
       });
-       fetchStaffData();
+       fetchStaffData(); // Re-fetch on error to ensure UI consistency
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingStatus(false);
     }
   };
 
@@ -183,10 +184,10 @@ export default function StaffMemberProfilePage() {
             <CardFooter className="p-4 flex flex-col gap-2">
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full" disabled={isSubmitting} aria-haspopup="true" aria-expanded="false" aria-label="Change staff member status">
+                  <Button variant="outline" className="w-full" disabled={isSubmittingStatus} aria-haspopup="true" aria-expanded="false" aria-label="Change staff member status">
                     <ChevronDown className="mr-2 h-4 w-4" />
                     Change Status
-                    {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                    {isSubmittingStatus && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="w-56">
@@ -196,7 +197,7 @@ export default function StaffMemberProfilePage() {
                     <DropdownMenuItem
                       key={opt.status}
                       onClick={() => handleMarkStatus(opt.status)}
-                      disabled={isSubmitting || staffMember.status === opt.status}
+                      disabled={isSubmittingStatus || staffMember.status === opt.status}
                       className={staffMember.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                       aria-label={`Mark as ${opt.label}`}
                     >
