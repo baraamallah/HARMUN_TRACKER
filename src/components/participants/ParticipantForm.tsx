@@ -41,9 +41,10 @@ const participantFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
   school: z.string().min(1, 'School is required.'),
   committee: z.string().min(1, 'Committee is required.'),
+  classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   additionalDetails: z.string().max(1000, 'Details must be at most 1000 characters.').optional().default(''),
-  classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''), // Changed from birthday
 });
 
 type ParticipantFormData = z.infer<typeof participantFormSchema>;
@@ -74,9 +75,10 @@ export function ParticipantForm({
       name: '',
       school: '',
       committee: '',
+      classGrade: '',
+      imageUrl: '',
       notes: '',
       additionalDetails: '',
-      classGrade: '', // Changed from birthday
     },
   });
 
@@ -87,18 +89,20 @@ export function ParticipantForm({
           name: participantToEdit.name,
           school: participantToEdit.school,
           committee: participantToEdit.committee,
+          classGrade: participantToEdit.classGrade || '',
+          imageUrl: participantToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : participantToEdit.imageUrl || '',
           notes: participantToEdit.notes || '',
           additionalDetails: participantToEdit.additionalDetails || '',
-          classGrade: participantToEdit.classGrade || '', // Changed from birthday
         });
       } else {
         form.reset({
           name: '',
           school: schools.length > 0 ? schools[0] : '',
           committee: committees.length > 0 ? committees[0] : '',
+          classGrade: '',
+          imageUrl: '',
           notes: '',
           additionalDetails: '',
-          classGrade: '', // Changed from birthday
         });
       }
     }
@@ -111,22 +115,47 @@ export function ParticipantForm({
           name: data.name.trim(),
           school: data.school.trim(),
           committee: data.committee.trim(),
+          classGrade: data.classGrade?.trim() || '',
           notes: data.notes?.trim() || '',
           additionalDetails: data.additionalDetails?.trim() || '',
-          classGrade: data.classGrade?.trim() || '', // Changed from birthday
           updatedAt: serverTimestamp(),
         };
+
+        let finalImageUrl = data.imageUrl?.trim();
+        if (!finalImageUrl && !participantToEdit) { // Only generate placeholder for new if no URL
+          const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
+          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+        } else if (!finalImageUrl && participantToEdit && participantToEdit.imageUrl?.startsWith('https://placehold.co')) {
+          // If editing and URL cleared, and old was placeholder, regenerate placeholder
+          const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
+          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+        } else if (!finalImageUrl && participantToEdit) {
+           // If editing and URL cleared, but old was custom, keep old custom or decide on a policy
+           // For now, let's clear it if explicitly cleared, or keep old if simply not touched and field was empty due to placeholder logic
+           // This means if user clears the field, imageUrl will become empty/null
+           // To ensure placeholder regen if field is empty AND old was custom, we'd need more logic.
+           // Sticking to: if field is empty, try to regen placeholder. If old one was custom and field is now empty, it means they want to remove it.
+           // So, if cleared, and was NOT placeholder, it becomes empty string.
+           // If it was placeholder, it gets regenerated.
+           if (participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
+             finalImageUrl = ''; // User actively cleared a custom URL
+           } else { // Was placeholder or empty, regenerate
+             const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
+             finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+           }
+        }
+        
+        submissionData.imageUrl = finalImageUrl;
+
 
         if (participantToEdit) {
           const participantRef = doc(db, 'participants', participantToEdit.id);
           await updateDoc(participantRef, submissionData);
           toast({ title: 'Participant Updated', description: `${data.name} has been updated.` });
         } else {
-          const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           const newParticipantData = {
             ...submissionData,
             status: 'Absent' as const, 
-            imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
             createdAt: serverTimestamp(),
           };
           await addDoc(collection(db, 'participants'), newParticipantData);
@@ -150,9 +179,10 @@ export function ParticipantForm({
         name: '', 
         school: schools.length > 0 ? schools[0] : '', 
         committee: committees.length > 0 ? committees[0] : '',
+        classGrade: '',
+        imageUrl: '',
         notes: '',
         additionalDetails: '',
-        classGrade: '', // Changed from birthday
     });
     onOpenChange(false);
   }
@@ -247,12 +277,25 @@ export function ParticipantForm({
             />
             <FormField
               control={form.control}
-              name="classGrade" // New field
+              name="classGrade" 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor="form-classGrade">Class/Grade (Optional)</FormLabel>
                   <FormControl>
                     <Input id="form-classGrade" placeholder="e.g., 10th Grade, Year 12" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-imageUrl">Image URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="form-imageUrl" placeholder="https://example.com/image.png" {...field} value={field.value ?? ''} disabled={isPending} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

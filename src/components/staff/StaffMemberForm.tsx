@@ -31,7 +31,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'; // Added Select
+} from '@/components/ui/select'; 
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition } from 'react';
 import { db } from '@/lib/firebase';
@@ -41,7 +41,8 @@ const staffMemberFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
   role: z.string().min(2, 'Role is required.').max(50, 'Role must be at most 50 characters.'),
   department: z.string().max(50, 'Department must be at most 50 characters.').optional().default(''),
-  team: z.string().optional().default(''), // New field for team
+  team: z.string().optional().default(''), 
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   contactInfo: z.string().max(100, 'Contact info must be at most 100 characters.').optional().default(''),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
 });
@@ -53,7 +54,7 @@ interface StaffMemberFormProps {
   onOpenChange: (isOpen: boolean) => void;
   staffMemberToEdit?: StaffMember | null;
   onFormSubmitSuccess?: () => void;
-  staffTeams?: string[]; // Prop to pass available staff teams
+  staffTeams?: string[]; 
 }
 
 export function StaffMemberForm({
@@ -61,7 +62,7 @@ export function StaffMemberForm({
   onOpenChange,
   staffMemberToEdit,
   onFormSubmitSuccess,
-  staffTeams = [], // Default to empty array
+  staffTeams = [], 
 }: StaffMemberFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -72,7 +73,8 @@ export function StaffMemberForm({
       name: '',
       role: '',
       department: '',
-      team: '', // Default for team
+      team: '',
+      imageUrl: '',
       contactInfo: '',
       notes: '',
     },
@@ -85,7 +87,8 @@ export function StaffMemberForm({
           name: staffMemberToEdit.name,
           role: staffMemberToEdit.role,
           department: staffMemberToEdit.department || '',
-          team: staffMemberToEdit.team || '', // Set team if editing
+          team: staffMemberToEdit.team || '', 
+          imageUrl: staffMemberToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : staffMemberToEdit.imageUrl || '',
           contactInfo: staffMemberToEdit.contactInfo || '',
           notes: staffMemberToEdit.notes || '',
         });
@@ -94,7 +97,8 @@ export function StaffMemberForm({
           name: '',
           role: '',
           department: '',
-          team: staffTeams.length > 0 ? '' : '', // Default team selection (can be empty for no default)
+          team: staffTeams.length > 0 ? '' : '', 
+          imageUrl: '',
           contactInfo: '',
           notes: '',
         });
@@ -109,22 +113,37 @@ export function StaffMemberForm({
           name: data.name.trim(),
           role: data.role.trim(),
           department: data.department?.trim() || '',
-          team: data.team?.trim() || '', // Save team
+          team: data.team?.trim() || '', 
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
           updatedAt: serverTimestamp(),
         };
+        
+        let finalImageUrl = data.imageUrl?.trim();
+        if (!finalImageUrl && !staffMemberToEdit) { 
+          const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
+          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+        } else if (!finalImageUrl && staffMemberToEdit && staffMemberToEdit.imageUrl?.startsWith('https://placehold.co')) {
+          const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
+          finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+        } else if (!finalImageUrl && staffMemberToEdit) {
+           if (staffMemberToEdit.imageUrl && !staffMemberToEdit.imageUrl.startsWith('https://placehold.co')) {
+             finalImageUrl = ''; 
+           } else { 
+             const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
+             finalImageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+           }
+        }
+        submissionData.imageUrl = finalImageUrl;
 
         if (staffMemberToEdit) {
           const staffMemberRef = doc(db, 'staff_members', staffMemberToEdit.id);
           await updateDoc(staffMemberRef, submissionData);
           toast({ title: 'Staff Member Updated', description: `${data.name} has been updated.` });
         } else {
-          const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
           const newStaffMemberData = {
             ...submissionData,
             status: 'Off Duty' as const,
-            imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
             createdAt: serverTimestamp(),
           };
           await addDoc(collection(db, 'staff_members'), newStaffMemberData);
@@ -144,7 +163,7 @@ export function StaffMemberForm({
   };
 
   const handleDialogClose = () => {
-    form.reset({ name: '', role: '', department: '', team: '', contactInfo: '', notes: '' });
+    form.reset({ name: '', role: '', department: '', team: '', imageUrl: '', contactInfo: '', notes: '' });
     onOpenChange(false);
   }
 
@@ -231,6 +250,19 @@ export function StaffMemberForm({
                     </SelectContent>
                   </Select>
                   {staffTeams.length === 0 && <p className="text-xs text-muted-foreground mt-1">Add teams in Superior Admin panel.</p>}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="staff-form-imageUrl">Image URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="staff-form-imageUrl" placeholder="https://example.com/image.png" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
