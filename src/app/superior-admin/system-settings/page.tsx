@@ -24,16 +24,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, ImagePlus, Save } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
+import { doc, setDoc } from 'firebase/firestore'; // Import Firestore functions
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getDefaultAttendanceStatusSetting, 
-  updateDefaultAttendanceStatusSetting,
   getSystemLogoUrlSetting,
-  updateSystemLogoUrlSetting
+  // updateDefaultAttendanceStatusSetting, // Removed server action
+  // updateSystemLogoUrlSetting // Removed server action
 } from '@/lib/actions';
 import type { AttendanceStatus } from '@/types';
 
@@ -41,6 +42,8 @@ const ALL_ATTENDANCE_STATUSES: AttendanceStatus[] = [
   "Present", "Absent", "Present On Account", "In Break", 
   "Restroom Break", "Technical Issue", "Stepped Out"
 ];
+const SYSTEM_CONFIG_COLLECTION = 'system_config';
+const APP_SETTINGS_DOC_ID = 'main_settings';
 
 export default function SystemSettingsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -105,31 +108,42 @@ export default function SystemSettingsPage() {
 
   const handleDefaultStatusChange = async (newStatus: AttendanceStatus) => {
     startUpdateStatusTransition(async () => {
-      const result = await updateDefaultAttendanceStatusSetting(newStatus);
-      if (result.success) {
+      try {
+        const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+        await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
         setCurrentDefaultStatus(newStatus);
         toast({ title: 'Setting Updated', description: `Default attendance status set to "${newStatus}".` });
-      } else {
-        toast({ title: 'Update Failed', description: result.error || 'Could not update setting.', variant: 'destructive' });
-        fetchStatusSetting(); 
+      } catch (error: any) {
+        console.error("Error updating default status client-side:", error);
+        toast({ 
+          title: 'Update Failed', 
+          description: error.message || 'Could not update setting.', 
+          variant: 'destructive' 
+        });
+        fetchStatusSetting(); // Re-fetch on error
       }
     });
   };
 
   const handleLogoUrlChange = async () => {
     startUpdateLogoTransition(async () => {
-      // Validate if it's a valid URL or empty string
       if (newLogoUrlInput.trim() !== '' && !isValidHttpUrl(newLogoUrlInput.trim())) {
           toast({ title: 'Invalid URL', description: 'Please enter a valid HTTP/HTTPS URL or leave it empty.', variant: 'destructive' });
           return;
       }
-      const result = await updateSystemLogoUrlSetting(newLogoUrlInput.trim());
-      if (result.success) {
-        setCurrentLogoUrl(newLogoUrlInput.trim() || null); // Update local state for preview
+      try {
+        const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+        await setDoc(configDocRef, { munLogoUrl: newLogoUrlInput.trim() }, { merge: true });
+        setCurrentLogoUrl(newLogoUrlInput.trim() || null);
         toast({ title: 'Logo URL Updated', description: `System logo URL has been ${newLogoUrlInput.trim() ? 'set' : 'cleared'}.` });
-      } else {
-        toast({ title: 'Update Failed', description: result.error || 'Could not update logo URL.', variant: 'destructive' });
-        fetchLogoSetting(); // Re-fetch to show the actual current server value
+      } catch (error: any) {
+        console.error("Error updating logo URL client-side:", error);
+        toast({ 
+          title: 'Update Failed', 
+          description: error.message || 'Could not update logo URL.', 
+          variant: 'destructive' 
+        });
+        fetchLogoSetting(); // Re-fetch on error
       }
     });
   };
@@ -313,6 +327,7 @@ export default function SystemSettingsPage() {
                                     width={150} 
                                     height={50} 
                                     className="object-contain rounded"
+                                    data-ai-hint="logo company"
                                     onError={() => {
                                         toast({title: "Preview Error", description: "Could not load logo preview. Check URL.", variant: "default"});
                                     }}
@@ -330,7 +345,8 @@ export default function SystemSettingsPage() {
                                         width={150} 
                                         height={50} 
                                         className="object-contain rounded"
-                                        onError={(e) => (e.currentTarget.style.display = 'none')} // Hide if preview fails
+                                        data-ai-hint="logo company"
+                                        onError={(e) => (e.currentTarget.style.display = 'none')} 
                                     />
                                 </div>
                             </div>
@@ -350,5 +366,4 @@ export default function SystemSettingsPage() {
     </div>
   );
 }
-
     

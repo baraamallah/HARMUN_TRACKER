@@ -7,7 +7,6 @@ import {
   collection,
   getDocs,
   addDoc,
-  // updateDoc, // No longer used for single participant/staff status updates from server actions
   deleteDoc,
   doc,
   query,
@@ -17,9 +16,10 @@ import {
   writeBatch,
   serverTimestamp,
   getDoc,
-  setDoc
+  setDoc,
+  updateDoc
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, StaffAttendanceStatus } from '@/types';
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember } from '@/types';
 import { OWNER_UID } from './constants';
 
 const PARTICIPANTS_COLLECTION = 'participants';
@@ -39,25 +39,27 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 // on the client. This can lead to PERMISSION_DENIED errors if your rules rely on 'request.auth.uid'
 // for checks like 'isAdmin()' or 'isOwner()'.
 //
-// Operations MOVED TO CLIENT-SIDE to leverage client's auth context:
+// Operations MOVED TO CLIENT-SIDE to leverage client's auth context include:
 // - Single participant attendance marking (from table actions and profile page)
 // - Bulk participant status updates (from main dashboard)
 // - Single staff member status marking (from table actions and profile page)
 // - Fetching participant lists and individual participant details
 // - Fetching staff member lists and individual staff member details
+// - Deleting single participants from table actions
+// - Updating system settings (logo URL, default attendance status)
 //
 // REMAINING SERVER ACTIONS and their typical use context:
-// - System list management (schools, committees, teams): Primarily Owner-only, rules checked against UID.
-// - Admin role management: Owner-only.
-// - System settings: Owner-only.
-// - CSV Import/Export, Bulk Delete: These are complex operations well-suited for server actions.
+// - System list management (schools, committees, teams - add/delete): Primarily Owner-only actions. Additions are client-side for now in Superior Admin page. Deletions are server actions.
+// - Admin role management (grant/revoke): Owner-only.
+// - Getting system settings (read-only): Used by various components.
+// - CSV Import, Bulk Delete Participants: These are complex operations well-suited for server actions.
 //   However, 'bulkDeleteParticipants' (and 'importParticipants' if it writes) will also face the same
-//   Firestore 'request.auth' limitations if rules require specific user roles for writes.
+//   Firestore 'request.auth' limitations if rules require specific user roles for writes not accounting for server context.
 //
 // For robust, user-specific permission handling in Server Actions, the Firebase ADMIN SDK (with ID token verification)
 // is the recommended approach. This project currently uses the Client SDK for server actions.
 
-// System Settings Actions
+// System Settings Actions (Read-only server actions)
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default status.`);
   try {
@@ -66,29 +68,11 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
     if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
       return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
     }
+    console.log(`[Server Action - getDefaultAttendanceStatusSetting] No setting found or field missing, returning 'Absent'.`);
     return 'Absent';
   } catch (error) {
     console.error("[Server Action] Error fetching default attendance status setting: ", error);
     return 'Absent'; 
-  }
-}
-
-export async function updateDefaultAttendanceStatusSetting(newStatus: AttendanceStatus): Promise<{success: boolean, error?: string}> {
-  console.log(`[Server Action - updateDefaultAttendanceStatusSetting] Attempting to update default status to: ${newStatus}.`);
-  try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
-    revalidatePath('/superior-admin/system-settings');
-    revalidatePath('/');
-    revalidatePath('/public');
-    revalidatePath('/staff');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error updating default attendance status setting: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to update setting (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_CONFIG_COLLECTION}/${APP_SETTINGS_DOC_ID}' allow writes for the Owner. (OWNER_UID: ${OWNER_UID})`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
   }
 }
 
@@ -100,6 +84,7 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
     if (docSnap.exists() && docSnap.data().munLogoUrl) {
       return docSnap.data().munLogoUrl as string;
     }
+    console.log(`[Server Action - getSystemLogoUrlSetting] No logo URL found or field missing.`);
     return null;
   } catch (error) {
     console.error("[Server Action] Error fetching system logo URL: ", error);
@@ -107,33 +92,12 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
   }
 }
 
-export async function updateSystemLogoUrlSetting(logoUrl: string): Promise<{success: boolean, error?: string}> {
-  console.log(`[Server Action - updateSystemLogoUrlSetting] Attempting to update logo URL to: ${logoUrl}.`);
-  try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    await setDoc(configDocRef, { munLogoUrl: logoUrl.trim() }, { merge: true });
-    revalidatePath('/superior-admin/system-settings');
-    revalidatePath('/');
-    revalidatePath('/staff');
-    revalidatePath('/public');
-    revalidatePath('/participants/[id]', 'page');
-    revalidatePath('/staff/[id]', 'page');
-    revalidatePath('/auth/login');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error updating system logo URL: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to update logo URL (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_CONFIG_COLLECTION}/${APP_SETTINGS_DOC_ID}' allow writes for the Owner.`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
-  }
-}
-
-
 // Participant Actions (Data fetching moved client-side)
+// The getParticipants & getParticipantById server actions are now primarily for the public page 
+// or scenarios where client-side auth context isn't strictly necessary for the read operation itself.
+// Admin-facing participant lists/details use client-side fetching.
+
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
-  // This server action is now primarily for the public page or scenarios where client-side auth isn't present/needed.
-  // Admin dashboard uses client-side fetching for authenticated filtering.
   try {
     const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
     let q;
@@ -177,22 +141,18 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         p.committee.toLowerCase().includes(term)
       );
     }
-
     return participantsData;
   } catch (error) {
       console.error(
-        "[Server Action - getParticipants (Public)] Error fetching participants from Firestore. Active filters:",
-        filters,
-        "Underlying error:",
-        error
+        "[Server Action - getParticipants (Public/Fallback)] Error fetching participants. Filters:",
+        filters, "Error:", error
       );
       const firebaseError = error as { code?: string; message?: string };
-      let detailedMessage = `Failed to fetch participants (Server Action for Public View). Firebase Code: ${firebaseError.code || 'Unknown'}.`;
-
+      let detailedMessage = `Failed to fetch participants (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}.`;
       if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-        detailedMessage += " This often indicates a missing Firestore index. Please check your browser's developer console for a Firestore error message that might include a link to create the required index in your Firebase project console.";
+        detailedMessage += " Firestore index missing. Check browser console for link to create it.";
       } else if (firebaseError.code === 'permission-denied') {
-        detailedMessage += " PERMISSION_DENIED. Firestore security rules are blocking this read. Ensure rules for 'participants' allow public reads if this is for the public page.";
+        detailedMessage += " PERMISSION_DENIED. Firestore rules blocking read.";
       } else {
         detailedMessage += ` Details: ${firebaseError.message || String(error)}.`;
       }
@@ -201,8 +161,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 }
 
 export async function getParticipantById(id: string): Promise<Participant | null> {
-  // This server action is now primarily for the public page or scenarios where client-side auth isn't present/needed.
-  // Admin participant profile uses client-side fetching.
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
     const docSnap = await getDoc(participantRef);
@@ -224,9 +182,9 @@ export async function getParticipantById(id: string): Promise<Participant | null
     }
     return null;
   } catch (error) {
-    console.error(`[Server Action - getParticipantById (Public)] Error fetching participant by ID ${id}: `, error);
+    console.error(`[Server Action - getParticipantById (Public/Fallback)] Error fetching participant by ID ${id}: `, error);
     const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to fetch participant (Server Action for Public View). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`);
+    throw new Error(`Failed to fetch participant (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`);
   }
 }
 
@@ -245,9 +203,6 @@ export async function getSystemSchools(): Promise<string[]> {
 
 export async function deleteSystemSchool(schoolName: string): Promise<{ success: boolean, error?: string }> {
   if (!schoolName) return { success: false, error: "School name cannot be empty." };
-  // This is an Owner-only action. Client-side Firestore direct delete with Owner auth context is generally more reliable.
-  // However, keeping as server action for now for consistency with other superior admin list management.
-  // Be aware of potential 'request.auth.uid' issues if not called by a true Owner context that Firestore recognizes.
   try {
     const q = query(collection(db, SYSTEM_SCHOOLS_COLLECTION), where("name", "==", schoolName));
     const querySnapshot = await getDocs(q);
@@ -261,7 +216,7 @@ export async function deleteSystemSchool(schoolName: string): Promise<{ success:
   } catch (error) {
     console.error("[Server Action] Error deleting system school: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to delete school (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_SCHOOLS_COLLECTION}' allow Owner to delete, and server action context meets this.`;
+    const detailedError = `Failed to delete school (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_SCHOOLS_COLLECTION}' allow Owner to delete, and server action context meets this. OWNER_UID (${OWNER_UID}).`;
     console.error(detailedError);
     return { success: false, error: detailedError };
   }
@@ -354,6 +309,7 @@ export async function importParticipants(
     existingSystemCommittees = await getSystemCommittees(); 
   } catch(e) {
     console.error("[Server Action: importParticipants] Error fetching system schools/committees during import pre-check:", e);
+    // Proceeding without pre-check if this fails, detection will still occur
   }
 
   for (const data of parsedParticipants) {
@@ -397,6 +353,7 @@ export async function importParticipants(
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met (e.g., isAdmin() check failing due to server action context).`;
     console.error(batchCommitError);
+    // Even if batch fails, return detected schools/committees. Error count reflects all attempted.
     return {
       count: 0,
       errors: parsedParticipants.length, 
@@ -481,14 +438,14 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
           return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() } };
         }
         return { success: true, message: `User ${trimmedAuthUid} is already an admin. No changes made.`, admin: existingAdminObject };
-      } else {
+      } else { // User exists but is not admin, upgrade role
         const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
         const updatedFields = { email: currentEmail, displayName: currentDisplayName, role: 'admin' as const, avatarUrl: dataFields.avatarUrl || `https://placehold.co/40x40.png?text=${firstLetter}`, updatedAt: serverTimestamp() };
         await updateDoc(userDocRefByUid, updatedFields); 
         revalidatePath('/superior-admin/admin-management');
         return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: { ...existingAdminObject, ...updatedFields, updatedAt: new Date().toISOString() } };
       }
-    } else {
+    } else { // User does not exist in users collection, create new admin entry
       const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
       const emailQuerySnapshot = await getDocs(qEmail); 
       if (!emailQuerySnapshot.empty) {
@@ -516,6 +473,8 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
   try {
     const adminDocSnap = await getDoc(adminDocRef); 
     if (!adminDocSnap.exists()) { return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` }; }
+    // Instead of deleting, update role to something else or remove role field if that's preferred.
+    // For now, deleting the role document is the existing logic.
     await deleteDoc(adminDocRef); 
     revalidatePath('/superior-admin/admin-management');
     return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
@@ -559,9 +518,11 @@ export async function bulkDeleteParticipants(participantIds: string[]): Promise<
 }
 
 
-// Staff Member Actions (Data fetching and single status updates moved client-side)
+// Staff Member Actions
+// Data fetching for staff members is now client-side.
+// Single status updates for staff members are client-side.
 // The deleteStaffMember server action is still here, used by Superior Admin.
-export async function deleteStaffMember(staffMemberId: string): Promise<{ success: boolean }> {
+export async function deleteStaffMember(staffMemberId: string): Promise<{ success: boolean, error?: string }> {
   try {
     const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffMemberId);
     await deleteDoc(staffMemberRef);
@@ -572,6 +533,9 @@ export async function deleteStaffMember(staffMemberId: string): Promise<{ succes
   } catch (error) {
     console.error("[Server Action] Error deleting staff member: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to delete staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}' (e.g., isAdmin() check failing due to server action context).`);
+    const detailedError = `Failed to delete staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`;
+    console.error(detailedError);
+    return { success: false, error: detailedError };
   }
 }
+
