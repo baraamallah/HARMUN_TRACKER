@@ -23,20 +23,16 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; // db from client SDK
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc } from 'firebase/firestore'; // direct firestore calls
+import { auth, db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc } from 'firebase/firestore'; // Added doc, deleteDoc
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
 import { 
   getSystemSchools, 
   getSystemCommittees, 
-  deleteStaffMember as deleteStaffMemberAction, 
   getSystemStaffTeams,
-  deleteSystemSchool as deleteSystemSchoolAction,
-  deleteSystemCommittee as deleteSystemCommitteeAction,
-  deleteSystemStaffTeam as deleteSystemStaffTeamAction
-} from '@/lib/actions'; // Server Actions
+} from '@/lib/actions'; // Removed delete server actions
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -140,6 +136,8 @@ export default function SuperiorAdminPage() {
           role: data.role || '',
           department: data.department,
           team: data.team,
+          email: data.email, // Added
+          phone: data.phone, // Added
           contactInfo: data.contactInfo,
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
@@ -243,26 +241,52 @@ export default function SuperiorAdminPage() {
     const { type, name, id } = itemToDelete;
 
     startTransition(async () => {
-      let result: { success: boolean; error?: string } | { success: boolean } = { success: false, error: "Unknown error during delete item action." };
       try {
-        if (type === 'school') result = await deleteSystemSchoolAction(name);
-        else if (type === 'committee') result = await deleteSystemCommitteeAction(name);
-        else if (type === 'staffTeam') result = await deleteSystemStaffTeamAction(name);
-        else if (type === 'staffMember' && id) result = await deleteStaffMemberAction(id);
-        
-        if ('error' in result && result.error) {
-          toast({ title: `Error Deleting ${type}`, description: result.error, variant: 'destructive', duration: 7000 });
-        } else if (result.success) {
-          toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Deleted`, description: `"${name}" has been removed.` });
-          if (type === 'school') fetchSchools();
-          else if (type === 'committee') fetchCommittees();
-          else if (type === 'staffTeam') fetchStaffTeams();
-          else if (type === 'staffMember') fetchStaff();
-        } else {
-           toast({ title: `Error Deleting ${type}`, description: "An unexpected error occurred or action was not successful.", variant: 'destructive', duration: 7000 });
+        let collectionName = '';
+        let docIdToDelete = id;
+
+        if (type === 'school' || type === 'committee' || type === 'staffTeam') {
+          if (type === 'school') collectionName = SYSTEM_SCHOOLS_COLLECTION;
+          else if (type === 'committee') collectionName = SYSTEM_COMMITTEES_COLLECTION;
+          else if (type === 'staffTeam') collectionName = SYSTEM_STAFF_TEAMS_COLLECTION;
+          
+          // Query for the document by name to get its ID
+          const q = query(collection(db, collectionName), where("name", "==", name));
+          const querySnapshot = await getDocs(q);
+          if (querySnapshot.empty) {
+            toast({ title: `Error Deleting ${type}`, description: `${type.charAt(0).toUpperCase() + type.slice(1)} "${name}" not found.`, variant: 'destructive' });
+            setIsDeleteDialogVisible(false);
+            setItemToDelete(null);
+            return;
+          }
+          docIdToDelete = querySnapshot.docs[0].id;
+        } else if (type === 'staffMember') {
+          collectionName = STAFF_MEMBERS_COLLECTION;
         }
+
+        if (!docIdToDelete || !collectionName) {
+            toast({ title: 'Error Deleting', description: 'Could not determine document to delete.', variant: 'destructive' });
+            setIsDeleteDialogVisible(false);
+            setItemToDelete(null);
+            return;
+        }
+        
+        await deleteDoc(doc(db, collectionName, docIdToDelete));
+        
+        toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Deleted`, description: `"${name}" has been removed.` });
+        if (type === 'school') fetchSchools();
+        else if (type === 'committee') fetchCommittees();
+        else if (type === 'staffTeam') fetchStaffTeams();
+        else if (type === 'staffMember') fetchStaff();
+
       } catch (error: any) {
-        toast({ title: `Error Deleting ${type}`, description: (error as Error).message || `Could not delete ${type}.`, variant: 'destructive', duration: 7000 });
+        console.error(`Client-side error deleting ${type} "${name}":`, error);
+        toast({ 
+          title: `Error Deleting ${type}`, 
+          description: error.message || `Could not delete ${type}. Ensure you have permissions.`, 
+          variant: 'destructive', 
+          duration: 7000 
+        });
       } finally {
         setIsDeleteDialogVisible(false);
         setItemToDelete(null);
@@ -629,5 +653,6 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
+    
 
     

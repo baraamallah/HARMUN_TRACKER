@@ -41,7 +41,7 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getSystemSchools, getSystemCommittees, bulkDeleteParticipants } from '@/lib/actions';
+import { getSystemSchools, getSystemCommittees } from '@/lib/actions'; // bulkDeleteParticipants removed
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -126,7 +126,6 @@ export default function AdminDashboardPage() {
     
     setIsLoadingData(true);
     try {
-      // Fetch participants client-side
       const participantsColRef = collection(db, 'participants');
       const queryConstraints = [];
 
@@ -171,7 +170,6 @@ export default function AdminDashboardPage() {
       }
       setParticipants(fetchedParticipants);
 
-      // Fetch system schools and committees using server actions (publicly readable)
       const [schoolsData, committeesData] = await Promise.all([
         getSystemSchools(),
         getSystemCommittees(),
@@ -285,24 +283,23 @@ export default function AdminDashboardPage() {
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
     try {
-      // Server action 'bulkDeleteParticipants' remains for now. 
-      // If it causes permission issues, it would also need to become client-side batch delete.
-      const result = await bulkDeleteParticipants(selectedParticipantIds);
-      if (result.errorMessage) {
-        toast({ title: "Bulk Delete Failed", description: result.errorMessage, variant: "destructive" });
-      } else {
-        toast({
-          title: "Bulk Delete Successful",
-          description: `${result.successCount} participant(s) deleted. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
-        });
-      }
+      const batch = writeBatch(db);
+      selectedParticipantIds.forEach(id => {
+        const participantRef = doc(db, "participants", id);
+        batch.delete(participantRef);
+      });
+      await batch.commit();
+
+      toast({
+        title: "Bulk Delete Successful",
+        description: `${selectedParticipantIds.length} participant(s) deleted.`,
+      });
       fetchData(); 
       setSelectedParticipantIds([]);
     } catch (error: any) {
+      console.error("Client-side error during bulk deletion: ", error);
       let description = "An unexpected error occurred during bulk deletion.";
-      if (error && error.message && (error.message.includes("Server Components render") || error.message.includes("omitted in production builds"))) {
-        description = `A server-side error occurred. Please check Vercel Function Logs. (Digest: ${error.digest || 'N/A'})`;
-      } else if (error && error.message) {
+      if (error && error.message) {
         description = error.message;
       }
       toast({ title: "Bulk Delete Failed", description, variant: "destructive" });
@@ -518,3 +515,5 @@ export default function AdminDashboardPage() {
     </AppLayoutClientShell>
   );
 }
+
+    

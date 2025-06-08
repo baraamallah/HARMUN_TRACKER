@@ -7,55 +7,44 @@ import {
   collection,
   getDocs,
   addDoc,
-  deleteDoc,
+  // deleteDoc, // No longer used for single deletions here
   doc,
   query,
   where,
   orderBy,
   Timestamp,
-  writeBatch,
+  // writeBatch, // No longer used for bulk participant delete here
   serverTimestamp,
   getDoc,
-  setDoc,
-  updateDoc
+  // setDoc, // No longer used for grantAdminRole here
+  // updateDoc // No longer used for grantAdminRole here
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember } from '@/types';
 import { OWNER_UID } from './constants';
 
 const PARTICIPANTS_COLLECTION = 'participants';
-const STAFF_MEMBERS_COLLECTION = 'staff_members';
+// const STAFF_MEMBERS_COLLECTION = 'staff_members'; // Referenced client-side
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
-const USERS_COLLECTION = 'users';
+// const USERS_COLLECTION = 'users'; // Referenced client-side
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
 
 // --- IMPORTANT NOTE ON SERVER ACTIONS AND FIREBASE AUTHENTICATION ---
-// Server Actions in this file that interact with Firestore using the CLIENT SDK's 'db' instance
-// may face limitations with `request.auth` in Firestore Security Rules not reflecting the end-user's UID.
-// This can lead to PERMISSION_DENIED errors for rules relying on user-specific roles (e.g., isAdmin(), isOwner()).
-//
-// Operations that have been MOVED TO CLIENT-SIDE to leverage client's auth context include:
-// - Single participant attendance marking & deletion.
-// - Bulk participant status updates.
-// - Single staff member status marking.
-// - Fetching participant lists and individual participant details for admin views.
-// - Fetching staff member lists and individual staff member details for admin views.
-// - Fetching admin user lists for the Superior Admin panel.
-// - Updating system settings (logo URL, default attendance status).
+// Many operations have been MOVED TO CLIENT-SIDE to leverage client's auth context:
+// - Single participant/staff attendance marking & deletion.
+// - Bulk participant status updates & deletion.
+// - Fetching participant/staff lists and details for admin views.
+// - Admin role management (grant/revoke).
+// - Updating system settings (logo, default status).
+// - Deletion of system schools, committees, staff teams.
 //
 // REMAINING SERVER ACTIONS and their typical use context:
-// - System list management (schools, committees, teams - delete): Owner-only delete actions. Additions are client-side in Superior Admin page for now.
-// - Admin role management (grant/revoke): Owner-only. `grantAdminRole` and `revokeAdminRole` are server actions.
-// - Getting system settings (read-only): Used by various components (e.g., logo URL, default status for import).
+// - System list fetching (schools, committees, teams - read-only): Used by various components.
+// - System settings fetching (read-only): Used by various components (e.g., logo URL, default status for import).
 // - CSV Import: Complex operation suited for server actions.
-// - Bulk Delete Participants: Server action for batch deletion.
-//
-// These remaining server actions might still face "PERMISSION_DENIED" if rules are too restrictive
-// or don't account for the server action's execution context. For robust, user-specific permission
-// handling in Server Actions, Firebase Admin SDK (with ID token verification) is the recommended long-term approach.
 
 // System Settings Actions (Read-only server actions)
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
@@ -202,28 +191,6 @@ export async function getSystemSchools(): Promise<string[]> {
   }
 }
 
-export async function deleteSystemSchool(schoolName: string): Promise<{ success: boolean, error?: string }> {
-  if (!schoolName) return { success: false, error: "School name cannot be empty." };
-  try {
-    const q = query(collection(db, SYSTEM_SCHOOLS_COLLECTION), where("name", "==", schoolName));
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-      return { success: false, error: `School "${schoolName}" not found.` };
-    }
-    const schoolDoc = querySnapshot.docs[0];
-    await deleteDoc(doc(db, SYSTEM_SCHOOLS_COLLECTION, schoolDoc.id));
-    revalidatePath('/superior-admin');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error deleting system school: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to delete school (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_SCHOOLS_COLLECTION}' allow Owner to delete, and server action context meets this. OWNER_UID (${OWNER_UID}).`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
-  }
-}
-
-
 // System Committee Actions
 export async function getSystemCommittees(): Promise<string[]> {
   try {
@@ -233,27 +200,6 @@ export async function getSystemCommittees(): Promise<string[]> {
   } catch (error) {
     console.error("[Server Action] Error fetching system committees: ", error);
     throw new Error("Failed to fetch system committees (Server Action). Check Firestore rules and connectivity.");
-  }
-}
-
-export async function deleteSystemCommittee(committeeName: string): Promise<{ success: boolean, error?: string }> {
-  if (!committeeName) return { success: false, error: "Committee name cannot be empty." };
-  try {
-    const q = query(collection(db, SYSTEM_COMMITTEES_COLLECTION), where("name", "==", committeeName));
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-      return { success: false, error: `Committee "${committeeName}" not found.` };
-    }
-    const committeeDoc = querySnapshot.docs[0];
-    await deleteDoc(doc(db, SYSTEM_COMMITTEES_COLLECTION, committeeDoc.id));
-    revalidatePath('/superior-admin');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error deleting system committee: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to delete committee (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_COMMITTEES_COLLECTION}' allow Owner to delete.`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
   }
 }
 
@@ -269,27 +215,6 @@ export async function getSystemStaffTeams(): Promise<string[]> {
   }
 }
 
-export async function deleteSystemStaffTeam(teamName: string): Promise<{ success: boolean, error?: string }> {
-  if (!teamName) return { success: false, error: "Team name cannot be empty." };
-  try {
-    const q = query(collection(db, SYSTEM_STAFF_TEAMS_COLLECTION), where("name", "==", teamName));
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-      return { success: false, error: `Staff Team "${teamName}" not found.` };
-    }
-    const teamDoc = querySnapshot.docs[0];
-    await deleteDoc(doc(db, SYSTEM_STAFF_TEAMS_COLLECTION, teamDoc.id));
-    revalidatePath('/superior-admin');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error deleting system staff team: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to delete staff team (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_STAFF_TEAMS_COLLECTION}' allow Owner to delete.`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
-  }
-}
-
 
 // Import Participants Action
 export async function importParticipants(
@@ -300,7 +225,9 @@ export async function importParticipants(
   const detectedNewSchoolNames: Set<string> = new Set();
   const detectedNewCommitteeNames: Set<string> = new Set();
 
-  const batch = writeBatch(db);
+  // Changed to firebase/firestore writeBatch
+  const { writeBatch: fsWriteBatch, collection: fsCollection, doc: fsDoc, serverTimestamp: fsServerTimestamp } = await import('firebase/firestore');
+  const batch = fsWriteBatch(db);
   const defaultStatus = await getDefaultAttendanceStatusSetting();
 
   let existingSystemSchools: string[] = [];
@@ -336,10 +263,10 @@ export async function importParticipants(
         classGrade: '',
         email: '',
         phone: '',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: fsServerTimestamp(),
+        updatedAt: fsServerTimestamp(),
       };
-      const participantRef = doc(collection(db, PARTICIPANTS_COLLECTION));
+      const participantRef = fsDoc(fsCollection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipantData);
       importedCount++;
     } catch (error) {
@@ -355,6 +282,7 @@ export async function importParticipants(
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met (e.g., isAdmin() check failing due to server action context).`;
     console.error(batchCommitError);
+    // Revert count if batch fails, as no participants were actually added.
     return {
       count: 0,
       errors: parsedParticipants.length, 
@@ -375,141 +303,7 @@ export async function importParticipants(
   };
 }
 
-// Admin Management Actions (Superior Admin)
-// getAdminUsers has been moved client-side to src/app/superior-admin/admin-management/page.tsx
-export async function grantAdminRole({ email, displayName, authUid }: { email: string; displayName?: string; authUid: string }): Promise<{ success: boolean; message: string; admin?: AdminManagedUser }> {
-  if (!email || !authUid) {
-    return { success: false, message: 'Email and Auth UID are required.' };
-  }
-  const trimmedAuthUid = authUid.trim();
-  if (!trimmedAuthUid) {
-    return { success: false, message: 'Auth UID cannot be empty.' };
-  }
+// Server actions for deleting system items, admin role management, and bulk participant deletion have been removed.
+// These operations are now handled client-side in their respective components/pages.
 
-  const userDocRefByUid = doc(db, USERS_COLLECTION, trimmedAuthUid);
-
-  try {
-    const userDocSnapByUid = await getDoc(userDocRefByUid); 
-    const currentEmail = email.toLowerCase().trim();
-    const currentDisplayName = displayName?.trim() || null;
-
-    if (userDocSnapByUid.exists()) {
-      const dataFields = userDocSnapByUid.data();
-      const existingAdminObject: AdminManagedUser = {
-        id: userDocSnapByUid.id,
-        email: dataFields.email,
-        displayName: dataFields.displayName,
-        role: dataFields.role,
-        createdAt: dataFields.createdAt instanceof Timestamp ? dataFields.createdAt.toDate().toISOString() : dataFields.createdAt,
-        updatedAt: dataFields.updatedAt instanceof Timestamp ? dataFields.updatedAt.toDate().toISOString() : dataFields.updatedAt,
-        avatarUrl: dataFields.avatarUrl,
-      };
-
-      if (existingAdminObject.role === 'admin') {
-        const updates: Partial<AdminManagedUser> = {};
-        let changed = false;
-        if (currentEmail !== existingAdminObject.email) { updates.email = currentEmail; changed = true; }
-        if (currentDisplayName !== existingAdminObject.displayName) { updates.displayName = currentDisplayName; changed = true; }
-        if (changed) {
-          await updateDoc(userDocRefByUid, {...updates, updatedAt: serverTimestamp()}); 
-          revalidatePath('/superior-admin/admin-management');
-          return { success: true, message: `User ${trimmedAuthUid} is already an admin. Details updated.`, admin: {...existingAdminObject, ...updates, updatedAt: new Date().toISOString() } };
-        }
-        return { success: true, message: `User ${trimmedAuthUid} is already an admin. No changes made.`, admin: existingAdminObject };
-      } else { 
-        const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-        const updatedFields = { email: currentEmail, displayName: currentDisplayName, role: 'admin' as const, avatarUrl: dataFields.avatarUrl || `https://placehold.co/40x40.png?text=${firstLetter}`, updatedAt: serverTimestamp() };
-        await updateDoc(userDocRefByUid, updatedFields); 
-        revalidatePath('/superior-admin/admin-management');
-        return { success: true, message: `Admin role granted to user ${trimmedAuthUid}.`, admin: { ...existingAdminObject, ...updatedFields, updatedAt: new Date().toISOString() } };
-      }
-    } else { 
-      const qEmail = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
-      const emailQuerySnapshot = await getDocs(qEmail); 
-      if (!emailQuerySnapshot.empty) {
-          const conflictingUserDoc = emailQuerySnapshot.docs[0];
-          return { success: false, message: `Error: Email ${currentEmail} is already associated with a different admin (UID: ${conflictingUserDoc.id}). Please use a unique email or resolve the conflict.` };
-      }
-      const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-      const newAdminDataFields = { email: currentEmail, displayName: currentDisplayName, role: 'admin' as const, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`};
-      await setDoc(userDocRefByUid, newAdminDataFields); 
-      revalidatePath('/superior-admin/admin-management');
-      return { success: true, message: `User ${trimmedAuthUid} granted admin role.`, admin: { id: trimmedAuthUid, ...newAdminDataFields, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };
-    }
-  } catch (error) {
-    console.error(`[Server Action] Error granting admin role to UID ${trimmedAuthUid}:`, error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to grant admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules allow Owner to write to '${USERS_COLLECTION}'.`;
-    console.error(detailedError);
-    return { success: false, message: detailedError };
-  }
-}
-
-export async function revokeAdminRole(adminId: string): Promise<{ success: boolean; message: string }> {
-  if (!adminId) { return { success: false, message: 'Admin Auth UID (adminId) is required.' }; }
-  const adminDocRef = doc(db, USERS_COLLECTION, adminId);
-  try {
-    const adminDocSnap = await getDoc(adminDocRef); 
-    if (!adminDocSnap.exists()) { return { success: false, message: `Admin with Auth UID ${adminId} not found in roles collection, or role already revoked.` }; }
-    await deleteDoc(adminDocRef); 
-    revalidatePath('/superior-admin/admin-management');
-    return { success: true, message: `Admin role revoked for user with Auth UID ${adminId}. (User record in roles removed)` };
-  } catch (error) {
-    console.error(`[Server Action] Error revoking admin role for UID ${adminId}:`, error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to revoke admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules allow Owner to delete from '${USERS_COLLECTION}'.`;
-    console.error(detailedError);
-    return { success: false, message: detailedError };
-  }
-}
-
-export async function bulkDeleteParticipants(participantIds: string[]): Promise<{ successCount: number; errorCount: number; errorMessage?: string }> {
-  if (!participantIds || participantIds.length === 0) {
-    return { successCount: 0, errorCount: 0 };
-  }
-  const batch = writeBatch(db);
-  let successCount = 0;
-  participantIds.forEach(id => {
-    const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
-    batch.delete(participantRef);
-    successCount++;
-  });
-
-  try {
-    await batch.commit();
-    revalidatePath('/');
-    revalidatePath('/public');
-  } catch (error) {
-    console.error("[Server Action: bulkDeleteParticipants] Error committing batch delete: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to bulk delete participants (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}' (e.g., isAdmin() check failing due to server action context).`;
-    console.error(detailedError);
-    return {
-      successCount: 0,
-      errorCount: participantIds.length,
-      errorMessage: detailedError
-    };
-  }
-  return { successCount, errorCount: 0 };
-}
-
-
-// Staff Member Actions (Fetching for admin views moved client-side)
-// Single status updates for staff members are client-side.
-// The deleteStaffMember server action is still here, used by Superior Admin.
-export async function deleteStaffMember(staffMemberId: string): Promise<{ success: boolean, error?: string }> {
-  try {
-    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffMemberId);
-    await deleteDoc(staffMemberRef);
-    revalidatePath('/staff');
-    revalidatePath(`/staff/${staffMemberId}`);
-    revalidatePath('/superior-admin');
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error deleting staff member: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to delete staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`;
-    console.error(detailedError);
-    return { success: false, error: detailedError };
-  }
-}
+    

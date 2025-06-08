@@ -24,14 +24,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; // Import db
+import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Firestore imports
+import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc } from 'firebase/firestore'; // Added doc, deleteDoc
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { AddAdminDialog } from '@/components/superior-admin/AddAdminDialog';
-import { revokeAdminRole } from '@/lib/actions'; // revokeAdminRole is still a server action
+// import { revokeAdminRole } from '@/lib/actions'; // revokeAdminRole server action removed
 import type { AdminManagedUser } from '@/types';
 import {
   AlertDialog,
@@ -69,7 +69,7 @@ export default function AdminManagementPage() {
       const admins = querySnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
-          id: docSnap.id, // Auth UID is the document ID
+          id: docSnap.id, 
           email: data.email,
           displayName: data.displayName,
           role: data.role,
@@ -107,7 +107,6 @@ export default function AdminManagementPage() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // Redirect or state update will be handled by onAuthStateChanged
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -123,16 +122,22 @@ export default function AdminManagementPage() {
     if (!userToRevoke) return;
     startTransitionAction(async () => {
       try {
-        // userToRevoke.id is the Firestore document ID (which is the Auth UID)
-        const result = await revokeAdminRole(userToRevoke.id); 
-        if (result.success) {
-          toast({ title: 'Admin Role Revoked', description: result.message });
-          fetchAdmins(); // Refresh list
+        const adminDocRef = doc(db, USERS_COLLECTION, userToRevoke.id);
+        const adminDocSnap = await getDoc(adminDocRef);
+        if (!adminDocSnap.exists()) {
+          toast({ title: 'Error', description: `Admin with UID ${userToRevoke.id} not found. Role might have already been revoked.`, variant: 'destructive'});
         } else {
-          toast({ title: 'Error Revoking Role', description: result.message, variant: 'destructive' });
+          await deleteDoc(adminDocRef);
+          toast({ title: 'Admin Role Revoked', description: `Admin role revoked for ${userToRevoke.displayName || userToRevoke.email}.` });
+          fetchAdmins(); 
         }
       } catch (error: any) {
-        toast({ title: 'Operation Failed', description: error.message || 'Could not revoke admin role.', variant: 'destructive' });
+        console.error(`Client-side Error revoking admin role for UID ${userToRevoke.id}:`, error);
+        toast({ 
+          title: 'Operation Failed', 
+          description: error.message || 'Could not revoke admin role. Check permissions.', 
+          variant: 'destructive' 
+        });
       } finally {
         setIsRevokeDialogVisible(false);
         setUserToRevoke(null);
@@ -144,7 +149,7 @@ export default function AdminManagementPage() {
     if (!dateString) return 'N/A';
     try {
       if (typeof dateString === 'string') {
-        return format(parseISO(dateString), 'PP'); // e.g., Aug 17, 2023
+        return format(parseISO(dateString), 'PP'); 
       }
       if (typeof dateString === 'object' && dateString.toDate) {
         return format(dateString.toDate(), 'PP');
@@ -350,7 +355,7 @@ export default function AdminManagementPage() {
               disabled={isPendingAction}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isPendingAction ? 'Revoking...' : 'Yes, Revoke Role'}
+              {isPendingAction ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Revoking...</> : 'Yes, Revoke Role'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -358,3 +363,5 @@ export default function AdminManagementPage() {
     </div>
   );
 }
+
+    
