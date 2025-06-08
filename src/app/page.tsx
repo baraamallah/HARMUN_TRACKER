@@ -205,7 +205,15 @@ export default function AdminDashboardPage() {
       });
       fetchData(); 
     } catch (error: any) {
-      toast({ title: "Bulk Update Failed", description: error.message || "An error occurred.", variant: "destructive" });
+      let description = "An unknown error occurred during bulk update.";
+      if (error && error.message) {
+        if (error.message.includes("Server Components render") || error.message.includes("omitted in production builds")) {
+          description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
+        } else {
+          description = error.message;
+        }
+      }
+      toast({ title: "Bulk Update Failed", description, variant: "destructive" });
     } finally {
       setIsBulkUpdating(false);
     }
@@ -231,9 +239,17 @@ export default function AdminDashboardPage() {
           description: `${result.successCount} participant(s) deleted. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
         });
       }
-      fetchData(); // Refresh data and clears selection
+      fetchData(); 
     } catch (error: any) {
-      toast({ title: "Bulk Delete Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+      let description = "An unexpected error occurred during bulk deletion.";
+      if (error && error.message) {
+        if (error.message.includes("Server Components render") || error.message.includes("omitted in production builds")) {
+          description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
+        } else {
+          description = error.message;
+        }
+      }
+      toast({ title: "Bulk Delete Failed", description, variant: "destructive" });
     } finally {
       setIsBulkDeleting(false);
       setIsBulkDeleteConfirmOpen(false);
@@ -446,3 +462,5 @@ export default function AdminDashboardPage() {
     </AppLayoutClientShell>
   );
 }
+
+    
