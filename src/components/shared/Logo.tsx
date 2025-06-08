@@ -12,7 +12,7 @@ interface LogoProps {
   customLogoUrl?: string | null;
 }
 
-const LOCAL_SVG_LOGO_PATH = "/mun-logo.svg"; // The path to your local SVG in the /public folder
+const LOCAL_PNG_LOGO_PATH = "/mun-logo.png"; // The path to your local PNG in the /public folder
 
 export function Logo({ size = 'md', variant = 'default', className, customLogoUrl }: LogoProps) {
   const textSizeClasses = size === 'sm' ? 'text-lg' : size === 'md' ? 'text-xl' : 'text-2xl';
@@ -28,16 +28,16 @@ export function Logo({ size = 'md', variant = 'default', className, customLogoUr
   React.useEffect(() => {
     // Only check for local logo if no custom URL is provided
     if (customLogoUrl === undefined || customLogoUrl === null || customLogoUrl === '') {
-      fetch(LOCAL_SVG_LOGO_PATH)
+      fetch(LOCAL_PNG_LOGO_PATH)
         .then(res => {
           if (res.ok) {
-            // Check content type to be reasonably sure it's an SVG
+            // Check content type to be reasonably sure it's a PNG
             const contentType = res.headers.get("content-type");
-            if (contentType && contentType.includes("svg")) {
+            if (contentType && contentType.includes("png")) {
               setLocalLogoExists(true);
             } else {
               setLocalLogoExists(false);
-              console.warn(`Local logo file found at ${LOCAL_SVG_LOGO_PATH}, but it might not be an SVG. Content-Type: ${contentType}`);
+              console.warn(`Local logo file found at ${LOCAL_PNG_LOGO_PATH}, but it might not be a PNG. Content-Type: ${contentType}`);
             }
           } else {
             setLocalLogoExists(false);
@@ -53,11 +53,11 @@ export function Logo({ size = 'md', variant = 'default', className, customLogoUr
 
   // Determine logo source
   let logoSrcToUse = customLogoUrl;
-  let isLocalSvg = false;
+  let isLocalPng = false;
 
   if (!customLogoUrl && !checkingLocalLogo && localLogoExists) {
-    logoSrcToUse = LOCAL_SVG_LOGO_PATH;
-    isLocalSvg = true;
+    logoSrcToUse = LOCAL_PNG_LOGO_PATH;
+    isLocalPng = true;
   }
 
   if (logoSrcToUse) {
@@ -66,22 +66,22 @@ export function Logo({ size = 'md', variant = 'default', className, customLogoUr
         <Image
           src={logoSrcToUse}
           alt="MUN Conference Logo"
-          width={variant === 'circled-icon' ? (size === 'sm' ? 28 : (size === 'md' ? 32 : 36)) : (isLocalSvg ? 40 : 120) } // Smaller width for local SVG default
+          width={variant === 'circled-icon' ? (size === 'sm' ? 28 : (size === 'md' ? 32 : 36)) : (isLocalPng ? 40 : 120) } 
           height={variant === 'circled-icon' ? (size === 'sm' ? 28 : (size === 'md' ? 32 : 36)) : 40}
           className={cn(
             "object-contain", 
             logoImageMaxHeight,
             variant === 'circled-icon' && "rounded-full p-0.5 bg-muted group-hover:bg-accent/80"
           )}
-          priority={isLocalSvg} // Prioritize if it's the local SVG as it's part of the initial layout
+          priority={isLocalPng} 
           data-ai-hint="logo company"
         />
-        {(variant !== 'circled-icon' && !isLocalSvg) && ( // Only show "MUN Tracker" text if it's a remote URL and not circled
+        {(variant !== 'circled-icon' && !isLocalPng) && ( 
            <h1 className={textBaseClasses} style={{ lineHeight: '1' }}> 
-             {/* MUN Tracker */} 
+             {/* MUN Tracker - Text hidden if remote logo is an image that implies the name */} 
            </h1>
         )}
-         {(variant !== 'circled-icon' && isLocalSvg) && ( // Optionally, show text next to local SVG
+         {(variant !== 'circled-icon' && isLocalPng) && ( 
            <h1 className={textBaseClasses} style={{ lineHeight: '1' }}> 
              MUN Tracker
            </h1>
@@ -90,7 +90,7 @@ export function Logo({ size = 'md', variant = 'default', className, customLogoUr
     );
   }
 
-  // Fallback to default icon + text logo if no custom URL and no local SVG or still checking
+  // Fallback to default icon + text logo if no custom URL and no local PNG or still checking
   if (variant === 'circled-icon') {
     return (
       <Link href="/" className={cn("flex items-center gap-2 group", className)}>
