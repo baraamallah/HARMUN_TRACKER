@@ -24,13 +24,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Firestore imports
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { AddAdminDialog } from '@/components/superior-admin/AddAdminDialog';
-import { getAdminUsers, revokeAdminRole } from '@/lib/actions';
+import { revokeAdminRole } from '@/lib/actions'; // revokeAdminRole is still a server action
 import type { AdminManagedUser } from '@/types';
 import {
   AlertDialog,
@@ -43,6 +44,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { format, parseISO } from 'date-fns';
+
+const USERS_COLLECTION = 'users';
 
 export default function AdminManagementPage() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -57,17 +60,38 @@ export default function AdminManagementPage() {
   const [isRevokeDialogVisible, setIsRevokeDialogVisible] = useState(false);
 
   const fetchAdmins = useCallback(async () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) return;
     setIsLoadingAdmins(true);
     try {
-      const admins = await getAdminUsers();
+      const usersColRef = collection(db, USERS_COLLECTION);
+      const q = query(usersColRef, where('role', '==', 'admin'), orderBy('email'));
+      const querySnapshot = await getDocs(q);
+      const admins = querySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id, // Auth UID is the document ID
+          email: data.email,
+          displayName: data.displayName,
+          role: data.role,
+          avatarUrl: data.avatarUrl,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as AdminManagedUser;
+      });
       setAdminUsers(admins);
-    } catch (error) {
-      console.error("Error fetching admins:", error);
-      toast({ title: 'Error Fetching Admins', description: (error as Error).message || 'Failed to load admin users. Please try again.', variant: 'destructive' });
+    } catch (error: any) {
+      console.error("Error fetching admins (client-side):", error);
+      let errorMessage = "Failed to load admin users. Please try again.";
+      if (error.code === 'permission-denied') {
+        errorMessage = `Permission denied fetching admins. Ensure the Owner (UID: ${OWNER_UID}) has 'list' permission on the '${USERS_COLLECTION}' collection in Firestore rules and that you are logged in as this owner.`;
+      } else if (error.message?.includes('requires an index')) {
+        errorMessage = "A Firestore index is required. Check browser console for a link to create it.";
+      }
+      toast({ title: 'Error Fetching Admins', description: errorMessage, variant: 'destructive', duration: 7000 });
     } finally {
       setIsLoadingAdmins(false);
     }
-  }, [toast]);
+  }, [toast, currentUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -122,8 +146,6 @@ export default function AdminManagementPage() {
       if (typeof dateString === 'string') {
         return format(parseISO(dateString), 'PP'); // e.g., Aug 17, 2023
       }
-      // If it's a Firestore Timestamp-like object (already converted in actions.ts to ISO string or similar)
-      // but somehow still an object, or for direct client-side Timestamp objects (though less likely here)
       if (typeof dateString === 'object' && dateString.toDate) {
         return format(dateString.toDate(), 'PP');
       }
@@ -131,7 +153,7 @@ export default function AdminManagementPage() {
       console.warn("Could not parse date:", dateString, e);
       return 'Invalid Date';
     }
-    return String(dateString); // Fallback
+    return String(dateString); 
   };
 
 
@@ -336,4 +358,3 @@ export default function AdminManagementPage() {
     </div>
   );
 }
-
