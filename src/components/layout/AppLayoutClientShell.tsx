@@ -44,6 +44,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
 import { OWNER_UID } from '@/lib/constants'; 
 import { useToast } from '@/hooks/use-toast';
+import { getSystemLogoUrlSetting } from '@/lib/actions';
 
 
 interface NavItem {
@@ -73,12 +74,27 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const { toast } = useToast();
   const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
+  const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null);
+  const [isLoadingLogo, setIsLoadingLogo] = React.useState(true);
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setLoggedInUser(user);
       setAuthSessionLoading(false);
     });
+    
+    const fetchLogo = async () => {
+      try {
+        const url = await getSystemLogoUrlSetting();
+        setMunLogoUrl(url);
+      } catch (error) {
+        console.error("Failed to fetch logo URL for layout:", error);
+      } finally {
+        setIsLoadingLogo(false);
+      }
+    };
+
+    fetchLogo();
     return () => unsubscribe();
   }, []);
 
@@ -114,7 +130,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4">
-          <Logo />
+          {isLoadingLogo ? <Skeleton className="h-10 w-3/4" /> : <Logo customLogoUrl={munLogoUrl} />}
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
@@ -161,7 +177,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
             <SidebarTrigger />
           </div>
           <div className="flex-1">
-            {/* Search bar can be re-added here if needed */}
+            {/* Can add a minimal version of Logo here if needed, or breadcrumbs */}
           </div>
           <ThemeToggleButton />
           {authSessionLoading ? (
@@ -201,3 +217,5 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     </SidebarProvider>
   );
 }
+
+    

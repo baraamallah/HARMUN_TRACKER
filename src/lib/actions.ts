@@ -33,35 +33,23 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 
 
 // IMPORTANT NOTE ON SERVER ACTIONS AND FIREBASE AUTHENTICATION (AS OF NEXT.JS 14 & FIREBASE CLIENT SDK):
-// When Server Actions in this file use the Firebase CLIENT SDK's 'db' instance (getFirestore from 'firebase/firestore')),
+// When Server Actions in this file use the Firebase CLIENT SDK's 'db' instance,
 // the 'request.auth' object within your Firestore Security Rules might NOT be populated with the
-// end-user's UID who initiated the action on the client. Instead, it might be null or represent
-// a default server identity (e.g., a service account if your Next.js app is hosted on Firebase Hosting with SSR,
-// or a generic identity if hosted elsewhere like Vercel without explicit Admin SDK auth impersonation).
+// end-user's UID who initiated the action on the client. This is a known behavior.
 //
 // This means security rules like 'allow read: if request.auth != null;' or custom functions
 // like 'isAdmin()' / 'isOwner()' that check 'request.auth.uid' WILL LIKELY FAIL when invoked
-// from these Server Actions, leading to PERMISSION_DENIED errors.
+// from these Server Actions, leading to PERMISSION_DENIED errors, UNLESS the rules
+// are specifically set up to allow access from the server's execution context (e.g., a service account
+// if deployed on Firebase Hosting with SSR, or open/public rules which is not recommended for writes).
 //
-// The 'auth' object imported from './firebase' (getAuth from 'firebase/auth') is also the CLIENT SDK's auth.
-// Calling 'auth.currentUser' within these server actions will result in 'null' because the server
-// environment doesn't share the client's browser session or automatically impersonate the user.
+// Client-side Firestore operations (e.g., those moved into components) WILL correctly populate 'request.auth.uid'.
 //
 // TO PROPERLY SECURE SERVER ACTIONS AND USE USER-SPECIFIC PERMISSIONS WITH FIRESTORE:
-// The recommended approach is to use the Firebase ADMIN SDK (Node.js library 'firebase-admin'):
-// 1. Client-Side: Get the current user's Firebase ID Token (e.g., `await auth.currentUser.getIdToken()`).
-// 2. Client-Side: Pass this ID Token as an argument to your Server Action.
-// 3. Server Action:
-//    a. Initialize the Firebase Admin SDK.
-//    b. Verify the ID Token using `admin.auth().verifyIdToken(idToken)`. This confirms authenticity and gets user UID/claims.
-//    c. Perform Firestore operations using the Admin SDK's Firestore instance (`admin.firestore()`).
-//       The Admin SDK typically bypasses security rules by default (as it operates with elevated privileges),
-//       OR it can be used to respect security rules if specifically configured or if you perform custom checks based on the verified UID.
+// The recommended approach involves the Firebase ADMIN SDK.
 //
-// The current implementation in this file uses the CLIENT SDK. Many actions have been moved client-side
-// to ensure `request.auth.uid` is correctly populated for security rules.
-// Remaining Server Actions (like import, bulk delete, admin management) will likely require the Admin SDK
-// or rule adjustments for proper, secure operation based on user roles.
+// The remaining Server Actions in this file are primarily for Owner-level operations or data retrieval
+// that might be permissible under less strict read rules or where Admin SDK would be appropriate for writes.
 
 // System Settings Actions
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
@@ -92,7 +80,45 @@ export async function updateDefaultAttendanceStatusSetting(newStatus: Attendance
   } catch (error) {
     console.error("[Server Action] Error updating default attendance status setting: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to update setting (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_CONFIG_COLLECTION}/${APP_SETTINGS_DOC_ID}' allow writes from server context or use Admin SDK. (OWNER_UID: ${OWNER_UID})`;
+    const detailedError = `Failed to update setting (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_CONFIG_COLLECTION}/${APP_SETTINGS_DOC_ID}' allow writes for the Owner. (OWNER_UID: ${OWNER_UID})`;
+    console.error(detailedError);
+    return { success: false, error: detailedError };
+  }
+}
+
+export async function getSystemLogoUrlSetting(): Promise<string | null> {
+  console.log(`[Server Action - getSystemLogoUrlSetting] Attempting to read logo URL.`);
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    const docSnap = await getDoc(configDocRef);
+    if (docSnap.exists() && docSnap.data().munLogoUrl) {
+      return docSnap.data().munLogoUrl as string;
+    }
+    return null;
+  } catch (error) {
+    console.error("[Server Action] Error fetching system logo URL: ", error);
+    return null; 
+  }
+}
+
+export async function updateSystemLogoUrlSetting(logoUrl: string): Promise<{success: boolean, error?: string}> {
+  console.log(`[Server Action - updateSystemLogoUrlSetting] Attempting to update logo URL to: ${logoUrl}.`);
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    await setDoc(configDocRef, { munLogoUrl: logoUrl.trim() }, { merge: true }); // Trim the URL
+    // Revalidate all major layouts where the logo might appear
+    revalidatePath('/superior-admin/system-settings');
+    revalidatePath('/');
+    revalidatePath('/staff');
+    revalidatePath('/public');
+    revalidatePath('/participants/[id]', 'page');
+    revalidatePath('/staff/[id]', 'page');
+    revalidatePath('/auth/login');
+    return { success: true };
+  } catch (error) {
+    console.error("[Server Action] Error updating system logo URL: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    const detailedError = `Failed to update logo URL (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules for '${SYSTEM_CONFIG_COLLECTION}/${APP_SETTINGS_DOC_ID}' allow writes for the Owner.`;
     console.error(detailedError);
     return { success: false, error: detailedError };
   }
@@ -195,21 +221,6 @@ export async function getParticipantById(id: string): Promise<Participant | null
   }
 }
 
-
-export async function deleteParticipant(participantId: string): Promise<{ success: boolean }> {
-  try {
-    const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    await deleteDoc(participantRef);
-    revalidatePath('/');
-    revalidatePath('/public');
-    revalidatePath(`/participants/${participantId}`);
-    return { success: true };
-  } catch (error) {
-    console.error("[Server Action] Error deleting participant: ", error);
-    const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to delete participant (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'. Likely requires Admin SDK or client-side execution for user-based permissions.`);
-  }
-}
 
 // System School Actions
 export async function getSystemSchools(): Promise<string[]> {
@@ -372,7 +383,7 @@ export async function importParticipants(
   } catch (error) {
     console.error("[Server Action: importParticipants] Error committing batch import: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met (e.g. isAdmin() or isOwner() failed due to auth context).`;
+    const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met.`;
     console.error(batchCommitError);
     return {
       count: 0,
@@ -415,7 +426,7 @@ export async function getAdminUsers(): Promise<AdminManagedUser[]> {
   } catch (error) {
     console.error('[Server Action] Error fetching admin users:', error);
     const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to fetch admin users (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${USERS_COLLECTION}'. Ensure owner (UID: ${OWNER_UID}) has list permission OR this server action runs as Owner. (isOwner() rule will likely fail here).`);
+    throw new Error(`Failed to fetch admin users (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${USERS_COLLECTION}'. Ensure owner (UID: ${OWNER_UID}) has list permission.`);
   }
 }
 
@@ -481,7 +492,7 @@ export async function grantAdminRole({ email, displayName, authUid }: { email: s
   } catch (error) {
     console.error(`[Server Action] Error granting admin role to UID ${trimmedAuthUid}:`, error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to grant admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules allow writes to '${USERS_COLLECTION}/${trimmedAuthUid}' from server context or use Admin SDK. (isOwner() rule will likely fail here).`;
+    const detailedError = `Failed to grant admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules.`;
     console.error(detailedError);
     return { success: false, message: detailedError };
   }
@@ -499,7 +510,7 @@ export async function revokeAdminRole(adminId: string): Promise<{ success: boole
   } catch (error) {
     console.error(`[Server Action] Error revoking admin role for UID ${adminId}:`, error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to revoke admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Ensure Firestore rules allow deletes from '${USERS_COLLECTION}' from server context or use Admin SDK. (isOwner() rule will likely fail here).`;
+    const detailedError = `Failed to revoke admin role (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules.`;
     console.error(detailedError);
     return { success: false, message: detailedError };
   }
@@ -524,7 +535,7 @@ export async function bulkDeleteParticipants(participantIds: string[]): Promise<
   } catch (error) {
     console.error("[Server Action: bulkDeleteParticipants] Error committing batch delete: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedError = `Failed to bulk delete participants (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'. Requires user-based permissions (isAdmin or isOwner), which likely fail in server action context.`;
+    const detailedError = `Failed to bulk delete participants (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${PARTICIPANTS_COLLECTION}'.`;
     console.error(detailedError);
     return {
       successCount: 0,
@@ -589,7 +600,7 @@ export async function getStaffMembers(filters?: { department?: string; team?: st
     if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
       detailedMessage += " This often indicates a missing Firestore index for staff_members.";
     } else if (firebaseError.code === 'permission-denied') {
-        detailedMessage += " PERMISSION_DENIED. Firestore security rules are blocking this read for staff members. Ensure server action context can read.";
+        detailedMessage += " PERMISSION_DENIED. Firestore security rules are blocking this read for staff members.";
     } else {
       detailedMessage += ` Details: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`;
     }
@@ -636,6 +647,8 @@ export async function deleteStaffMember(staffMemberId: string): Promise<{ succes
   } catch (error) {
     console.error("[Server Action] Error deleting staff member: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to delete staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'. Requires user-based permissions, likely fails in server action context.`);
+    throw new Error(`Failed to delete staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. Check Firestore rules for '${STAFF_MEMBERS_COLLECTION}'.`);
   }
 }
+
+    

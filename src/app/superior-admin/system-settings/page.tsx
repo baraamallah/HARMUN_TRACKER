@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -19,14 +20,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, ImagePlus, Save } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { getDefaultAttendanceStatusSetting, updateDefaultAttendanceStatusSetting } from '@/lib/actions';
+import { 
+  getDefaultAttendanceStatusSetting, 
+  updateDefaultAttendanceStatusSetting,
+  getSystemLogoUrlSetting,
+  updateSystemLogoUrlSetting
+} from '@/lib/actions';
 import type { AttendanceStatus } from '@/types';
 
 const ALL_ATTENDANCE_STATUSES: AttendanceStatus[] = [
@@ -40,29 +48,49 @@ export default function SystemSettingsPage() {
   const { toast } = useToast();
   
   const [currentDefaultStatus, setCurrentDefaultStatus] = useState<AttendanceStatus | null>(null);
-  const [isLoadingSetting, setIsLoadingSetting] = useState(true);
-  const [isUpdatingSetting, startUpdateTransition] = useTransition();
+  const [isLoadingStatusSetting, setIsLoadingStatusSetting] = useState(true);
+  const [isUpdatingStatusSetting, startUpdateStatusTransition] = useTransition();
+
+  const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(null);
+  const [newLogoUrlInput, setNewLogoUrlInput] = useState<string>('');
+  const [isLoadingLogoSetting, setIsLoadingLogoSetting] = useState(true);
+  const [isUpdatingLogoSetting, startUpdateLogoTransition] = useTransition();
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
-        fetchSetting();
+        fetchStatusSetting();
+        fetchLogoSetting();
       }
     });
     return () => unsubscribe();
   }, []);
 
-  const fetchSetting = async () => {
-    setIsLoadingSetting(true);
+  const fetchStatusSetting = async () => {
+    setIsLoadingStatusSetting(true);
     try {
       const status = await getDefaultAttendanceStatusSetting();
       setCurrentDefaultStatus(status);
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load default attendance status.', variant: 'destructive' });
     } finally {
-      setIsLoadingSetting(false);
+      setIsLoadingStatusSetting(false);
+    }
+  };
+
+  const fetchLogoSetting = async () => {
+    setIsLoadingLogoSetting(true);
+    try {
+      const logoUrl = await getSystemLogoUrlSetting();
+      setCurrentLogoUrl(logoUrl);
+      setNewLogoUrlInput(logoUrl || '');
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load system logo URL.', variant: 'destructive' });
+    } finally {
+      setIsLoadingLogoSetting(false);
     }
   };
 
@@ -75,21 +103,49 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const handleStatusChange = async (newStatus: AttendanceStatus) => {
-    startUpdateTransition(async () => {
+  const handleDefaultStatusChange = async (newStatus: AttendanceStatus) => {
+    startUpdateStatusTransition(async () => {
       const result = await updateDefaultAttendanceStatusSetting(newStatus);
       if (result.success) {
         setCurrentDefaultStatus(newStatus);
         toast({ title: 'Setting Updated', description: `Default attendance status set to "${newStatus}".` });
       } else {
         toast({ title: 'Update Failed', description: result.error || 'Could not update setting.', variant: 'destructive' });
-        // Re-fetch to show the actual current server value if update failed
-        fetchSetting(); 
+        fetchStatusSetting(); 
       }
     });
   };
 
-  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingSetting)) {
+  const handleLogoUrlChange = async () => {
+    startUpdateLogoTransition(async () => {
+      // Validate if it's a valid URL or empty string
+      if (newLogoUrlInput.trim() !== '' && !isValidHttpUrl(newLogoUrlInput.trim())) {
+          toast({ title: 'Invalid URL', description: 'Please enter a valid HTTP/HTTPS URL or leave it empty.', variant: 'destructive' });
+          return;
+      }
+      const result = await updateSystemLogoUrlSetting(newLogoUrlInput.trim());
+      if (result.success) {
+        setCurrentLogoUrl(newLogoUrlInput.trim() || null); // Update local state for preview
+        toast({ title: 'Logo URL Updated', description: `System logo URL has been ${newLogoUrlInput.trim() ? 'set' : 'cleared'}.` });
+      } else {
+        toast({ title: 'Update Failed', description: result.error || 'Could not update logo URL.', variant: 'destructive' });
+        fetchLogoSetting(); // Re-fetch to show the actual current server value
+      }
+    });
+  };
+
+  function isValidHttpUrl(string: string) {
+    let url;
+    try {
+      url = new URL(string);
+    } catch (_) {
+      return false;  
+    }
+    return url.protocol === "http:" || url.protocol === "https:";
+  }
+
+
+  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && (isLoadingStatusSetting || isLoadingLogoSetting))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-lg shadow-2xl">
@@ -103,6 +159,8 @@ export default function SystemSettingsPage() {
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-20 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -178,37 +236,109 @@ export default function SystemSettingsPage() {
               Modify application-wide operational parameters here.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {isLoadingSetting ? (
-                <div className="flex items-center space-x-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Loading current setting...</span>
-                </div>
-            ) : (
-                <div className="space-y-2">
-                <Label htmlFor="defaultStatusSelect" className="text-base font-medium">Default Attendance Status for New Participants</Label>
+          <CardContent className="space-y-8">
+            {/* Default Attendance Status Setting */}
+            <div className="space-y-3 p-4 border rounded-lg shadow-sm">
+                <Label htmlFor="defaultStatusSelect" className="text-lg font-semibold flex items-center">
+                    <Settings className="mr-2 h-5 w-5 text-primary" /> Default Attendance Status
+                </Label>
                 <p className="text-sm text-muted-foreground">
-                    Choose the status that will be automatically assigned to participants when they are newly added manually or via CSV import.
+                    Choose the status automatically assigned to participants when newly added (manually or via CSV).
                 </p>
-                <Select
-                    value={currentDefaultStatus || 'Absent'} // Fallback if null
-                    onValueChange={(value) => handleStatusChange(value as AttendanceStatus)}
-                    disabled={isUpdatingSetting}
-                >
-                    <SelectTrigger id="defaultStatusSelect" className="w-full md:w-[300px]">
-                    <SelectValue placeholder="Select a default status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    {ALL_ATTENDANCE_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                        {status}
-                        </SelectItem>
-                    ))}
-                    </SelectContent>
-                </Select>
-                {isUpdatingSetting && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
-                </div>
-            )}
+                {isLoadingStatusSetting ? (
+                    <div className="flex items-center space-x-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Loading current status...</span>
+                    </div>
+                ) : (
+                    <Select
+                        value={currentDefaultStatus || 'Absent'}
+                        onValueChange={(value) => handleDefaultStatusChange(value as AttendanceStatus)}
+                        disabled={isUpdatingStatusSetting}
+                    >
+                        <SelectTrigger id="defaultStatusSelect" className="w-full md:w-[300px]">
+                        <SelectValue placeholder="Select a default status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {ALL_ATTENDANCE_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                            {status}
+                            </SelectItem>
+                        ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                {isUpdatingStatusSetting && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
+            </div>
+
+            <Separator />
+
+            {/* System Logo URL Setting */}
+            <div className="space-y-3 p-4 border rounded-lg shadow-sm">
+                <Label htmlFor="logoUrlInput" className="text-lg font-semibold flex items-center">
+                    <ImagePlus className="mr-2 h-5 w-5 text-primary" /> System Logo URL
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                    Enter a direct URL to an image for the MUN logo. This will replace the default logo in the application header/sidebar. Leave empty to use the default.
+                </p>
+                {isLoadingLogoSetting ? (
+                     <div className="flex items-center space-x-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Loading logo setting...</span>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex items-start gap-3">
+                            <Input
+                                id="logoUrlInput"
+                                type="url"
+                                placeholder="https://example.com/your-logo.png"
+                                value={newLogoUrlInput}
+                                onChange={(e) => setNewLogoUrlInput(e.target.value)}
+                                disabled={isUpdatingLogoSetting}
+                                className="flex-grow"
+                            />
+                            <Button onClick={handleLogoUrlChange} disabled={isUpdatingLogoSetting || newLogoUrlInput === (currentLogoUrl || '')}>
+                                {isUpdatingLogoSetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Save Logo URL
+                            </Button>
+                        </div>
+                        {currentLogoUrl && (
+                            <div className="mt-3">
+                                <p className="text-sm font-medium mb-1">Current Logo Preview:</p>
+                                <div className="p-2 border rounded-md inline-block bg-muted max-w-xs">
+                                  <Image 
+                                    src={currentLogoUrl} 
+                                    alt="Current MUN Logo Preview" 
+                                    width={150} 
+                                    height={50} 
+                                    className="object-contain rounded"
+                                    onError={() => {
+                                        toast({title: "Preview Error", description: "Could not load logo preview. Check URL.", variant: "default"});
+                                    }}
+                                  />
+                                </div>
+                            </div>
+                        )}
+                         {!currentLogoUrl && newLogoUrlInput && isValidHttpUrl(newLogoUrlInput) && (
+                            <div className="mt-3">
+                                <p className="text-sm font-medium mb-1">New Logo Preview:</p>
+                                 <div className="p-2 border rounded-md inline-block bg-muted max-w-xs">
+                                    <Image 
+                                        src={newLogoUrlInput} 
+                                        alt="New MUN Logo Preview" 
+                                        width={150} 
+                                        height={50} 
+                                        className="object-contain rounded"
+                                        onError={(e) => (e.currentTarget.style.display = 'none')} // Hide if preview fails
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+                 {isUpdatingLogoSetting && <p className="text-sm text-primary flex items-center mt-2"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating logo URL...</p>}
+            </div>
             
             <div className="mt-8 p-4 border border-dashed rounded-lg text-center">
                 <Settings size={48} className="mx-auto text-muted-foreground opacity-30 mb-2" />
