@@ -23,8 +23,8 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react';
-import { auth, db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase'; // db from client SDK
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore'; // direct firestore calls
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
@@ -37,7 +37,7 @@ import {
   deleteSystemSchool as deleteSystemSchoolAction,
   deleteSystemCommittee as deleteSystemCommitteeAction,
   deleteSystemStaffTeam as deleteSystemStaffTeamAction
-} from '@/lib/actions';
+} from '@/lib/actions'; // Server Actions
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -88,11 +88,12 @@ export default function SuperiorAdminPage() {
   const fetchSchools = useCallback(async () => {
     setIsLoadingSchools(true);
     try {
-      const schoolsData = await getSystemSchools();
+      // This uses a server action, which itself uses client SDK. See notes in actions.ts.
+      const schoolsData = await getSystemSchools(); 
       setSystemSchools(schoolsData);
     } catch (error) {
-      console.error("Error fetching system schools (client-side): ", error);
-      toast({ title: 'Error Fetching Schools', description: 'Failed to load the list of schools.', variant: 'destructive' });
+      console.error("Error fetching system schools (client-side, via action): ", error);
+      toast({ title: 'Error Fetching Schools', description: (error as Error).message || 'Failed to load the list of schools.', variant: 'destructive' });
     } finally {
       setIsLoadingSchools(false);
     }
@@ -101,11 +102,12 @@ export default function SuperiorAdminPage() {
   const fetchCommittees = useCallback(async () => {
     setIsLoadingCommittees(true);
     try {
+      // Server action call
       const committeesData = await getSystemCommittees();
       setSystemCommittees(committeesData);
     } catch (error) {
-      console.error("Error fetching system committees (client-side): ", error);
-      toast({ title: 'Error Fetching Committees', description: 'Failed to load the list of committees.', variant: 'destructive' });
+      console.error("Error fetching system committees (client-side, via action): ", error);
+      toast({ title: 'Error Fetching Committees', description: (error as Error).message || 'Failed to load the list of committees.', variant: 'destructive' });
     } finally {
       setIsLoadingCommittees(false);
     }
@@ -114,11 +116,12 @@ export default function SuperiorAdminPage() {
   const fetchStaffTeams = useCallback(async () => {
     setIsLoadingStaffTeams(true);
     try {
+      // Server action call
       const teamsData = await getSystemStaffTeams();
       setSystemStaffTeams(teamsData);
     } catch (error) {
-      console.error("Error fetching system staff teams (client-side): ", error);
-      toast({ title: 'Error Fetching Staff Teams', description: 'Failed to load the list of staff teams.', variant: 'destructive' });
+      console.error("Error fetching system staff teams (client-side, via action): ", error);
+      toast({ title: 'Error Fetching Staff Teams', description: (error as Error).message || 'Failed to load the list of staff teams.', variant: 'destructive' });
     } finally {
       setIsLoadingStaffTeams(false);
     }
@@ -127,10 +130,11 @@ export default function SuperiorAdminPage() {
   const fetchStaff = useCallback(async () => {
     setIsLoadingStaff(true);
     try {
+      // Server action call
       const staffData = await getStaffMembers();
       setStaffMembers(staffData);
     } catch (error) {
-      console.error("Error fetching staff members: ", error);
+      console.error("Error fetching staff members (client-side, via action): ", error);
       toast({ title: 'Error Fetching Staff', description: (error as Error).message || 'Failed to load staff members.', variant: 'destructive' });
     } finally {
       setIsLoadingStaff(false);
@@ -142,14 +146,24 @@ export default function SuperiorAdminPage() {
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
+        // User is confirmed as OWNER on client-side.
+        // Subsequent direct Firestore calls from client (like addDoc in handleAddItem)
+        // SHOULD have correct request.auth.uid.
+        // Calls to server actions (getSystemSchools etc.) depend on server action auth context.
         fetchSchools();
         fetchCommittees();
         fetchStaffTeams();
         fetchStaff();
+      } else if (user) {
+        // Logged in, but not owner.
+        // Redirect or show access denied can be handled here or by UI conditional rendering.
+      } else {
+        // Not logged in.
+        // Redirect or show access denied.
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]);
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]); // Added fetchStaff to dependency array
 
   const handleAddItem = async (type: 'school' | 'committee' | 'staffTeam') => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -184,16 +198,26 @@ export default function SuperiorAdminPage() {
       return;
     }
 
+    // This 'addDoc' call is made directly from the client-side.
+    // Firestore security rules (isOwner()) should evaluate correctly based on currentUser.uid.
+    // If this fails, it's likely a mismatch between OWNER_UID in constants.ts and rules,
+    // or the user isn't truly logged in as Owner.
     startTransition(async () => {
       try {
         const colRef = collection(db, collectionName);
         await addDoc(colRef, { name: itemName, createdAt: serverTimestamp() });
         toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Added`, description: `"${itemName}" has been successfully added.` });
         setNewItemName('');
-        fetchFunction();
+        fetchFunction(); // This re-fetches using server actions.
       } catch (error: any) {
-        console.error(`Error adding system ${type} "${itemName}" (client-side): `, error);
-        toast({ title: `Error Adding ${type.charAt(0).toUpperCase() + type.slice(1)}`, description: `Failed: ${error.message || 'Unknown error'}. Make sure Firestore rules allow this.`, variant: 'destructive', duration: 10000 });
+        console.error(`Error adding system ${type} "${itemName}" (Client-side direct addDoc): `, error);
+        const firebaseError = error as { code?: string; message?: string };
+        toast({ 
+          title: `Error Adding ${type}`, 
+          description: `Failed: ${firebaseError.code === 'permission-denied' ? `PERMISSION_DENIED. Firestore rules (isOwner) are blocking this. Ensure OWNER_UID (${OWNER_UID}) in rules matches the logged-in user and constants.ts.` : (firebaseError.message || 'Unknown error')}.`, 
+          variant: 'destructive', 
+          duration: 10000 
+        });
       }
     });
   };
@@ -204,11 +228,17 @@ export default function SuperiorAdminPage() {
   };
 
   const handleDeleteItem = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || !currentUser || currentUser.uid !== OWNER_UID) {
+      toast({ title: 'Unauthorized or Item not specified', variant: 'destructive' });
+      setIsDeleteDialogVisible(false);
+      setItemToDelete(null);
+      return;
+    }
     const { type, name, id } = itemToDelete;
 
+    // These calls use Server Actions. Prone to auth context issues noted in actions.ts.
     startTransition(async () => {
-      let result: { success: boolean; error?: string } | { success: boolean } = { success: false, error: "Unknown error" };
+      let result: { success: boolean; error?: string } | { success: boolean } = { success: false, error: "Unknown error during delete item action." };
       try {
         if (type === 'school') result = await deleteSystemSchoolAction(name);
         else if (type === 'committee') result = await deleteSystemCommitteeAction(name);
@@ -216,7 +246,7 @@ export default function SuperiorAdminPage() {
         else if (type === 'staffMember' && id) result = await deleteStaffMemberAction(id);
         
         if ('error' in result && result.error) {
-          toast({ title: `Error Deleting ${type}`, description: result.error, variant: 'destructive' });
+          toast({ title: `Error Deleting ${type}`, description: result.error, variant: 'destructive', duration: 7000 });
         } else if (result.success) {
           toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Deleted`, description: `"${name}" has been removed.` });
           if (type === 'school') fetchSchools();
@@ -224,10 +254,10 @@ export default function SuperiorAdminPage() {
           else if (type === 'staffTeam') fetchStaffTeams();
           else if (type === 'staffMember') fetchStaff();
         } else {
-           toast({ title: `Error Deleting ${type}`, description: "An unexpected error occurred.", variant: 'destructive' });
+           toast({ title: `Error Deleting ${type}`, description: "An unexpected error occurred or action was not successful.", variant: 'destructive', duration: 7000 });
         }
       } catch (error: any) {
-        toast({ title: `Error Deleting ${type}`, description: error.message || `Could not delete ${type}.`, variant: 'destructive' });
+        toast({ title: `Error Deleting ${type}`, description: (error as Error).message || `Could not delete ${type}.`, variant: 'destructive', duration: 7000 });
       } finally {
         setIsDeleteDialogVisible(false);
         setItemToDelete(null);
@@ -240,6 +270,7 @@ export default function SuperiorAdminPage() {
     try {
       await signOut(auth);
       toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
+      // onAuthStateChanged will handle redirect
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -247,11 +278,15 @@ export default function SuperiorAdminPage() {
   };
 
   const handleOpenAddStaffForm = () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) {
+      toast({ title: 'Unauthorized', description: 'Only the owner can add staff.', variant: 'destructive' });
+      return;
+    }
     setIsStaffFormOpen(true);
   };
 
   const handleStaffFormSuccess = () => {
-    fetchStaff();
+    fetchStaff(); // Re-fetches staff list using server action
     setIsStaffFormOpen(false);
   };
 
@@ -277,6 +312,7 @@ export default function SuperiorAdminPage() {
   }
 
   if (!currentUser || currentUser.uid !== OWNER_UID) {
+    // This UI is shown if onAuthStateChanged confirms user is not OWNER_UID or not logged in.
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-t-4 border-destructive">
@@ -290,12 +326,12 @@ export default function SuperiorAdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            {currentUser && (
+            {currentUser && ( // currentUser might be populated but not be OWNER_UID
               <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full text-lg py-3">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Restricted User'})
               </Button>
             )}
-            {!currentUser && (
+            {!currentUser && ( // Explicitly not logged in
                  <p className="text-md text-muted-foreground mt-4">
                     Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account.
                  </p>
@@ -313,6 +349,7 @@ export default function SuperiorAdminPage() {
     );
   }
 
+  // Render page content if currentUser is OWNER_UID
   const renderSystemListManagementCard = (
     title: string,
     icon: React.ElementType,
@@ -340,8 +377,12 @@ export default function SuperiorAdminPage() {
               disabled={isPending}
               className="flex-grow"
             />
-            <Button onClick={() => handleAddItem(addItemType)} disabled={isPending || !newItemName.trim()} className={`bg-${iconColorClass.split('-')[1]}-500 hover:bg-${iconColorClass.split('-')[1]}-600 ${iconColorClass.includes('orange') ? 'text-white' : (iconColorClass.includes('accent') ? 'text-accent-foreground' : 'text-primary-foreground')}`}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add
+            <Button 
+              onClick={() => handleAddItem(addItemType)} 
+              disabled={isPending || !newItemName.trim()} 
+              className={`bg-${iconColorClass.split('-')[1]}-500 hover:bg-${iconColorClass.split('-')[1]}-600 ${iconColorClass.includes('orange') ? 'text-white' : (iconColorClass.includes('accent') ? 'text-accent-foreground' : 'text-primary-foreground')}`}
+            >
+              {isPending && (addItemType === 'school' && newSchoolName.trim() || addItemType === 'committee' && newCommitteeName.trim() || addItemType === 'staffTeam' && newStaffTeamName.trim()) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />} Add
             </Button>
           </div>
           <Separator />
@@ -383,9 +424,11 @@ export default function SuperiorAdminPage() {
                 <h1 className="text-3xl font-bold tracking-tight text-foreground">
                 Superior Admin Panel
                 </h1>
-                <p className="text-xs text-green-600 dark:text-green-400">
-                    Authenticated as: {currentUser.email} (UID: {currentUser.uid})
-                </p>
+                {currentUser && ( // Ensure currentUser is not null before accessing email/uid
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                        Authenticated as: {currentUser.email} (UID: {currentUser.uid})
+                    </p>
+                )}
             </div>
           </div>
           <Button variant="outline" onClick={handleSuperAdminLogout} size="lg" className="text-md">
@@ -414,7 +457,7 @@ export default function SuperiorAdminPage() {
               <StaffIcon className="h-7 w-7 text-green-500" />
             </CardHeader>
             <CardContent className="pt-2">
-              <Button onClick={handleOpenAddStaffForm} className="w-full sm:w-auto mb-4 bg-green-500 hover:bg-green-600 text-white">
+              <Button onClick={handleOpenAddStaffForm} className="w-full sm:w-auto mb-4 bg-green-500 hover:bg-green-600 text-white" disabled={isPending}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Staff Member
               </Button>
               <Separator />
@@ -456,7 +499,7 @@ export default function SuperiorAdminPage() {
                                 <span className="sr-only">Edit</span>
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)} className="text-destructive hover:text-destructive/80 h-8 w-8" title={`Delete ${staff.name}`}>
+                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)} className="text-destructive hover:text-destructive/80 h-8 w-8" title={`Delete ${staff.name}`} disabled={isPending}>
                               {isPending && itemToDelete?.id === staff.id && itemToDelete?.type === 'staffMember' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               <span className="sr-only">Delete</span>
                             </Button>
@@ -543,9 +586,11 @@ export default function SuperiorAdminPage() {
           <p className="text-md text-muted-foreground">
             MUN Tracker - Superior Administration Panel &copy; {new Date().getFullYear()}
           </p>
-           <p className="text-xs text-muted-foreground mt-1">
-            Owner UID: {OWNER_UID}
-          </p>
+           {currentUser && (
+            <p className="text-xs text-muted-foreground mt-1">
+                Owner UID: {OWNER_UID} (Current User UID: {currentUser.uid})
+            </p>
+           )}
         </div>
       </footer>
 
@@ -573,6 +618,7 @@ export default function SuperiorAdminPage() {
               disabled={isPending}
               className="bg-destructive hover:bg-destructive/90"
             >
+              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {isPending ? 'Deleting...' : 'Yes, Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -581,4 +627,3 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
-
