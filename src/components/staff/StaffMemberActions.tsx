@@ -29,11 +29,11 @@ import {
   Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, Coffee, ChevronDown, UserCheck, UserX, Briefcase, Plane, Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { deleteStaffMember } from '@/lib/actions'; // Server action for delete
+// Removed: import { deleteStaffMember } from '@/lib/actions'; 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase'; // Import db
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
+import { db } from '@/lib/firebase'; 
+import { doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore'; 
 
 
 interface StaffMemberActionsProps {
@@ -44,8 +44,8 @@ interface StaffMemberActionsProps {
 export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [isDeleting, startDeleteTransition] = useTransition();
+  const [isPending, startTransition] = useTransition(); // For status updates
+  const [isDeleting, startDeleteTransition] = useTransition(); // Specifically for delete
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const handleMarkStatusClientSide = async (status: StaffAttendanceStatus) => {
@@ -72,7 +72,8 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
   const handleDelete = async () => {
     startDeleteTransition(async () => {
       try {
-        await deleteStaffMember(staffMember.id); // deleteStaffMember is still a server action
+        const staffMemberRef = doc(db, 'staff_members', staffMember.id);
+        await deleteDoc(staffMemberRef);
         toast({
           title: 'Staff Member Deleted',
           description: `${staffMember.name} has been removed.`,
@@ -80,10 +81,9 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
         setIsDeleteDialogOpen(false);
         router.refresh(); 
       } catch (error: any) {
+        console.error("Client-side error deleting staff member:", error);
         let description = "An unexpected error occurred during deletion.";
-        if (error && error.message && (error.message.includes("Server Components render") || error.message.includes("omitted in production builds"))) {
-          description = `A server-side error occurred. Please check Vercel Function Logs. Digest: ${error.digest || 'N/A'}`;
-        } else if (error && error.message) {
+        if (error && error.message) {
           description = error.message;
         }
         toast({

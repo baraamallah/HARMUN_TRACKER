@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone, Landmark, GraduationCap } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { db } from '@/lib/firebase'; 
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; 
+import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore'; 
 
 export default function ParticipantProfilePage() {
   const params = useParams();
@@ -52,7 +52,7 @@ export default function ParticipantProfilePage() {
     try {
       // Direct Firestore fetch
       const participantRef = doc(db, 'participants', id);
-      const docSnap = await participantRef.get();
+      const docSnap = await getDoc(participantRef); // Corrected: use getDoc()
       let participantData: Participant | null = null;
       if (docSnap.exists()) {
           const data = docSnap.data();
@@ -68,8 +68,8 @@ export default function ParticipantProfilePage() {
             classGrade: data.classGrade,
             email: data.email,
             phone: data.phone,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
+            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
           } as Participant;
       }
       // System lists can still be fetched via server actions if preferred / rules allow
@@ -84,8 +84,8 @@ export default function ParticipantProfilePage() {
         toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
         router.push('/'); 
       }
-      setSchools(systemSchools.filter(s => s !== 'All Schools')); // Assuming 'All Schools' is a filter value
-      setCommittees(systemCommittees.filter(c => c !== 'All Committees')); // Assuming 'All Committees' is a filter value
+      setSchools(systemSchools.filter(s => s !== 'All Schools')); 
+      setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
 
     } catch (error: any) {
       console.error("Failed to fetch participant data:", error);
@@ -112,7 +112,8 @@ export default function ParticipantProfilePage() {
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
       
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      fetchParticipantData(); 
+      // No need to call fetchParticipantData() immediately after client-side update if we update local state
+      // router.refresh() or fetchParticipantData() can be used if server-derived fields need re-fetching
 
       toast({
         title: 'Attendance Updated',
@@ -125,7 +126,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData(); 
+       fetchParticipantData(); // Re-fetch on error to ensure data consistency
     } finally {
       setIsSubmitting(false);
     }
@@ -150,7 +151,7 @@ export default function ParticipantProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-32 w-full rounded-lg" /> {/* Increased height for new fields */}
+            <Skeleton className="h-32 w-full rounded-lg" />
             <Skeleton className="h-10 w-full rounded-lg" />
             <Skeleton className="h-10 w-full rounded-lg" />
           </div>
@@ -305,8 +306,9 @@ export default function ParticipantProfilePage() {
   );
 }
 
-// Helper for Firestore Timestamp, if needed globally, move to a util file
-const Timestamp = { 
-    fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
-    toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
-};
+// Local Timestamp helper, if FirestoreTimestampType is not resolving correctly for `instanceof`
+// However, importing FirestoreTimestampType from 'firebase/firestore' should work.
+// const Timestamp = { 
+//     fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
+//     toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
+// };
