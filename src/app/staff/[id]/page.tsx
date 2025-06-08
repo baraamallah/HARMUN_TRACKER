@@ -59,9 +59,9 @@ export default function StaffMemberProfilePage() {
         router.push('/staff');
       }
       setSystemStaffTeams(teamsData); // Set staff teams
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch staff member data or teams:", error);
-      toast({ title: "Error Fetching Data", description: (error as Error).message || "Failed to load staff member data or teams.", variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: error.message || "Failed to load staff member data or teams.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -84,20 +84,21 @@ export default function StaffMemberProfilePage() {
       if (updatedStaffMemberData) {
          setStaffMember(updatedStaffMemberData);
       } else {
+        // Fallback: optimistically update UI if server action doesn't return the full object
         setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-        fetchStaffDataAndTeams();
+        // fetchStaffDataAndTeams(); // Consider re-fetching if server doesn't return updated obj
       }
       toast({
         title: 'Status Updated',
         description: `${staffMember.name}'s status set to ${status}.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: 'Error Updating Status',
-        description: (error as Error).message || 'An unknown error occurred while updating status.',
+        description: error.message || 'An unknown error occurred while updating status.',
         variant: 'destructive',
       });
-       fetchStaffDataAndTeams();
+       fetchStaffDataAndTeams(); // Re-fetch on error
     } finally {
       setIsSubmittingStatus(false);
     }

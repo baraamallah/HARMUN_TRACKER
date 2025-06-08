@@ -65,9 +65,9 @@ export default function ParticipantProfilePage() {
       setSchools(systemSchools.filter(s => s !== 'All Schools'));
       setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch participant data:", error);
-      toast({ title: "Error", description: "Failed to load participant data.", variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: error.message || "Failed to load participant data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -90,19 +90,24 @@ export default function ParticipantProfilePage() {
       if (updatedParticipant) {
          setParticipant(updatedParticipant); 
       } else {
+        // Fallback: optimistically update UI if server action doesn't return the full object
         setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+        // It's good practice to re-fetch if the server doesn't return the updated object,
+        // but markAttendance in actions.ts *does* return it, so this might be redundant if no errors.
+        // If errors often occur where updatedParticipant is null but operation succeeded, then re-fetch.
+        // fetchParticipantData(); 
       }
       toast({
         title: 'Attendance Updated',
         description: `${participant.name}'s status set to ${status}.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: 'Error',
-        description: 'Failed to update attendance.',
+        title: 'Error Updating Attendance',
+        description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData();
+       fetchParticipantData(); // Re-fetch on error to ensure UI consistency
     } finally {
       setIsSubmitting(false);
     }

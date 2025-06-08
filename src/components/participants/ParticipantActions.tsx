@@ -54,10 +54,10 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
           title: 'Attendance Updated',
           description: `${participant.name}'s status set to ${status}.`,
         });
-      } catch (error) {
+      } catch (error: any) {
         toast({
-          title: 'Error',
-          description: 'Failed to update attendance.',
+          title: 'Error Updating Attendance',
+          description: error.message || 'An unknown error occurred while updating attendance.',
           variant: 'destructive',
         });
       }
@@ -73,10 +73,10 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
           description: `${participant.name} has been removed.`,
         });
         setIsDeleteDialogOpen(false);
-      } catch (error) {
+      } catch (error: any) {
         toast({
-          title: 'Error',
-          description: 'Failed to delete participant.',
+          title: 'Error Deleting Participant',
+          description: error.message || 'An unknown error occurred while deleting participant.',
           variant: 'destructive',
         });
       }

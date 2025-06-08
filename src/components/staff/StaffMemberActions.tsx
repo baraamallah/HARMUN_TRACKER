@@ -50,10 +50,10 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
           title: 'Status Updated',
           description: `${staffMember.name}'s status set to ${status}.`,
         });
-      } catch (error) {
+      } catch (error: any) {
         toast({
           title: 'Error Updating Status',
-          description: (error as Error).message || 'An unknown error occurred while updating staff status.',
+          description: error.message || 'An unknown error occurred while updating staff status.',
           variant: 'destructive',
         });
       }
@@ -69,10 +69,10 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
           description: `${staffMember.name} has been removed.`,
         });
         setIsDeleteDialogOpen(false);
-      } catch (error) {
+      } catch (error: any) {
         toast({
           title: 'Error Deleting Staff Member',
-          description: (error as Error).message || 'An unknown error occurred while deleting staff member.',
+          description: error.message || 'An unknown error occurred while deleting staff member.',
           variant: 'destructive',
         });
       }
