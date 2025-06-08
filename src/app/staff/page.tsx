@@ -4,8 +4,9 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { PlusCircle, ListFilter, Loader2, Users2, AlertOctagon, ChevronDown, UserCheck, UserX, Coffee, Plane } from 'lucide-react';
+import { auth, db } from '@/lib/firebase'; // Import db
+import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Firestore imports
+import { PlusCircle, ListFilter, Loader2, Users2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,7 +28,7 @@ import { StaffMemberTable } from '@/components/staff/StaffMemberTable';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { StaffMember, StaffVisibleColumns, StaffAttendanceStatus } from '@/types';
-import { getStaffMembers, getSystemStaffTeams } from '@/lib/actions'; // Added getSystemStaffTeams
+import { getSystemStaffTeams } from '@/lib/actions'; // Keep for system data
 import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -49,7 +50,7 @@ export default function StaffDashboardPage() {
 
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
-  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); // State for staff teams
+  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]);
 
   const [searchTerm, setSearchTerm] = React.useState('');
   const [quickStatusFilter, setQuickStatusFilter] = React.useState<StaffAttendanceStatus | 'All'>('All');
@@ -66,7 +67,7 @@ export default function StaffDashboardPage() {
     name: true,
     role: true,
     department: true,
-    team: true, // Default to show team
+    team: true,
     contactInfo: true,
     status: true,
     actions: true,
@@ -97,22 +98,63 @@ export default function StaffDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser) return; // Ensure user is authenticated
     setIsLoadingData(true);
     try {
-      const [staffData, teamsData] = await Promise.all([
-          getStaffMembers({
-            searchTerm: debouncedSearchTerm,
-            status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
-            team: selectedTeamFilter === 'All Teams' ? undefined : selectedTeamFilter,
-          }),
-          getSystemStaffTeams()
-      ]);
-      setStaffMembers(staffData);
+      // Fetch staff members client-side
+      const staffColRef = collection(db, 'staff_members');
+      const queryConstraints = [];
+
+      if (selectedTeamFilter !== "All Teams") {
+        queryConstraints.push(where('team', '==', selectedTeamFilter));
+      }
+      if (quickStatusFilter !== 'All') {
+        queryConstraints.push(where('status', '==', quickStatusFilter));
+      }
+      
+      const q = query(staffColRef, ...queryConstraints, orderBy('name'));
+      const staffQuerySnapshot = await getDocs(q);
+      let fetchedStaffData = staffQuerySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || '',
+          role: data.role || '',
+          department: data.department,
+          team: data.team,
+          contactInfo: data.contactInfo,
+          status: data.status || 'Off Duty',
+          imageUrl: data.imageUrl,
+          notes: data.notes,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as StaffMember;
+      });
+
+      if (debouncedSearchTerm) {
+        const term = debouncedSearchTerm.toLowerCase();
+        fetchedStaffData = fetchedStaffData.filter(s =>
+          s.name.toLowerCase().includes(term) ||
+          (s.role && s.role.toLowerCase().includes(term)) ||
+          (s.department && s.department.toLowerCase().includes(term)) ||
+          (s.team && s.team.toLowerCase().includes(term))
+        );
+      }
+      setStaffMembers(fetchedStaffData);
+
+      // Fetch system staff teams (can remain server action if rules allow public read)
+      const teamsData = await getSystemStaffTeams();
       setSystemStaffTeams(['All Teams', ...teamsData]);
-    } catch (error) {
-      console.error("Failed to fetch staff data:", error);
-      toast({title: "Error", description: "Failed to load staff data.", variant: "destructive"})
+
+    } catch (error: any) {
+      console.error("Failed to fetch staff data (client-side):", error);
+      let errorMessage = "Failed to load staff data.";
+      if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Ensure you have rights to view staff data, and check Firestore rules.";
+      } else if (error.message && error.message.includes('requires an index')) {
+        errorMessage = "A Firestore index is required. Check browser console for a link to create it.";
+      }
+      toast({title: "Error", description: errorMessage, variant: "destructive"})
     } finally {
       setIsLoadingData(false);
     }
@@ -134,8 +176,6 @@ export default function StaffDashboardPage() {
     setIsStaffFormOpen(true);
   };
 
-  // toggleAllColumns function is not present, but not strictly necessary for this page.
-  // If added, it should be similar to the one in Participant dashboard.
 
   if (isAuthLoading) {
     return (
@@ -244,7 +284,7 @@ export default function StaffDashboardPage() {
         onOpenChange={setIsStaffFormOpen}
         staffMemberToEdit={staffToEdit}
         onFormSubmitSuccess={fetchData}
-        staffTeams={systemStaffTeams.filter(t => t !== 'All Teams')} // Pass actual teams
+        staffTeams={systemStaffTeams.filter(t => t !== 'All Teams')}
       />
     </AppLayoutClientShell>
   );

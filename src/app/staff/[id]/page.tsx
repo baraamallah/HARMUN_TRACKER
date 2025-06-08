@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getStaffMemberById, getSystemStaffTeams } from '@/lib/actions'; 
+import { getSystemStaffTeams } from '@/lib/actions'; 
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2 as StaffIcon, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -23,9 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db } from '@/lib/firebase'; // Import db
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
-
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore'; // Added getDoc, Timestamp
 
 export default function StaffMemberProfilePage() {
   const params = useParams();
@@ -49,21 +48,44 @@ export default function StaffMemberProfilePage() {
     }
     setIsLoading(true);
     try {
-      const [staffData, teamsData] = await Promise.all([ 
-        getStaffMemberById(id),
-        getSystemStaffTeams()
-      ]);
+      // Fetch staff member data client-side
+      const staffMemberRef = doc(db, 'staff_members', id);
+      const staffDocSnap = await getDoc(staffMemberRef);
+      let fetchedStaffData: StaffMember | null = null;
 
-      if (staffData) {
-        setStaffMember(staffData);
+      if (staffDocSnap.exists()) {
+        const data = staffDocSnap.data();
+        fetchedStaffData = {
+          id: staffDocSnap.id,
+          name: data.name || '',
+          role: data.role || '',
+          department: data.department,
+          team: data.team,
+          contactInfo: data.contactInfo,
+          status: data.status || 'Off Duty',
+          imageUrl: data.imageUrl,
+          notes: data.notes,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as StaffMember;
+      }
+      
+      const teamsData = await getSystemStaffTeams(); // Can remain server action
+
+      if (fetchedStaffData) {
+        setStaffMember(fetchedStaffData);
       } else {
         toast({ title: "Not Found", description: "Staff member data could not be found.", variant: "destructive" });
         router.push('/staff');
       }
       setSystemStaffTeams(teamsData); 
     } catch (error: any) {
-      console.error("Failed to fetch staff member data or teams:", error);
-      toast({ title: "Error Fetching Data", description: error.message || "Failed to load staff member data or teams.", variant: "destructive" });
+      console.error("Failed to fetch staff member data or teams (client-side for staff data):", error);
+      let errorMessage = "Failed to load staff member data or teams.";
+       if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied when fetching staff data. Check Firestore rules.";
+      }
+      toast({ title: "Error Fetching Data", description: errorMessage, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -85,9 +107,10 @@ export default function StaffMemberProfilePage() {
       const staffMemberRef = doc(db, 'staff_members', staffMember.id);
       await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
       
-      // Optimistically update local state and re-fetch for consistency
       setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      fetchStaffDataAndTeams(); // Re-fetch to ensure data is fresh from server
+      // No need to call fetchStaffDataAndTeams() again if only status is updated locally for UI
+      // However, if other parts of the data might change or for consistency, you can re-fetch:
+      // fetchStaffDataAndTeams(); 
 
       toast({
         title: 'Status Updated',
@@ -135,7 +158,7 @@ export default function StaffMemberProfilePage() {
   if (!staffMember) {
     return (
       <div className="container mx-auto p-4 md:p-8 text-center">
-        <Users2 className="h-32 w-32 mx-auto text-muted-foreground mb-4" data-ai-hint="error user" />
+        <StaffIcon className="h-32 w-32 mx-auto text-muted-foreground mb-4" data-ai-hint="error user" />
         <h1 className="text-2xl font-bold">Staff Member Not Found</h1>
         <p className="text-muted-foreground mb-6">The staff member you are looking for does not exist.</p>
         <Button asChild variant="outline">
@@ -170,7 +193,7 @@ export default function StaffMemberProfilePage() {
                 <span className="text-right">{staffMember.role}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="font-medium text-muted-foreground flex items-center"><Users2 className="mr-2 h-4 w-4 text-primary/70" />Department:</span>
+                <span className="font-medium text-muted-foreground flex items-center"><StaffIcon className="mr-2 h-4 w-4 text-primary/70" />Department:</span>
                 <span className="text-right">{staffMember.department || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center">

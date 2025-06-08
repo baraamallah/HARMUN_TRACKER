@@ -24,14 +24,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; // db from client SDK
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore'; // direct firestore calls
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc } from 'firebase/firestore'; // direct firestore calls
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
 import { 
   getSystemSchools, 
   getSystemCommittees, 
-  getStaffMembers, 
   deleteStaffMember as deleteStaffMemberAction, 
   getSystemStaffTeams,
   deleteSystemSchool as deleteSystemSchoolAction,
@@ -58,6 +57,8 @@ import {
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
+const STAFF_MEMBERS_COLLECTION = 'staff_members';
+
 
 export default function SuperiorAdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -88,7 +89,6 @@ export default function SuperiorAdminPage() {
   const fetchSchools = useCallback(async () => {
     setIsLoadingSchools(true);
     try {
-      // This uses a server action, which itself uses client SDK. See notes in actions.ts.
       const schoolsData = await getSystemSchools(); 
       setSystemSchools(schoolsData);
     } catch (error) {
@@ -102,7 +102,6 @@ export default function SuperiorAdminPage() {
   const fetchCommittees = useCallback(async () => {
     setIsLoadingCommittees(true);
     try {
-      // Server action call
       const committeesData = await getSystemCommittees();
       setSystemCommittees(committeesData);
     } catch (error) {
@@ -116,7 +115,6 @@ export default function SuperiorAdminPage() {
   const fetchStaffTeams = useCallback(async () => {
     setIsLoadingStaffTeams(true);
     try {
-      // Server action call
       const teamsData = await getSystemStaffTeams();
       setSystemStaffTeams(teamsData);
     } catch (error) {
@@ -128,42 +126,54 @@ export default function SuperiorAdminPage() {
   }, [toast]);
 
   const fetchStaff = useCallback(async () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) return;
     setIsLoadingStaff(true);
     try {
-      // Server action call
-      const staffData = await getStaffMembers();
-      setStaffMembers(staffData);
-    } catch (error) {
-      console.error("Error fetching staff members (client-side, via action): ", error);
-      toast({ title: 'Error Fetching Staff', description: (error as Error).message || 'Failed to load staff members.', variant: 'destructive' });
+      const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
+      const q = query(staffColRef, orderBy('name'));
+      const staffQuerySnapshot = await getDocs(q);
+      const fetchedStaffData = staffQuerySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || '',
+          role: data.role || '',
+          department: data.department,
+          team: data.team,
+          contactInfo: data.contactInfo,
+          status: data.status || 'Off Duty',
+          imageUrl: data.imageUrl,
+          notes: data.notes,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as StaffMember;
+      });
+      setStaffMembers(fetchedStaffData);
+    } catch (error: any) {
+      console.error("Error fetching staff members (client-side, Superior Admin): ", error);
+      let errorMessage = "Failed to load staff members.";
+       if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Ensure Firestore rules for 'staff_members' allow Owner read access.";
+      }
+      toast({ title: 'Error Fetching Staff', description: errorMessage, variant: 'destructive' });
     } finally {
       setIsLoadingStaff(false);
     }
-  }, [toast]);
+  }, [toast, currentUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
-        // User is confirmed as OWNER on client-side.
-        // Subsequent direct Firestore calls from client (like addDoc in handleAddItem)
-        // SHOULD have correct request.auth.uid.
-        // Calls to server actions (getSystemSchools etc.) depend on server action auth context.
         fetchSchools();
         fetchCommittees();
         fetchStaffTeams();
         fetchStaff();
-      } else if (user) {
-        // Logged in, but not owner.
-        // Redirect or show access denied can be handled here or by UI conditional rendering.
-      } else {
-        // Not logged in.
-        // Redirect or show access denied.
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]); // Added fetchStaff to dependency array
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]);
 
   const handleAddItem = async (type: 'school' | 'committee' | 'staffTeam') => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -198,17 +208,13 @@ export default function SuperiorAdminPage() {
       return;
     }
 
-    // This 'addDoc' call is made directly from the client-side.
-    // Firestore security rules (isOwner()) should evaluate correctly based on currentUser.uid.
-    // If this fails, it's likely a mismatch between OWNER_UID in constants.ts and rules,
-    // or the user isn't truly logged in as Owner.
     startTransition(async () => {
       try {
         const colRef = collection(db, collectionName);
         await addDoc(colRef, { name: itemName, createdAt: serverTimestamp() });
         toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Added`, description: `"${itemName}" has been successfully added.` });
         setNewItemName('');
-        fetchFunction(); // This re-fetches using server actions.
+        fetchFunction(); 
       } catch (error: any) {
         console.error(`Error adding system ${type} "${itemName}" (Client-side direct addDoc): `, error);
         const firebaseError = error as { code?: string; message?: string };
@@ -236,7 +242,6 @@ export default function SuperiorAdminPage() {
     }
     const { type, name, id } = itemToDelete;
 
-    // These calls use Server Actions. Prone to auth context issues noted in actions.ts.
     startTransition(async () => {
       let result: { success: boolean; error?: string } | { success: boolean } = { success: false, error: "Unknown error during delete item action." };
       try {
@@ -270,7 +275,6 @@ export default function SuperiorAdminPage() {
     try {
       await signOut(auth);
       toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
-      // onAuthStateChanged will handle redirect
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -286,7 +290,7 @@ export default function SuperiorAdminPage() {
   };
 
   const handleStaffFormSuccess = () => {
-    fetchStaff(); // Re-fetches staff list using server action
+    fetchStaff();
     setIsStaffFormOpen(false);
   };
 
@@ -312,7 +316,6 @@ export default function SuperiorAdminPage() {
   }
 
   if (!currentUser || currentUser.uid !== OWNER_UID) {
-    // This UI is shown if onAuthStateChanged confirms user is not OWNER_UID or not logged in.
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-t-4 border-destructive">
@@ -326,12 +329,12 @@ export default function SuperiorAdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            {currentUser && ( // currentUser might be populated but not be OWNER_UID
+            {currentUser && (
               <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full text-lg py-3">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Restricted User'})
               </Button>
             )}
-            {!currentUser && ( // Explicitly not logged in
+            {!currentUser && (
                  <p className="text-md text-muted-foreground mt-4">
                     Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Superior Admin account.
                  </p>
@@ -349,7 +352,6 @@ export default function SuperiorAdminPage() {
     );
   }
 
-  // Render page content if currentUser is OWNER_UID
   const renderSystemListManagementCard = (
     title: string,
     icon: React.ElementType,
@@ -424,7 +426,7 @@ export default function SuperiorAdminPage() {
                 <h1 className="text-3xl font-bold tracking-tight text-foreground">
                 Superior Admin Panel
                 </h1>
-                {currentUser && ( // Ensure currentUser is not null before accessing email/uid
+                {currentUser && ( 
                     <p className="text-xs text-green-600 dark:text-green-400">
                         Authenticated as: {currentUser.email} (UID: {currentUser.uid})
                     </p>
@@ -627,3 +629,5 @@ export default function SuperiorAdminPage() {
     </div>
   );
 }
+
+    
