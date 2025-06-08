@@ -49,6 +49,10 @@ const staffMemberFormSchema = z.object({
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
 
+// Special value for the "Unassigned / No Team" option to avoid empty string in Select.Item
+const UNASSIGNED_TEAM_VALUE = "_UNASSIGNED_";
+const NO_TEAMS_PLACEHOLDER_VALUE = "_NO_TEAMS_PLACEHOLDER_";
+
 interface StaffMemberFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -73,7 +77,7 @@ export function StaffMemberForm({
       name: '',
       role: '',
       department: '',
-      team: '',
+      team: '', // Form's internal default can be '', Select component handles this for placeholder
       imageUrl: '',
       contactInfo: '',
       notes: '',
@@ -87,24 +91,29 @@ export function StaffMemberForm({
           name: staffMemberToEdit.name,
           role: staffMemberToEdit.role,
           department: staffMemberToEdit.department || '',
+          // If team from DB is empty string, map to UNASSIGNED_TEAM_VALUE for select item consistency,
+          // otherwise use the actual team name.
+          // Or, if form value should be '' to show placeholder, then this is fine.
+          // The issue is an ITEM having value="".
+          // If staffMemberToEdit.team is '', field.value will be '', placeholder shows. Correct.
           team: staffMemberToEdit.team || '', 
           imageUrl: staffMemberToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : staffMemberToEdit.imageUrl || '',
           contactInfo: staffMemberToEdit.contactInfo || '',
           notes: staffMemberToEdit.notes || '',
         });
       } else {
-        form.reset({
+        form.reset({ // For new staff member
           name: '',
           role: '',
           department: '',
-          team: '', // Default to empty, placeholder will show "Select a team" or "No teams"
+          team: '', // Default to empty string for field value, shows placeholder "Select a team"
           imageUrl: '',
           contactInfo: '',
           notes: '',
         });
       }
     }
-  }, [staffMemberToEdit, form, isOpen, staffTeams]);
+  }, [staffMemberToEdit, form, isOpen]); // Removed staffTeams from deps as it doesn't directly influence reset values here
 
   const onSubmit = (data: StaffMemberFormData) => {
     startTransition(async () => {
@@ -113,7 +122,8 @@ export function StaffMemberForm({
           name: data.name.trim(),
           role: data.role.trim(),
           department: data.department?.trim() || '',
-          team: data.team?.trim() || '', 
+          // Convert special unassigned value back to empty string for DB
+          team: data.team === UNASSIGNED_TEAM_VALUE ? '' : data.team?.trim() || '', 
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
           updatedAt: serverTimestamp(),
@@ -123,17 +133,15 @@ export function StaffMemberForm({
 
         if (formImageUrl) {
           submissionData.imageUrl = formImageUrl;
-        } else { // User left the URL field blank or cleared it
+        } else { 
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-          if (staffMemberToEdit) { // Editing existing staff
+          if (staffMemberToEdit) { 
             if (staffMemberToEdit.imageUrl && !staffMemberToEdit.imageUrl.startsWith('https://placehold.co')) {
-              // Old URL was custom, and user cleared it. So, remove it.
               submissionData.imageUrl = '';
             } else {
-              // Old URL was a placeholder, or empty. Regenerate placeholder (name might have changed).
               submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
             }
-          } else { // Adding new staff and URL field is blank
+          } else { 
             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
           }
         }
@@ -229,13 +237,12 @@ export function StaffMemberForm({
             <FormField
               control={form.control}
               name="team"
-              render={({ field }) => (
+              render={({ field }) => ( // field.value will be '' if no team is set initially, Select displays placeholder
                 <FormItem>
                   <FormLabel htmlFor="staff-form-team">Team (Optional)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
+                    value={field.value} // Can be '', UNASSIGNED_TEAM_VALUE, or an actual team name
                     disabled={isPending}
                   >
                     <FormControl>
@@ -244,13 +251,17 @@ export function StaffMemberForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Unassigned / No Team</SelectItem>
+                      <SelectItem value={UNASSIGNED_TEAM_VALUE}>Unassigned / No Team</SelectItem>
                       {staffTeams.map((teamName) => (
                         <SelectItem key={teamName} value={teamName}>
                           {teamName}
                         </SelectItem>
                       ))}
-                      {staffTeams.length === 0 && <SelectItem value="" disabled>No teams available. Add via Superior Admin.</SelectItem>}
+                      {staffTeams.length === 0 && (
+                        <SelectItem value={NO_TEAMS_PLACEHOLDER_VALUE} disabled>
+                          No teams available. Add via Superior Admin.
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -319,3 +330,4 @@ export function StaffMemberForm({
     </Dialog>
   );
 }
+
