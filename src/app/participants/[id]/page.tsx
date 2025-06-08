@@ -4,7 +4,6 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getParticipantById } from '@/lib/actions'; // serverMarkAttendance removed
 import type { Participant, AttendanceStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -24,8 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db } from '@/lib/firebase'; // Import db
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
+import { db } from '@/lib/firebase'; 
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; 
 
 export default function ParticipantProfilePage() {
   const params = useParams();
@@ -51,8 +50,30 @@ export default function ParticipantProfilePage() {
     }
     setIsLoading(true);
     try {
-      const [participantData, systemSchools, systemCommittees] = await Promise.all([
-        getParticipantById(id),
+      // Direct Firestore fetch
+      const participantRef = doc(db, 'participants', id);
+      const docSnap = await participantRef.get();
+      let participantData: Participant | null = null;
+      if (docSnap.exists()) {
+          const data = docSnap.data();
+          participantData = {
+            id: docSnap.id,
+            name: data.name || '',
+            school: data.school || '',
+            committee: data.committee || '',
+            status: data.status || 'Absent',
+            imageUrl: data.imageUrl,
+            notes: data.notes,
+            additionalDetails: data.additionalDetails,
+            classGrade: data.classGrade,
+            email: data.email,
+            phone: data.phone,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+          } as Participant;
+      }
+      // System lists can still be fetched via server actions if preferred / rules allow
+      const [systemSchools, systemCommittees] = await Promise.all([
         getSystemSchools(),
         getSystemCommittees(),
       ]);
@@ -63,8 +84,8 @@ export default function ParticipantProfilePage() {
         toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
         router.push('/'); 
       }
-      setSchools(systemSchools.filter(s => s !== 'All Schools'));
-      setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
+      setSchools(systemSchools.filter(s => s !== 'All Schools')); // Assuming 'All Schools' is a filter value
+      setCommittees(systemCommittees.filter(c => c !== 'All Committees')); // Assuming 'All Committees' is a filter value
 
     } catch (error: any) {
       console.error("Failed to fetch participant data:", error);
@@ -90,9 +111,8 @@ export default function ParticipantProfilePage() {
       const participantRef = doc(db, 'participants', participant.id);
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
       
-      // Optimistically update local state and re-fetch for consistency
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      fetchParticipantData(); // Re-fetch to ensure data is fresh from server
+      fetchParticipantData(); 
 
       toast({
         title: 'Attendance Updated',
@@ -105,7 +125,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData(); // Re-fetch on error to ensure UI consistency
+       fetchParticipantData(); 
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +150,7 @@ export default function ParticipantProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-20 w-full rounded-lg" />
+            <Skeleton className="h-32 w-full rounded-lg" /> {/* Increased height for new fields */}
             <Skeleton className="h-10 w-full rounded-lg" />
             <Skeleton className="h-10 w-full rounded-lg" />
           </div>
@@ -176,27 +196,35 @@ export default function ParticipantProfilePage() {
               </div>
             </CardHeader>
             <CardContent className="text-sm space-y-3 px-6 pb-6">
-              <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">School:</span>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Landmark className="mr-2 h-4 w-4 text-primary/70" />School:</span>
                 <span className="text-right">{participant.school}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">Committee:</span>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><BookUser className="mr-2 h-4 w-4 text-primary/70" />Committee:</span>
                 <span className="text-right">{participant.committee}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">Class/Grade:</span>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><GraduationCap className="mr-2 h-4 w-4 text-primary/70" />Class/Grade:</span>
                 <span className="text-right">{participant.classGrade || 'Not set'}</span>
               </div>
-               <div className="flex justify-between">
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Mail className="mr-2 h-4 w-4 text-primary/70" />Email:</span>
+                <span className="text-right break-all">{participant.email || 'Not set'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Phone className="mr-2 h-4 w-4 text-primary/70" />Phone:</span>
+                <span className="text-right">{participant.phone || 'Not set'}</span>
+              </div>
+               <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>
-                <span className="text-right text-xs">
+                <span className="text-right">
                   {participant.createdAt && isValid(parseISO(participant.createdAt as string)) ? format(parseISO(participant.createdAt as string), 'PPpp') : 'N/A'}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Last Updated:</span>
-                <span className="text-right text-xs">
+                <span className="text-right">
                   {participant.updatedAt && isValid(parseISO(participant.updatedAt as string)) ? format(parseISO(participant.updatedAt as string), 'PPpp') : 'N/A'}
                 </span>
               </div>
@@ -276,3 +304,9 @@ export default function ParticipantProfilePage() {
     </div>
   );
 }
+
+// Helper for Firestore Timestamp, if needed globally, move to a util file
+const Timestamp = { 
+    fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
+    toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
+};

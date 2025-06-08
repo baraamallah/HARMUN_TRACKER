@@ -42,14 +42,15 @@ const staffMemberFormSchema = z.object({
   role: z.string().min(2, 'Role is required.').max(50, 'Role must be at most 50 characters.'),
   department: z.string().max(50, 'Department must be at most 50 characters.').optional().default(''),
   team: z.string().optional().default(''), 
+  email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
+  phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
+  contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''), // Kept for legacy/other
   imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
-  contactInfo: z.string().max(100, 'Contact info must be at most 100 characters.').optional().default(''),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
 });
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
 
-// Special value for the "Unassigned / No Team" option to avoid empty string in Select.Item
 const UNASSIGNED_TEAM_VALUE = "_UNASSIGNED_";
 const NO_TEAMS_PLACEHOLDER_VALUE = "_NO_TEAMS_PLACEHOLDER_";
 
@@ -77,9 +78,11 @@ export function StaffMemberForm({
       name: '',
       role: '',
       department: '',
-      team: '', // Form's internal default can be '', Select component handles this for placeholder
-      imageUrl: '',
+      team: '', 
+      email: '',
+      phone: '',
       contactInfo: '',
+      imageUrl: '',
       notes: '',
     },
   });
@@ -91,29 +94,28 @@ export function StaffMemberForm({
           name: staffMemberToEdit.name,
           role: staffMemberToEdit.role,
           department: staffMemberToEdit.department || '',
-          // If team from DB is empty string, map to UNASSIGNED_TEAM_VALUE for select item consistency,
-          // otherwise use the actual team name.
-          // Or, if form value should be '' to show placeholder, then this is fine.
-          // The issue is an ITEM having value="".
-          // If staffMemberToEdit.team is '', field.value will be '', placeholder shows. Correct.
           team: staffMemberToEdit.team || '', 
-          imageUrl: staffMemberToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : staffMemberToEdit.imageUrl || '',
+          email: staffMemberToEdit.email || '',
+          phone: staffMemberToEdit.phone || '',
           contactInfo: staffMemberToEdit.contactInfo || '',
+          imageUrl: staffMemberToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : staffMemberToEdit.imageUrl || '',
           notes: staffMemberToEdit.notes || '',
         });
       } else {
-        form.reset({ // For new staff member
+        form.reset({ 
           name: '',
           role: '',
           department: '',
-          team: '', // Default to empty string for field value, shows placeholder "Select a team"
-          imageUrl: '',
+          team: '', 
+          email: '',
+          phone: '',
           contactInfo: '',
+          imageUrl: '',
           notes: '',
         });
       }
     }
-  }, [staffMemberToEdit, form, isOpen]); // Removed staffTeams from deps as it doesn't directly influence reset values here
+  }, [staffMemberToEdit, form, isOpen]);
 
   const onSubmit = (data: StaffMemberFormData) => {
     startTransition(async () => {
@@ -122,8 +124,9 @@ export function StaffMemberForm({
           name: data.name.trim(),
           role: data.role.trim(),
           department: data.department?.trim() || '',
-          // Convert special unassigned value back to empty string for DB
           team: data.team === UNASSIGNED_TEAM_VALUE ? '' : data.team?.trim() || '', 
+          email: data.email?.trim() || '',
+          phone: data.phone?.trim() || '',
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
           updatedAt: serverTimestamp(),
@@ -174,7 +177,7 @@ export function StaffMemberForm({
   };
 
   const handleDialogClose = () => {
-    form.reset({ name: '', role: '', department: '', team: '', imageUrl: '', contactInfo: '', notes: '' });
+    form.reset({ name: '', role: '', department: '', team: '', email: '', phone: '', contactInfo: '', imageUrl: '', notes: '' });
     onOpenChange(false);
   }
 
@@ -237,12 +240,12 @@ export function StaffMemberForm({
             <FormField
               control={form.control}
               name="team"
-              render={({ field }) => ( // field.value will be '' if no team is set initially, Select displays placeholder
+              render={({ field }) => ( 
                 <FormItem>
                   <FormLabel htmlFor="staff-form-team">Team (Optional)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value} // Can be '', UNASSIGNED_TEAM_VALUE, or an actual team name
+                    value={field.value} 
                     disabled={isPending}
                   >
                     <FormControl>
@@ -268,6 +271,45 @@ export function StaffMemberForm({
                 </FormItem>
               )}
             />
+             <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="staff-form-email">Email (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="staff-form-email" type="email" placeholder="staff@example.com" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="staff-form-phone">Phone (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="staff-form-phone" type="tel" placeholder="+1 555-000-0000" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contactInfo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="staff-form-contactInfo">Other Contact Info (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="staff-form-contactInfo" placeholder="e.g., Radio channel, specific instructions" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="imageUrl"
@@ -276,19 +318,6 @@ export function StaffMemberForm({
                   <FormLabel htmlFor="staff-form-imageUrl">Image URL (Optional)</FormLabel>
                   <FormControl>
                     <Input id="staff-form-imageUrl" placeholder="https://example.com/image.png" {...field} value={field.value ?? ''} disabled={isPending} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="contactInfo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel htmlFor="staff-form-contactInfo">Contact Info (Optional)</FormLabel>
-                  <FormControl>
-                    <Input id="staff-form-contactInfo" placeholder="e.g., 555-1234 or name@example.com" {...field} value={field.value ?? ''} disabled={isPending} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -330,4 +359,3 @@ export function StaffMemberForm({
     </Dialog>
   );
 }
-

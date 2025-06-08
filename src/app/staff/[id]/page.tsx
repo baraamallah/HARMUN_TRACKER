@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
-import { ArrowLeft, Edit, Loader2, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2 as StaffIcon, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, Info, StickyNote, ChevronDown, Briefcase, Phone as PhoneIcon, Mail, Users2 as StaffIcon, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore'; // Added getDoc, Timestamp
+import { doc, updateDoc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore'; 
 
 export default function StaffMemberProfilePage() {
   const params = useParams();
@@ -48,7 +48,6 @@ export default function StaffMemberProfilePage() {
     }
     setIsLoading(true);
     try {
-      // Fetch staff member data client-side
       const staffMemberRef = doc(db, 'staff_members', id);
       const staffDocSnap = await getDoc(staffMemberRef);
       let fetchedStaffData: StaffMember | null = null;
@@ -61,6 +60,8 @@ export default function StaffMemberProfilePage() {
           role: data.role || '',
           department: data.department,
           team: data.team,
+          email: data.email,
+          phone: data.phone,
           contactInfo: data.contactInfo,
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
@@ -70,7 +71,7 @@ export default function StaffMemberProfilePage() {
         } as StaffMember;
       }
       
-      const teamsData = await getSystemStaffTeams(); // Can remain server action
+      const teamsData = await getSystemStaffTeams(); 
 
       if (fetchedStaffData) {
         setStaffMember(fetchedStaffData);
@@ -108,10 +109,6 @@ export default function StaffMemberProfilePage() {
       await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
       
       setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      // No need to call fetchStaffDataAndTeams() again if only status is updated locally for UI
-      // However, if other parts of the data might change or for consistency, you can re-fetch:
-      // fetchStaffDataAndTeams(); 
-
       toast({
         title: 'Status Updated',
         description: `${staffMember.name}'s status set to ${status}.`,
@@ -145,7 +142,7 @@ export default function StaffMemberProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-48 w-full rounded-lg" /> 
+            <Skeleton className="h-64 w-full rounded-lg" /> {/* Increased height for new fields */}
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -201,9 +198,19 @@ export default function StaffMemberProfilePage() {
                 <span className="text-right">{staffMember.team || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="font-medium text-muted-foreground flex items-center"><Phone className="mr-2 h-4 w-4 text-primary/70" />Contact:</span>
-                <span className="text-right">{staffMember.contactInfo || 'N/A'}</span>
+                <span className="font-medium text-muted-foreground flex items-center"><Mail className="mr-2 h-4 w-4 text-primary/70" />Email:</span>
+                <span className="text-right break-all">{staffMember.email || 'N/A'}</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><PhoneIcon className="mr-2 h-4 w-4 text-primary/70" />Phone:</span>
+                <span className="text-right">{staffMember.phone || 'N/A'}</span>
+              </div>
+              {staffMember.contactInfo && (
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-muted-foreground flex items-center"><Info className="mr-2 h-4 w-4 text-primary/70" />Other Contact:</span>
+                  <span className="text-right">{staffMember.contactInfo}</span>
+                </div>
+              )}
                <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>
                 <span className="text-right">
@@ -277,3 +284,8 @@ export default function StaffMemberProfilePage() {
     </div>
   );
 }
+// Helper for Firestore Timestamp, if needed globally, move to a util file
+const Timestamp = { 
+    fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
+    toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
+};

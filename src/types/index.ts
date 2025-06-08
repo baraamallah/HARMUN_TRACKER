@@ -18,6 +18,8 @@ export interface Participant {
   notes?: string;
   additionalDetails?: string;
   classGrade?: string;
+  email?: string; // Added
+  phone?: string; // Added
   createdAt?: string | any;
   updatedAt?: string | any;
 }
@@ -34,7 +36,9 @@ export interface StaffMember {
   role: string; // e.g., "Director", "Volunteer", "Security"
   department?: string; // e.g., "Logistics", "Press", "Crisis"
   team?: string; // New: e.g., "Logistics Team A", "Security Alpha"
-  contactInfo?: string; // e.g., phone or email
+  email?: string; // Added
+  phone?: string; // Added
+  contactInfo?: string; // Kept for any other non-email/phone contact, but new fields are primary
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
@@ -69,7 +73,7 @@ export interface StaffVisibleColumns {
   role: boolean;
   department: boolean;
   team: boolean; // Added team column
-  contactInfo: boolean;
+  contactInfo: boolean; // This will show the old contactInfo field
   status: boolean;
   actions: boolean;
   // No selection for staff initially

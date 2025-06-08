@@ -42,6 +42,8 @@ const participantFormSchema = z.object({
   school: z.string().min(1, 'School is required.'),
   committee: z.string().min(1, 'Committee is required.'),
   classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''),
+  email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
+  phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
   imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   additionalDetails: z.string().max(1000, 'Details must be at most 1000 characters.').optional().default(''),
@@ -76,6 +78,8 @@ export function ParticipantForm({
       school: '',
       committee: '',
       classGrade: '',
+      email: '',
+      phone: '',
       imageUrl: '',
       notes: '',
       additionalDetails: '',
@@ -90,6 +94,8 @@ export function ParticipantForm({
           school: participantToEdit.school,
           committee: participantToEdit.committee,
           classGrade: participantToEdit.classGrade || '',
+          email: participantToEdit.email || '',
+          phone: participantToEdit.phone || '',
           imageUrl: participantToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : participantToEdit.imageUrl || '',
           notes: participantToEdit.notes || '',
           additionalDetails: participantToEdit.additionalDetails || '',
@@ -97,16 +103,18 @@ export function ParticipantForm({
       } else {
         form.reset({
           name: '',
-          school: '', // Always default to '' for new, let placeholder show
-          committee: '', // Always default to '' for new, let placeholder show
+          school: '', 
+          committee: '', 
           classGrade: '',
+          email: '',
+          phone: '',
           imageUrl: '',
           notes: '',
           additionalDetails: '',
         });
       }
     }
-  }, [participantToEdit, form, isOpen, schools, committees]);
+  }, [participantToEdit, form, isOpen]);
 
   const onSubmit = (data: ParticipantFormData) => {
     startTransition(async () => {
@@ -116,6 +124,8 @@ export function ParticipantForm({
           school: data.school.trim(),
           committee: data.committee.trim(),
           classGrade: data.classGrade?.trim() || '',
+          email: data.email?.trim() || '',
+          phone: data.phone?.trim() || '',
           notes: data.notes?.trim() || '',
           additionalDetails: data.additionalDetails?.trim() || '',
           updatedAt: serverTimestamp(),
@@ -125,17 +135,15 @@ export function ParticipantForm({
 
         if (formImageUrl) {
           submissionData.imageUrl = formImageUrl;
-        } else { // User left the URL field blank or cleared it
+        } else { 
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          if (participantToEdit) { // Editing existing participant
+          if (participantToEdit) { 
             if (participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-              // Old URL was custom, and user cleared it. So, remove it.
               submissionData.imageUrl = '';
             } else {
-              // Old URL was a placeholder, or empty. Regenerate placeholder (name might have changed).
               submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
             }
-          } else { // Adding new participant and URL field is blank
+          } else { 
             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
           }
         }
@@ -173,6 +181,8 @@ export function ParticipantForm({
         school: '', 
         committee: '',
         classGrade: '',
+        email: '',
+        phone: '',
         imageUrl: '',
         notes: '',
         additionalDetails: '',
@@ -233,7 +243,7 @@ export function ParticipantForm({
                           {school}
                         </SelectItem>
                       ))}
-                      {schools.length === 0 && <SelectItem value="" disabled>No schools available. Add via Superior Admin.</SelectItem>}
+                      {schools.length === 0 && <SelectItem value="_NO_SCHOOLS_" disabled>No schools available. Add via Superior Admin.</SelectItem>}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -263,7 +273,7 @@ export function ParticipantForm({
                           {committee}
                         </SelectItem>
                       ))}
-                       {committees.length === 0 && <SelectItem value="" disabled>No committees available. Add via Superior Admin.</SelectItem>}
+                       {committees.length === 0 && <SelectItem value="_NO_COMMITTEES_" disabled>No committees available. Add via Superior Admin.</SelectItem>}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -278,6 +288,32 @@ export function ParticipantForm({
                   <FormLabel htmlFor="form-classGrade">Class/Grade (Optional)</FormLabel>
                   <FormControl>
                     <Input id="form-classGrade" placeholder="e.g., 10th Grade, Year 12" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-email">Email (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="form-email" type="email" placeholder="participant@example.com" {...field} value={field.value ?? ''} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-phone">Phone (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="form-phone" type="tel" placeholder="e.g., +1 555-123-4567" {...field} value={field.value ?? ''} disabled={isPending} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
