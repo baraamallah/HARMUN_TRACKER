@@ -4,8 +4,8 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase'; // Import db
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore'; // Import Firestore batch and serverTimestamp
+import { auth, db } from '@/lib/firebase';
+import { collection, query, where, orderBy, getDocs, Timestamp, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,7 +41,7 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getParticipants, getSystemSchools, getSystemCommittees, bulkDeleteParticipants } from '@/lib/actions'; // bulkMarkAttendance removed
+import { getSystemSchools, getSystemCommittees, bulkDeleteParticipants } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -118,31 +118,76 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser && !isAuthLoading) { // Ensure currentUser exists or auth is still loading
+    if (!currentUser && !isAuthLoading) {
       if (!isAuthLoading) router.push('/auth/login');
       return;
     }
-    if(isAuthLoading && !currentUser) return; // Still waiting for auth state
+    if (isAuthLoading && !currentUser) return;
     
     setIsLoadingData(true);
     try {
-      const [participantsData, schoolsData, committeesData] = await Promise.all([
-        getParticipants({ 
-          school: selectedSchool === 'All Schools' ? undefined : selectedSchool, 
-          committee: selectedCommittee === 'All Committees' ? undefined : selectedCommittee,
-          searchTerm: debouncedSearchTerm,
-          status: quickStatusFilter === 'All' ? undefined : quickStatusFilter,
-        }),
+      // Fetch participants client-side
+      const participantsColRef = collection(db, 'participants');
+      const queryConstraints = [];
+
+      if (selectedSchool !== 'All Schools') {
+        queryConstraints.push(where('school', '==', selectedSchool));
+      }
+      if (selectedCommittee !== 'All Committees') {
+        queryConstraints.push(where('committee', '==', selectedCommittee));
+      }
+      if (quickStatusFilter !== 'All') {
+        queryConstraints.push(where('status', '==', quickStatusFilter));
+      }
+      
+      const participantsQuery = query(participantsColRef, ...queryConstraints, orderBy('name'));
+      const participantsSnapshot = await getDocs(participantsQuery);
+      let fetchedParticipants = participantsSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || '',
+          school: data.school || '',
+          committee: data.committee || '',
+          status: data.status || 'Absent',
+          imageUrl: data.imageUrl,
+          notes: data.notes,
+          additionalDetails: data.additionalDetails,
+          classGrade: data.classGrade,
+          email: data.email,
+          phone: data.phone,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as Participant;
+      });
+
+      if (debouncedSearchTerm) {
+        const term = debouncedSearchTerm.toLowerCase();
+        fetchedParticipants = fetchedParticipants.filter(p =>
+          p.name.toLowerCase().includes(term) ||
+          p.school.toLowerCase().includes(term) ||
+          p.committee.toLowerCase().includes(term)
+        );
+      }
+      setParticipants(fetchedParticipants);
+
+      // Fetch system schools and committees using server actions (publicly readable)
+      const [schoolsData, committeesData] = await Promise.all([
         getSystemSchools(),
         getSystemCommittees(),
       ]);
-      setParticipants(participantsData);
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
       setSelectedParticipantIds([]); 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast({title: "Error", description: "Failed to load dashboard data.", variant: "destructive"})
+      let errorMessage = "Failed to load dashboard data.";
+      if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Ensure you have rights to view participant data, and check Firestore rules.";
+      } else if (error.message && error.message.includes('requires an index')) {
+        errorMessage = "A Firestore index is required. Check browser console for a link to create it.";
+      }
+      toast({title: "Error", description: errorMessage, variant: "destructive"})
     } finally {
       setIsLoadingData(false);
     }
@@ -240,6 +285,8 @@ export default function AdminDashboardPage() {
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
     try {
+      // Server action 'bulkDeleteParticipants' remains for now. 
+      // If it causes permission issues, it would also need to become client-side batch delete.
       const result = await bulkDeleteParticipants(selectedParticipantIds);
       if (result.errorMessage) {
         toast({ title: "Bulk Delete Failed", description: result.errorMessage, variant: "destructive" });
@@ -253,9 +300,8 @@ export default function AdminDashboardPage() {
       setSelectedParticipantIds([]);
     } catch (error: any) {
       let description = "An unexpected error occurred during bulk deletion.";
-      // Check if error.message indicates a server component render error (Next.js specific for server actions)
       if (error && error.message && (error.message.includes("Server Components render") || error.message.includes("omitted in production builds"))) {
-        description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
+        description = `A server-side error occurred. Please check Vercel Function Logs. (Digest: ${error.digest || 'N/A'})`;
       } else if (error && error.message) {
         description = error.message;
       }
