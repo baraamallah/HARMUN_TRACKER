@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getParticipantById, markAttendance as serverMarkAttendance } from '@/lib/actions';
+import { getParticipantById } from '@/lib/actions'; // serverMarkAttendance removed
 import type { Participant, AttendanceStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser } from 'lucide-react'; // Added BookUser for Class/Grade
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -24,7 +24,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
+import { db } from '@/lib/firebase'; // Import db
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
 
 export default function ParticipantProfilePage() {
   const params = useParams();
@@ -82,26 +83,23 @@ export default function ParticipantProfilePage() {
     setIsParticipantFormOpen(false); 
   };
 
-  const handleMarkAttendance = async (status: AttendanceStatus) => {
+  const handleMarkAttendanceClientSide = async (status: AttendanceStatus) => {
     if (!participant) return;
     setIsSubmitting(true);
     try {
-      const updatedParticipant = await serverMarkAttendance(participant.id, status);
-      if (updatedParticipant) {
-         setParticipant(updatedParticipant); 
-      } else {
-        // Fallback: optimistically update UI if server action doesn't return the full object
-        setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-        // It's good practice to re-fetch if the server doesn't return the updated object,
-        // but markAttendance in actions.ts *does* return it, so this might be redundant if no errors.
-        // If errors often occur where updatedParticipant is null but operation succeeded, then re-fetch.
-        // fetchParticipantData(); 
-      }
+      const participantRef = doc(db, 'participants', participant.id);
+      await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+      
+      // Optimistically update local state and re-fetch for consistency
+      setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+      fetchParticipantData(); // Re-fetch to ensure data is fresh from server
+
       toast({
         title: 'Attendance Updated',
         description: `${participant.name}'s status set to ${status}.`,
       });
     } catch (error: any) {
+      console.error("Client-side Error marking attendance on profile page: ", error);
       toast({
         title: 'Error Updating Attendance',
         description: error.message || 'An unknown error occurred while updating attendance.',
@@ -218,7 +216,7 @@ export default function ParticipantProfilePage() {
                   {attendanceOptions.map(opt => (
                     <DropdownMenuItem
                       key={opt.status}
-                      onClick={() => handleMarkAttendance(opt.status)}
+                      onClick={() => handleMarkAttendanceClientSide(opt.status)}
                       disabled={isSubmitting || participant.status === opt.status}
                       className={participant.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                       aria-label={`Mark as ${opt.label}`}

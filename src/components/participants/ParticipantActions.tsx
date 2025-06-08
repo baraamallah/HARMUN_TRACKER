@@ -27,14 +27,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { 
   Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, 
-  AlertOctagon, // Changed from AlertCircle for 'Present On Account'
-  ChevronDown, Coffee, UserRound, // Changed from PersonStanding for 'Restroom Break'
-  Wrench, LogOutIcon, // Changed from DoorOpen for 'Stepped Out'
-  HelpCircle // For default/unknown status if needed, or can be omitted
+  AlertOctagon,
+  ChevronDown, Coffee, UserRound,
+  Wrench, LogOutIcon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { markAttendance, deleteParticipant } from '@/lib/actions';
+import { deleteParticipant } from '@/lib/actions'; // Keep delete as server action for now or move too if needed
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 interface ParticipantActionsProps {
   participant: Participant;
@@ -43,21 +45,25 @@ interface ParticipantActionsProps {
 
 export function ParticipantActions({ participant, onEdit }: ParticipantActionsProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const handleMarkAttendance = async (status: AttendanceStatus) => {
+  const handleMarkAttendanceClientSide = async (status: AttendanceStatus) => {
     startTransition(async () => {
       try {
-        await markAttendance(participant.id, status);
+        const participantRef = doc(db, 'participants', participant.id);
+        await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
         toast({
           title: 'Attendance Updated',
           description: `${participant.name}'s status set to ${status}.`,
         });
+        router.refresh(); // Re-fetch data for the page
       } catch (error: any) {
+        console.error("Client-side Error marking attendance: ", error);
         toast({
           title: 'Error Updating Attendance',
-          description: error.message || 'An unknown error occurred while updating attendance.',
+          description: error.message || 'An unknown error occurred client-side.',
           variant: 'destructive',
         });
       }
@@ -67,12 +73,13 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
   const handleDelete = async () => {
     startTransition(async () => {
       try {
-        await deleteParticipant(participant.id);
+        await deleteParticipant(participant.id); // This is still a server action
         toast({
           title: 'Participant Deleted',
           description: `${participant.name} has been removed.`,
         });
         setIsDeleteDialogOpen(false);
+        // router.refresh() will be handled by revalidatePath in the server action if successful
       } catch (error: any) {
         toast({
           title: 'Error Deleting Participant',
@@ -102,7 +109,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             <span className="sr-only">Open menu</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60"> {/* Increased width slightly for potentially longer labels */}
+        <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel>Actions for {participant.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
@@ -115,7 +122,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
                 {attendanceOptions.map(opt => (
                   <DropdownMenuItem
                     key={opt.status}
-                    onClick={() => handleMarkAttendance(opt.status)}
+                    onClick={() => handleMarkAttendanceClientSide(opt.status)}
                     disabled={isPending || participant.status === opt.status}
                     className={participant.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                   >
