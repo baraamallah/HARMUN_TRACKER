@@ -29,14 +29,14 @@ import {
   Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, 
   AlertOctagon,
   ChevronDown, Coffee, UserRound,
-  Wrench, LogOutIcon,
+  Wrench, LogOutIcon, Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { deleteParticipant } from '@/lib/actions'; // Keep delete as server action for now or move too if needed
+// Removed: import { deleteParticipant } from '@/lib/actions'; 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore'; // Added deleteDoc
 
 interface ParticipantActionsProps {
   participant: Participant;
@@ -46,11 +46,12 @@ interface ParticipantActionsProps {
 export function ParticipantActions({ participant, onEdit }: ParticipantActionsProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isUpdatingStatus, startStatusUpdateTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const handleMarkAttendanceClientSide = async (status: AttendanceStatus) => {
-    startTransition(async () => {
+    startStatusUpdateTransition(async () => {
       try {
         const participantRef = doc(db, 'participants', participant.id);
         await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
@@ -58,7 +59,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
           title: 'Attendance Updated',
           description: `${participant.name}'s status set to ${status}.`,
         });
-        router.refresh(); // Re-fetch data for the page
+        router.refresh(); 
       } catch (error: any) {
         console.error("Client-side Error marking attendance: ", error);
         toast({
@@ -70,17 +71,19 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
     });
   };
 
-  const handleDelete = async () => {
-    startTransition(async () => {
+  const handleDeleteClientSide = async () => {
+    startDeleteTransition(async () => {
       try {
-        await deleteParticipant(participant.id); // This is still a server action
+        const participantRef = doc(db, 'participants', participant.id);
+        await deleteDoc(participantRef);
         toast({
           title: 'Participant Deleted',
           description: `${participant.name} has been removed.`,
         });
         setIsDeleteDialogOpen(false);
-        // router.refresh() will be handled by revalidatePath in the server action if successful
+        router.refresh(); 
       } catch (error: any) {
+        console.error("Client-side Error deleting participant: ", error);
         toast({
           title: 'Error Deleting Participant',
           description: error.message || 'An unknown error occurred while deleting participant.',
@@ -104,16 +107,16 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
     <div className="flex items-center gap-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">Open menu</span>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isUpdatingStatus || isDeleting}>
+            {(isUpdatingStatus || isDeleting) ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+            <span className="sr-only">Open menu for {participant.name}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel>Actions for {participant.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={isUpdatingStatus || isDeleting}>
               <ChevronDown className="mr-2 h-4 w-4" />
               <span>Mark Attendance</span>
             </DropdownMenuSubTrigger>
@@ -123,7 +126,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
                   <DropdownMenuItem
                     key={opt.status}
                     onClick={() => handleMarkAttendanceClientSide(opt.status)}
-                    disabled={isPending || participant.status === opt.status}
+                    disabled={isUpdatingStatus || isDeleting || participant.status === opt.status}
                     className={participant.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                   >
                     <opt.icon className="mr-2 h-4 w-4" />
@@ -134,11 +137,15 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             </DropdownMenuPortal>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isPending}>
+          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isUpdatingStatus || isDeleting}>
             <Edit3 className="mr-2 h-4 w-4" />
             Edit Details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" disabled={isPending}>
+          <DropdownMenuItem 
+            onClick={() => setIsDeleteDialogOpen(true)} 
+            className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" 
+            disabled={isUpdatingStatus || isDeleting}
+          >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Participant
           </DropdownMenuItem>
@@ -155,9 +162,13 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isPending} className="bg-destructive hover:bg-destructive/90">
-              {isPending ? 'Deleting...' : 'Yes, Delete'}
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteClientSide} 
+              disabled={isDeleting} 
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : 'Yes, Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
