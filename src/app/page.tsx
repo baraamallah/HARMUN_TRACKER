@@ -4,7 +4,8 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore'; // Import Firestore batch and serverTimestamp
 import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,7 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getParticipants, getSystemSchools, getSystemCommittees, bulkMarkAttendance, bulkDeleteParticipants } from '@/lib/actions';
+import { getParticipants, getSystemSchools, getSystemCommittees, bulkDeleteParticipants } from '@/lib/actions'; // bulkMarkAttendance removed
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,7 +118,12 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return; 
+    if (!currentUser && !isAuthLoading) { // Ensure currentUser exists or auth is still loading
+      if (!isAuthLoading) router.push('/auth/login');
+      return;
+    }
+    if(isAuthLoading && !currentUser) return; // Still waiting for auth state
+    
     setIsLoadingData(true);
     try {
       const [participantsData, schoolsData, committeesData] = await Promise.all([
@@ -140,7 +146,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
+  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast, router, isAuthLoading]);
 
   React.useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -198,22 +204,26 @@ export default function AdminDashboardPage() {
     }
     setIsBulkUpdating(true);
     try {
-      const result = await bulkMarkAttendance(selectedParticipantIds, status);
+      const batch = writeBatch(db);
+      selectedParticipantIds.forEach(id => {
+        const participantRef = doc(db, "participants", id);
+        batch.update(participantRef, { status, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+
       toast({
         title: "Bulk Update Successful",
-        description: `${result.successCount} participant(s) updated to ${status}. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
+        description: `${selectedParticipantIds.length} participant(s) updated to ${status}.`,
       });
       fetchData(); 
+      setSelectedParticipantIds([]);
     } catch (error: any) {
-      let description = "An unknown error occurred during bulk update.";
-      if (error && error.message) {
-        if (error.message.includes("Server Components render") || error.message.includes("omitted in production builds")) {
-          description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
-        } else {
-          description = error.message;
-        }
-      }
-      toast({ title: "Bulk Update Failed", description, variant: "destructive" });
+      console.error("Client-side Error bulk marking attendance: ", error);
+      toast({ 
+        title: "Bulk Update Failed", 
+        description: error.message || "An unexpected error occurred during bulk update. Check Firestore rules.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsBulkUpdating(false);
     }
@@ -240,14 +250,14 @@ export default function AdminDashboardPage() {
         });
       }
       fetchData(); 
+      setSelectedParticipantIds([]);
     } catch (error: any) {
       let description = "An unexpected error occurred during bulk deletion.";
-      if (error && error.message) {
-        if (error.message.includes("Server Components render") || error.message.includes("omitted in production builds")) {
-          description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
-        } else {
-          description = error.message;
-        }
+      // Check if error.message indicates a server component render error (Next.js specific for server actions)
+      if (error && error.message && (error.message.includes("Server Components render") || error.message.includes("omitted in production builds"))) {
+        description = `A server-side error occurred. Please check the Vercel Function Logs for detailed information. (Digest: ${error.digest || 'N/A'})`;
+      } else if (error && error.message) {
+        description = error.message;
       }
       toast({ title: "Bulk Delete Failed", description, variant: "destructive" });
     } finally {
@@ -462,5 +472,3 @@ export default function AdminDashboardPage() {
     </AppLayoutClientShell>
   );
 }
-
-    

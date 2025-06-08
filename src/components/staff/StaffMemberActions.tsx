@@ -26,11 +26,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { 
-  Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, Coffee, ChevronDown, UserCheck, UserX, Briefcase, Plane
+  Edit3, Trash2, MoreHorizontal, CheckCircle, XCircle, Coffee, ChevronDown, UserCheck, UserX, Briefcase, Plane, Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { markStaffMemberStatus, deleteStaffMember } from '@/lib/actions';
+import { deleteStaffMember } from '@/lib/actions'; // Server action for delete
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { db } from '@/lib/firebase'; // Import db
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
+
 
 interface StaffMemberActionsProps {
   staffMember: StaffMember;
@@ -39,21 +43,26 @@ interface StaffMemberActionsProps {
 
 export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const handleMarkStatus = async (status: StaffAttendanceStatus) => {
+  const handleMarkStatusClientSide = async (status: StaffAttendanceStatus) => {
     startTransition(async () => {
       try {
-        await markStaffMemberStatus(staffMember.id, status);
+        const staffMemberRef = doc(db, 'staff_members', staffMember.id);
+        await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
         toast({
           title: 'Status Updated',
           description: `${staffMember.name}'s status set to ${status}.`,
         });
+        router.refresh(); 
       } catch (error: any) {
+        console.error("Client-side Error marking staff status: ", error);
         toast({
           title: 'Error Updating Status',
-          description: error.message || 'An unknown error occurred while updating staff status.',
+          description: error.message || 'An unknown error occurred client-side.',
           variant: 'destructive',
         });
       }
@@ -61,18 +70,25 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
   };
 
   const handleDelete = async () => {
-    startTransition(async () => {
+    startDeleteTransition(async () => {
       try {
-        await deleteStaffMember(staffMember.id);
+        await deleteStaffMember(staffMember.id); // deleteStaffMember is still a server action
         toast({
           title: 'Staff Member Deleted',
           description: `${staffMember.name} has been removed.`,
         });
         setIsDeleteDialogOpen(false);
+        router.refresh(); 
       } catch (error: any) {
+        let description = "An unexpected error occurred during deletion.";
+        if (error && error.message && (error.message.includes("Server Components render") || error.message.includes("omitted in production builds"))) {
+          description = `A server-side error occurred. Please check Vercel Function Logs. Digest: ${error.digest || 'N/A'}`;
+        } else if (error && error.message) {
+          description = error.message;
+        }
         toast({
           title: 'Error Deleting Staff Member',
-          description: error.message || 'An unknown error occurred while deleting staff member.',
+          description: description,
           variant: 'destructive',
         });
       }
@@ -90,8 +106,8 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
     <div className="flex items-center gap-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <MoreHorizontal className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isPending || isDeleting}>
+            {isPending || isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
             <span className="sr-only">Open menu for {staffMember.name}</span>
           </Button>
         </DropdownMenuTrigger>
@@ -99,7 +115,7 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
           <DropdownMenuLabel>Actions for {staffMember.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={isPending || isDeleting}>
               <ChevronDown className="mr-2 h-4 w-4" />
               <span>Change Status</span>
             </DropdownMenuSubTrigger>
@@ -108,8 +124,8 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
                 {staffStatusOptions.map(opt => (
                   <DropdownMenuItem
                     key={opt.status}
-                    onClick={() => handleMarkStatus(opt.status)}
-                    disabled={isPending || staffMember.status === opt.status}
+                    onClick={() => handleMarkStatusClientSide(opt.status)}
+                    disabled={isPending || isDeleting || staffMember.status === opt.status}
                     className={staffMember.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                   >
                     <opt.icon className="mr-2 h-4 w-4" />
@@ -120,11 +136,11 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
             </DropdownMenuPortal>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(staffMember)} disabled={isPending}>
+          <DropdownMenuItem onClick={() => onEdit(staffMember)} disabled={isPending || isDeleting}>
             <Edit3 className="mr-2 h-4 w-4" />
             Edit Details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" disabled={isPending}>
+          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" disabled={isPending || isDeleting}>
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Staff Member
           </DropdownMenuItem>
@@ -141,9 +157,9 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isPending} className="bg-destructive hover:bg-destructive/90">
-              {isPending ? 'Deleting...' : 'Yes, Delete'}
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting...</> : 'Yes, Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

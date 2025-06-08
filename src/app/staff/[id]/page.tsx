@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getStaffMemberById, markStaffMemberStatus as serverMarkStaffStatus, getSystemStaffTeams } from '@/lib/actions'; // Added getSystemStaffTeams
+import { getStaffMemberById, getSystemStaffTeams } from '@/lib/actions'; 
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; // Added Network for Team
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, ChevronDown, Briefcase, Phone, Users2, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -23,6 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { db } from '@/lib/firebase'; // Import db
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Import firestore functions
 
 
 export default function StaffMemberProfilePage() {
@@ -36,9 +38,9 @@ export default function StaffMemberProfilePage() {
   const [isSubmittingStatus, setIsSubmittingStatus] = React.useState(false);
 
   const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
-  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); // State for staff teams
+  const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); 
 
-  const fetchStaffDataAndTeams = React.useCallback(async () => { // Renamed function
+  const fetchStaffDataAndTeams = React.useCallback(async () => { 
     if (!id) {
       setIsLoading(false);
       toast({ title: "Error", description: "Staff Member ID is missing.", variant: "destructive" });
@@ -47,7 +49,7 @@ export default function StaffMemberProfilePage() {
     }
     setIsLoading(true);
     try {
-      const [staffData, teamsData] = await Promise.all([ // Fetch staff and teams
+      const [staffData, teamsData] = await Promise.all([ 
         getStaffMemberById(id),
         getSystemStaffTeams()
       ]);
@@ -58,7 +60,7 @@ export default function StaffMemberProfilePage() {
         toast({ title: "Not Found", description: "Staff member data could not be found.", variant: "destructive" });
         router.push('/staff');
       }
-      setSystemStaffTeams(teamsData); // Set staff teams
+      setSystemStaffTeams(teamsData); 
     } catch (error: any) {
       console.error("Failed to fetch staff member data or teams:", error);
       toast({ title: "Error Fetching Data", description: error.message || "Failed to load staff member data or teams.", variant: "destructive" });
@@ -72,33 +74,33 @@ export default function StaffMemberProfilePage() {
   }, [fetchStaffDataAndTeams]);
 
   const handleFormSubmitSuccess = () => {
-    fetchStaffDataAndTeams(); // Re-fetch both staff and teams
+    fetchStaffDataAndTeams(); 
     setIsStaffFormOpen(false);
   };
 
-  const handleMarkStatus = async (status: StaffAttendanceStatus) => {
+  const handleMarkStatusClientSide = async (status: StaffAttendanceStatus) => {
     if (!staffMember) return;
     setIsSubmittingStatus(true);
     try {
-      const updatedStaffMemberData = await serverMarkStaffStatus(staffMember.id, status);
-      if (updatedStaffMemberData) {
-         setStaffMember(updatedStaffMemberData);
-      } else {
-        // Fallback: optimistically update UI if server action doesn't return the full object
-        setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-        // fetchStaffDataAndTeams(); // Consider re-fetching if server doesn't return updated obj
-      }
+      const staffMemberRef = doc(db, 'staff_members', staffMember.id);
+      await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
+      
+      // Optimistically update local state and re-fetch for consistency
+      setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+      fetchStaffDataAndTeams(); // Re-fetch to ensure data is fresh from server
+
       toast({
         title: 'Status Updated',
         description: `${staffMember.name}'s status set to ${status}.`,
       });
     } catch (error: any) {
+      console.error("Client-side Error marking staff status on profile page: ", error);
       toast({
         title: 'Error Updating Status',
         description: error.message || 'An unknown error occurred while updating status.',
         variant: 'destructive',
       });
-       fetchStaffDataAndTeams(); // Re-fetch on error
+       fetchStaffDataAndTeams(); 
     } finally {
       setIsSubmittingStatus(false);
     }
@@ -120,7 +122,7 @@ export default function StaffMemberProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-48 w-full rounded-lg" /> {/* Increased height for more details */}
+            <Skeleton className="h-48 w-full rounded-lg" /> 
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -207,7 +209,7 @@ export default function StaffMemberProfilePage() {
                   {staffStatusOptions.map(opt => (
                     <DropdownMenuItem
                       key={opt.status}
-                      onClick={() => handleMarkStatus(opt.status)}
+                      onClick={() => handleMarkStatusClientSide(opt.status)}
                       disabled={isSubmittingStatus || staffMember.status === opt.status}
                       className={staffMember.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                       aria-label={`Mark as ${opt.label}`}
@@ -247,7 +249,7 @@ export default function StaffMemberProfilePage() {
         onOpenChange={setIsStaffFormOpen}
         staffMemberToEdit={staffMember}
         onFormSubmitSuccess={handleFormSubmitSuccess}
-        staffTeams={systemStaffTeams} // Pass teams to the form
+        staffTeams={systemStaffTeams} 
       />
     </div>
   );
