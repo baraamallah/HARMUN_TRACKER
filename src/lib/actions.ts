@@ -6,7 +6,7 @@ import { db } from './firebase';
 import {
   collection,
   getDocs,
-  addDoc,
+  // addDoc, // No longer used for adding system items here
   // deleteDoc, // No longer used for single deletions here
   doc,
   query,
@@ -14,13 +14,16 @@ import {
   orderBy,
   Timestamp,
   // writeBatch, // No longer used for bulk participant delete here
-  serverTimestamp,
+  serverTimestamp as fsServerTimestamp, // Aliased to avoid conflict if serverTimestamp is used locally
   getDoc,
   // setDoc, // No longer used for grantAdminRole here
   // updateDoc // No longer used for grantAdminRole here
+  writeBatch as fsWriteBatch, // Explicit import for batch operations
+  collection as fsCollection, // Explicit import for batch operations
+  doc as fsDoc, // Explicit import for batch operations
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember } from '@/types';
-import { OWNER_UID } from './constants';
+// import { OWNER_UID } from './constants'; // OWNER_UID not directly used in remaining server actions
 
 const PARTICIPANTS_COLLECTION = 'participants';
 // const STAFF_MEMBERS_COLLECTION = 'staff_members'; // Referenced client-side
@@ -40,6 +43,7 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 // - Admin role management (grant/revoke).
 // - Updating system settings (logo, default status).
 // - Deletion of system schools, committees, staff teams.
+// - Adding system schools, committees, staff teams.
 //
 // REMAINING SERVER ACTIONS and their typical use context:
 // - System list fetching (schools, committees, teams - read-only): Used by various components.
@@ -220,13 +224,15 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 export async function importParticipants(
   parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
+  if (parsedParticipants.length === 0) {
+    return { count: 0, errors: 0, detectedNewSchools: [], detectedNewCommittees: [] };
+  }
+
   let importedCount = 0;
   let errorCount = 0;
   const detectedNewSchoolNames: Set<string> = new Set();
   const detectedNewCommitteeNames: Set<string> = new Set();
 
-  // Changed to firebase/firestore writeBatch
-  const { writeBatch: fsWriteBatch, collection: fsCollection, doc: fsDoc, serverTimestamp: fsServerTimestamp } = await import('firebase/firestore');
   const batch = fsWriteBatch(db);
   const defaultStatus = await getDefaultAttendanceStatusSetting();
 
@@ -263,8 +269,8 @@ export async function importParticipants(
         classGrade: '',
         email: '',
         phone: '',
-        createdAt: fsServerTimestamp(),
-        updatedAt: fsServerTimestamp(),
+        createdAt: fsServerTimestamp(), // Use aliased import
+        updatedAt: fsServerTimestamp(), // Use aliased import
       };
       const participantRef = fsDoc(fsCollection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipantData);
@@ -305,5 +311,8 @@ export async function importParticipants(
 
 // Server actions for deleting system items, admin role management, and bulk participant deletion have been removed.
 // These operations are now handled client-side in their respective components/pages.
-
-    
+// Adding system schools, committees, staff teams is also client-side in Superior Admin page.
+// Updating system settings (logo, default status) is client-side in Superior Admin settings page.
+// Fetching individual participant/staff details for profile pages is client-side.
+// Fetching participant/staff lists for admin dashboards is client-side.
+// Individual attendance marking for participants/staff is client-side.

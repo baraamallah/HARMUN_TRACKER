@@ -18,10 +18,10 @@ export interface Participant {
   notes?: string;
   additionalDetails?: string;
   classGrade?: string;
-  email?: string; // Added
-  phone?: string; // Added
-  createdAt?: string | any;
-  updatedAt?: string | any;
+  email?: string; 
+  phone?: string; 
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type StaffAttendanceStatus =
@@ -36,14 +36,14 @@ export interface StaffMember {
   role: string; // e.g., "Director", "Volunteer", "Security"
   department?: string; // e.g., "Logistics", "Press", "Crisis"
   team?: string; // New: e.g., "Logistics Team A", "Security Alpha"
-  email?: string; // Added
-  phone?: string; // Added
-  contactInfo?: string; // Kept for any other non-email/phone contact, but new fields are primary
+  email?: string; 
+  phone?: string; 
+  contactInfo?: string; 
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
-  createdAt?: string | any;
-  updatedAt?: string | any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface School {
@@ -85,8 +85,8 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string;
-  createdAt?: string | any;
-  updatedAt?: string | any;
+  createdAt?: string;
+  updatedAt?: string;
   avatarUrl?: string;
 }
 
