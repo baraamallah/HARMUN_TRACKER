@@ -26,12 +26,11 @@ import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc } from 'firebase/firestore'; // Added doc, deleteDoc
+import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore'; // Ensured getDoc is here
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { AddAdminDialog } from '@/components/superior-admin/AddAdminDialog';
-// import { revokeAdminRole } from '@/lib/actions'; // revokeAdminRole server action removed
 import type { AdminManagedUser } from '@/types';
 import {
   AlertDialog,
