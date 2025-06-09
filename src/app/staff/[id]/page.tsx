@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore'; 
+import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore'; 
 
 export default function StaffMemberProfilePage() {
   const params = useParams();
@@ -66,8 +66,8 @@ export default function StaffMemberProfilePage() {
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
           notes: data.notes,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as StaffMember;
       }
       
@@ -284,8 +284,3 @@ export default function StaffMemberProfilePage() {
     </div>
   );
 }
-// Helper for Firestore Timestamp, if needed globally, move to a util file
-const Timestamp = { 
-    fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
-    toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
-};
