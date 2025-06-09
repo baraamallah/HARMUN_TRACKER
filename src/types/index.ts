@@ -1,4 +1,6 @@
 
+import type { FieldValue } from 'firebase/firestore';
+
 export type AttendanceStatus =
   | "Present"
   | "Absent"
@@ -20,8 +22,8 @@ export interface Participant {
   classGrade?: string;
   email?: string; 
   phone?: string; 
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | FieldValue;
+  updatedAt?: string | FieldValue;
 }
 
 export type StaffAttendanceStatus =
@@ -42,8 +44,8 @@ export interface StaffMember {
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | FieldValue;
+  updatedAt?: string | FieldValue;
 }
 
 export interface School {
@@ -85,8 +87,8 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | FieldValue;
+  updatedAt?: string | FieldValue;
   avatarUrl?: string;
 }
 
