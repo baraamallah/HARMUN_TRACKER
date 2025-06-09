@@ -6,49 +6,30 @@ import { db } from './firebase';
 import {
   collection,
   getDocs,
-  // addDoc, // No longer used for adding system items here
-  // deleteDoc, // No longer used for single deletions here
+  // addDoc, 
+  // deleteDoc, 
   doc,
   query,
   where,
   orderBy,
   Timestamp,
-  // writeBatch, // No longer used for bulk participant delete here
-  serverTimestamp as fsServerTimestamp, // Aliased to avoid conflict if serverTimestamp is used locally
+  // writeBatch, 
+  serverTimestamp as fsServerTimestamp, 
   getDoc,
-  // setDoc, // No longer used for grantAdminRole here
-  // updateDoc // No longer used for grantAdminRole here
-  writeBatch as fsWriteBatch, // Explicit import for batch operations
-  collection as fsCollection, // Explicit import for batch operations
-  doc as fsDoc, // Explicit import for batch operations
+  // setDoc, 
+  // updateDoc 
+  writeBatch as fsWriteBatch, 
+  collection as fsCollection, 
+  doc as fsDoc, 
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember } from '@/types';
-// import { OWNER_UID } from './constants'; // OWNER_UID not directly used in remaining server actions
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType } from '@/types'; // Updated FieldValueType
 
 const PARTICIPANTS_COLLECTION = 'participants';
-// const STAFF_MEMBERS_COLLECTION = 'staff_members'; // Referenced client-side
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
-// const USERS_COLLECTION = 'users'; // Referenced client-side
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
-
-
-// --- IMPORTANT NOTE ON SERVER ACTIONS AND FIREBASE AUTHENTICATION ---
-// Many operations have been MOVED TO CLIENT-SIDE to leverage client's auth context:
-// - Single participant/staff attendance marking & deletion.
-// - Bulk participant status updates & deletion.
-// - Fetching participant/staff lists and details for admin views.
-// - Admin role management (grant/revoke).
-// - Updating system settings (logo, default status).
-// - Deletion of system schools, committees, staff teams.
-// - Adding system schools, committees, staff teams.
-//
-// REMAINING SERVER ACTIONS and their typical use context:
-// - System list fetching (schools, committees, teams - read-only): Used by various components.
-// - System settings fetching (read-only): Used by various components (e.g., logo URL, default status for import).
-// - CSV Import: Complex operation suited for server actions.
 
 // System Settings Actions (Read-only server actions)
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
@@ -67,21 +48,7 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
   }
 }
 
-export async function getSystemLogoUrlSetting(): Promise<string | null> {
-  console.log(`[Server Action - getSystemLogoUrlSetting] Attempting to read logo URL.`);
-  try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    const docSnap = await getDoc(configDocRef);
-    if (docSnap.exists() && docSnap.data().munLogoUrl) {
-      return docSnap.data().munLogoUrl as string;
-    }
-    console.log(`[Server Action - getSystemLogoUrlSetting] No logo URL found or field missing.`);
-    return null;
-  } catch (error) {
-    console.error("[Server Action] Error fetching system logo URL: ", error);
-    return null; 
-  }
-}
+// getSystemLogoUrlSetting function removed
 
 // Participant Actions (Data fetching for admin views moved client-side)
 // The getParticipants & getParticipantById server actions are now primarily for the public page 
@@ -120,8 +87,8 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
       } as Participant;
     });
 
@@ -170,8 +137,8 @@ export async function getParticipantById(id: string): Promise<Participant | null
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
       } as Participant;
     }
     return null;
@@ -222,9 +189,11 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone'>[]
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
+  
   if (parsedParticipants.length === 0) {
+    console.log("[Server Action: importParticipants] No parsed participants to import.");
     return { count: 0, errors: 0, detectedNewSchools: [], detectedNewCommittees: [] };
   }
 
@@ -258,7 +227,8 @@ export async function importParticipants(
       }
 
       const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
-      const newParticipantData: Omit<Participant, 'id'> = {
+      // Explicitly type the object being written to Firestore
+      const newParticipantData: Omit<Participant, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType } = {
         name: data.name.trim(),
         school: trimmedSchool,
         committee: trimmedCommittee,
@@ -269,8 +239,8 @@ export async function importParticipants(
         classGrade: '',
         email: '',
         phone: '',
-        createdAt: fsServerTimestamp(), // Use aliased import
-        updatedAt: fsServerTimestamp(), // Use aliased import
+        createdAt: fsServerTimestamp(), 
+        updatedAt: fsServerTimestamp(), 
       };
       const participantRef = fsDoc(fsCollection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipantData);
@@ -288,7 +258,6 @@ export async function importParticipants(
     const firebaseError = error as { code?: string; message?: string };
     const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met (e.g., isAdmin() check failing due to server action context).`;
     console.error(batchCommitError);
-    // Revert count if batch fails, as no participants were actually added.
     return {
       count: 0,
       errors: parsedParticipants.length, 
@@ -308,11 +277,3 @@ export async function importParticipants(
     detectedNewCommittees: Array.from(detectedNewCommitteeNames),
   };
 }
-
-// Server actions for deleting system items, admin role management, and bulk participant deletion have been removed.
-// These operations are now handled client-side in their respective components/pages.
-// Adding system schools, committees, staff teams is also client-side in Superior Admin page.
-// Updating system settings (logo, default status) is client-side in Superior Admin settings page.
-// Fetching individual participant/staff details for profile pages is client-side.
-// Fetching participant/staff lists for admin dashboards is client-side.
-// Individual attendance marking for participants/staff is client-side.

@@ -46,7 +46,7 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Manage system-wide lists of Schools, Committees, and **Staff Teams** (add new ones).
     *   Manage staff members (add, view list, link to edit, delete).
     *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
-    *   Manage System Settings (e.g., Default Attendance Status for new participants, System Logo URL).
+    *   Manage System Settings (e.g., Default Attendance Status for new participants).
     *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
 *   **Theme Toggling**:
     *   User-selectable Light, Dark, or System theme preference.
@@ -99,8 +99,8 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
 
 ### Running the Application Locally
 
-*   Start server: `npm run dev` or `yarn dev`.
-*   Open `http://localhost:9002` (or your configured port).
+*   Start server: `npm run dev`.
+*   Open your configured port (e.g., `http://localhost:3000` or `http://localhost:9002` if set by environment).
 
 ## Firestore Security Rules Critical Step-by-Step
 
@@ -122,7 +122,7 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
 
         // Helper function to check if the user is the Owner
         function isOwner() {
-          return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Replace with your Owner UID
+          return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Replace with your Owner UID from src/lib/constants.ts
         }
 
         // Participants Collection
@@ -139,25 +139,25 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
 
         // System Schools Collection
         match /system_schools/{schoolId} {
-          allow read: if true; // Public read
-          allow write: if isOwner(); // Owner only
+          allow read: if true; // Public read for dropdowns, filters
+          allow write: if isOwner(); // Owner only for adding/deleting
         }
 
         // System Committees Collection
         match /system_committees/{committeeId} {
-          allow read: if true; // Public read
-          allow write: if isOwner(); // Owner only
+          allow read: if true; // Public read for dropdowns, filters
+          allow write: if isOwner(); // Owner only for adding/deleting
         }
 
         // System Staff Teams Collection
         match /system_staff_teams/{teamId} {
-          allow read: if true; // Public read
-          allow write: if isOwner(); // Owner only
+          allow read: if true; // Public read for dropdowns, filters
+          allow write: if isOwner(); // Owner only for adding/deleting
         }
 
         // System Configuration Collection
         match /system_config/{settingId} {
-          // Public read for settings like logo URL and default attendance status.
+          // Public read for settings like default attendance status.
           // Write is restricted to Owner.
           allow read: if true; 
           allow write: if isOwner();
@@ -170,6 +170,7 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
         }
 
         // Allow Owner to list all user documents (for admin management page)
+        // This is necessary for the admin-management page to display existing admins.
         match /users {
            allow list: if isOwner(); // Owner only
         }
@@ -218,4 +219,3 @@ If you are encountering "Missing or insufficient permissions" errors, especially
     *   Often masks a deeper server-side error. Check Vercel function logs. If related to Firestore, it's likely a missing index or a security rule denial for a server action.
 
 This guide should help you get started, understand the application's structure, and prepare for a more secure deployment!
-

@@ -1,5 +1,8 @@
 
-import type { FieldValue } from 'firebase/firestore';
+import type { FieldValue as FirestoreFieldValue } from 'firebase/firestore'; // Renamed to avoid local conflicts
+
+// Generic type for server timestamps used in writes
+export type FieldValueType = FirestoreFieldValue;
 
 export type AttendanceStatus =
   | "Present"
@@ -22,8 +25,8 @@ export interface Participant {
   classGrade?: string;
   email?: string;
   phone?: string;
-  createdAt?: string | FieldValue | undefined;
-  updatedAt?: string | FieldValue | undefined;
+  createdAt?: string | FieldValueType | undefined; // string when read, FieldValueType when writing
+  updatedAt?: string | FieldValueType | undefined; // string when read, FieldValueType when writing
 }
 
 export type StaffAttendanceStatus =
@@ -35,17 +38,17 @@ export type StaffAttendanceStatus =
 export interface StaffMember {
   id: string;
   name: string;
-  role: string; // e.g., "Director", "Volunteer", "Security"
-  department?: string; // e.g., "Logistics", "Press", "Crisis"
-  team?: string; // New: e.g., "Logistics Team A", "Security Alpha"
+  role: string; 
+  department?: string; 
+  team?: string; 
   email?: string;
   phone?: string;
   contactInfo?: string;
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
-  createdAt?: string | FieldValue | undefined;
-  updatedAt?: string | FieldValue | undefined;
+  createdAt?: string | FieldValueType | undefined;
+  updatedAt?: string | FieldValueType | undefined;
 }
 
 export interface School {
@@ -68,9 +71,8 @@ export interface VisibleColumns {
   selection?: boolean;
 }
 
-// Specific for Staff Table, if columns differ significantly or for clarity
 export interface StaffVisibleColumns {
-  selection?: boolean; // Added selection column
+  selection?: boolean; 
   avatar: boolean;
   name: boolean;
   role: boolean;
@@ -87,8 +89,7 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string;
-  createdAt?: string | FieldValue | undefined;
-  updatedAt?: string | FieldValue | undefined;
+  createdAt?: string | FieldValueType | undefined;
+  updatedAt?: string | FieldValueType | undefined;
   avatarUrl?: string;
 }
-

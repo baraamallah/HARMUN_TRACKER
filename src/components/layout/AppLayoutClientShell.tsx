@@ -44,7 +44,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
 import { OWNER_UID } from '@/lib/constants'; 
 import { useToast } from '@/hooks/use-toast';
-import { getSystemLogoUrlSetting } from '@/lib/actions';
+// import { getSystemLogoUrlSetting } from '@/lib/actions'; // Removed
 
 
 interface NavItem {
@@ -74,8 +74,8 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const { toast } = useToast();
   const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
-  const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null);
-  const [isLoadingLogo, setIsLoadingLogo] = React.useState(true);
+  // const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null); // Removed
+  // const [isLoadingLogo, setIsLoadingLogo] = React.useState(true); // Removed
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -83,18 +83,18 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
       setAuthSessionLoading(false);
     });
     
-    const fetchLogo = async () => {
-      try {
-        const url = await getSystemLogoUrlSetting();
-        setMunLogoUrl(url);
-      } catch (error) {
-        console.error("Failed to fetch logo URL for layout:", error);
-      } finally {
-        setIsLoadingLogo(false);
-      }
-    };
+    // const fetchLogo = async () => { // Removed
+    //   try {
+    //     const url = await getSystemLogoUrlSetting();
+    //     setMunLogoUrl(url);
+    //   } catch (error) {
+    //     console.error("Failed to fetch logo URL for layout:", error);
+    //   } finally {
+    //     setIsLoadingLogo(false);
+    //   }
+    // };
 
-    fetchLogo();
+    // fetchLogo(); // Removed
     return () => unsubscribe();
   }, []);
 
@@ -130,7 +130,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4">
-          {isLoadingLogo ? <Skeleton className="h-10 w-3/4" /> : <Logo customLogoUrl={munLogoUrl} />}
+          <Logo />
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
@@ -217,5 +217,3 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     </SidebarProvider>
   );
 }
-
-    
