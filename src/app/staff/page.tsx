@@ -4,9 +4,9 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase'; // Import db
-import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Firestore imports
-import { PlusCircle, ListFilter, Loader2, Users2 } from 'lucide-react';
+import { auth, db } from '@/lib/firebase';
+import { collection, query, where, orderBy, getDocs, Timestamp, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,22 +23,41 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { StaffMemberTable } from '@/components/staff/StaffMemberTable';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { StaffMember, StaffVisibleColumns, StaffAttendanceStatus } from '@/types';
-import { getSystemStaffTeams } from '@/lib/actions'; // Keep for system data
+import { getSystemStaffTeams } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
-const ALL_STAFF_STATUS_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
+const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
     { status: 'All', label: 'All Statuses' },
     { status: 'On Duty', label: 'On Duty' },
     { status: 'Off Duty', label: 'Off Duty' },
     { status: 'On Break', label: 'On Break' },
     { status: 'Away', label: 'Away' },
+];
+
+const STAFF_BULK_STATUS_OPTIONS: { status: StaffAttendanceStatus; label: string; icon: React.ElementType }[] = [
+    { status: 'On Duty', label: 'On Duty', icon: Users2 }, // Placeholder icon, consider specific icons
+    { status: 'Off Duty', label: 'Off Duty', icon: Users2 },
+    { status: 'On Break', label: 'On Break', icon: Users2 },
+    { status: 'Away', label: 'Away', icon: Users2 },
 ];
 
 
@@ -63,6 +82,7 @@ export default function StaffDashboardPage() {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const [visibleColumns, setVisibleColumns] = React.useState<StaffVisibleColumns>({
+    selection: true,
     avatar: true,
     name: true,
     role: true,
@@ -74,6 +94,7 @@ export default function StaffDashboardPage() {
   });
 
   const columnLabels: Record<keyof StaffVisibleColumns, string> = {
+    selection: 'Select',
     avatar: 'Avatar',
     name: 'Name',
     role: 'Role',
@@ -83,6 +104,12 @@ export default function StaffDashboardPage() {
     status: 'Status',
     actions: 'Actions',
   };
+
+  const [selectedStaffMemberIds, setSelectedStaffMemberIds] = React.useState<string[]>([]);
+  const [isBulkUpdating, setIsBulkUpdating] = React.useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
+
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -98,10 +125,9 @@ export default function StaffDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return; // Ensure user is authenticated
+    if (!currentUser) return;
     setIsLoadingData(true);
     try {
-      // Fetch staff members client-side
       const staffColRef = collection(db, 'staff_members');
       const queryConstraints = [];
 
@@ -141,8 +167,8 @@ export default function StaffDashboardPage() {
         );
       }
       setStaffMembers(fetchedStaffData);
+      setSelectedStaffMemberIds([]);
 
-      // Fetch system staff teams (can remain server action if rules allow public read)
       const teamsData = await getSystemStaffTeams();
       setSystemStaffTeams(['All Teams', ...teamsData]);
 
@@ -174,6 +200,96 @@ export default function StaffDashboardPage() {
   const handleEditStaffMember = (staffMember: StaffMember) => {
     setStaffToEdit(staffMember);
     setIsStaffFormOpen(true);
+  };
+
+  const toggleAllColumns = (show: boolean) => {
+    setVisibleColumns(prev =>
+      Object.keys(prev).reduce((acc, key) => {
+        acc[key as keyof StaffVisibleColumns] = show;
+        return acc;
+      }, {} as StaffVisibleColumns)
+    );
+  };
+
+  const handleSelectStaffMember = (staffMemberId: string, isSelected: boolean) => {
+    setSelectedStaffMemberIds(prevSelected =>
+      isSelected
+        ? [...prevSelected, staffMemberId]
+        : prevSelected.filter(id => id !== staffMemberId)
+    );
+  };
+
+  const handleSelectAllStaff = (isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedStaffMemberIds(staffMembers.map(s => s.id));
+    } else {
+      setSelectedStaffMemberIds([]);
+    }
+  };
+
+  const isAllStaffSelected = staffMembers.length > 0 && selectedStaffMemberIds.length === staffMembers.length;
+
+  const handleBulkStatusUpdate = async (status: StaffAttendanceStatus) => {
+    if (selectedStaffMemberIds.length === 0) {
+      toast({ title: "No staff selected", description: "Please select staff members to update.", variant: "default" });
+      return;
+    }
+    setIsBulkUpdating(true);
+    try {
+      const batch = writeBatch(db);
+      selectedStaffMemberIds.forEach(id => {
+        const staffRef = doc(db, "staff_members", id);
+        batch.update(staffRef, { status, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+
+      toast({
+        title: "Bulk Update Successful",
+        description: `${selectedStaffMemberIds.length} staff member(s) updated to ${status}.`,
+      });
+      fetchData();
+    } catch (error: any) {
+      console.error("Client-side Error bulk updating staff status: ", error);
+      toast({
+        title: "Bulk Update Failed",
+        description: error.message || "An unexpected error occurred during bulk update. Check Firestore rules.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const confirmBulkDelete = () => {
+    if (selectedStaffMemberIds.length === 0) {
+      toast({ title: "No staff selected", description: "Please select staff members to delete.", variant: "default" });
+      return;
+    }
+    setIsBulkDeleteConfirmOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      const batch = writeBatch(db);
+      selectedStaffMemberIds.forEach(id => {
+        const staffRef = doc(db, "staff_members", id);
+        batch.delete(staffRef);
+      });
+      await batch.commit();
+
+      toast({
+        title: "Bulk Delete Successful",
+        description: `${selectedStaffMemberIds.length} staff member(s) deleted.`,
+      });
+      fetchData();
+    } catch (error: any) {
+      console.error("Client-side error during staff bulk deletion: ", error);
+      toast({ title: "Bulk Delete Failed", description: error.message || "An error occurred.", variant: "destructive" });
+    } finally {
+      setIsBulkDeleting(false);
+      setIsBulkDeleteConfirmOpen(false);
+    }
   };
 
 
@@ -219,6 +335,13 @@ export default function StaffDashboardPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
+                  <CheckSquare className="mr-2 h-4 w-4" /> Show All
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
+                  <Square className="mr-2 h-4 w-4" /> Hide All
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {(Object.keys(visibleColumns) as Array<keyof StaffVisibleColumns>).map((key) => (
                   <DropdownMenuCheckboxItem
                     key={key}
@@ -250,7 +373,7 @@ export default function StaffDashboardPage() {
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              {ALL_STAFF_STATUS_OPTIONS.map((opt) => (
+              {ALL_STAFF_STATUS_FILTER_OPTIONS.map((opt) => (
                 <SelectItem key={opt.status} value={opt.status}>
                   {opt.label}
                 </SelectItem>
@@ -271,11 +394,47 @@ export default function StaffDashboardPage() {
           </Select>
         </div>
 
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
+            {selectedStaffMemberIds.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting}>
+                    <Layers className="mr-2 h-4 w-4" />
+                    Actions for {selectedStaffMemberIds.length} Selected
+                    {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Set status for selected to:</DropdownMenuLabel>
+                  {STAFF_BULK_STATUS_OPTIONS.map(opt => (
+                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating || isBulkDeleting}>
+                      <opt.icon className="mr-2 h-4 w-4" />
+                      {opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={confirmBulkDelete}
+                    disabled={isBulkUpdating || isBulkDeleting}
+                    className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+        </div>
+
         <StaffMemberTable
           staffMembers={staffMembers}
           isLoading={isLoadingData}
           onEditStaffMember={handleEditStaffMember}
           visibleColumns={visibleColumns}
+          selectedStaffMembers={selectedStaffMemberIds}
+          onSelectStaffMember={handleSelectStaffMember}
+          onSelectAll={handleSelectAllStaff}
+          isAllSelected={isAllStaffSelected}
         />
       </div>
 
@@ -286,6 +445,29 @@ export default function StaffDashboardPage() {
         onFormSubmitSuccess={fetchData}
         staffTeams={systemStaffTeams.filter(t => t !== 'All Teams')}
       />
+
+      <AlertDialog open={isBulkDeleteConfirmOpen} onOpenChange={setIsBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete {selectedStaffMemberIds.length} selected staff member(s)?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isBulkDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : 'Yes, Delete Selected'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </AppLayoutClientShell>
   );
 }

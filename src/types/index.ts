@@ -20,10 +20,10 @@ export interface Participant {
   notes?: string;
   additionalDetails?: string;
   classGrade?: string;
-  email?: string; 
-  phone?: string; 
-  createdAt?: string | FieldValue;
-  updatedAt?: string | FieldValue;
+  email?: string;
+  phone?: string;
+  createdAt?: string | FieldValue | undefined;
+  updatedAt?: string | FieldValue | undefined;
 }
 
 export type StaffAttendanceStatus =
@@ -38,14 +38,14 @@ export interface StaffMember {
   role: string; // e.g., "Director", "Volunteer", "Security"
   department?: string; // e.g., "Logistics", "Press", "Crisis"
   team?: string; // New: e.g., "Logistics Team A", "Security Alpha"
-  email?: string; 
-  phone?: string; 
-  contactInfo?: string; 
+  email?: string;
+  phone?: string;
+  contactInfo?: string;
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
-  createdAt?: string | FieldValue;
-  updatedAt?: string | FieldValue;
+  createdAt?: string | FieldValue | undefined;
+  updatedAt?: string | FieldValue | undefined;
 }
 
 export interface School {
@@ -70,15 +70,15 @@ export interface VisibleColumns {
 
 // Specific for Staff Table, if columns differ significantly or for clarity
 export interface StaffVisibleColumns {
+  selection?: boolean; // Added selection column
   avatar: boolean;
   name: boolean;
   role: boolean;
   department: boolean;
-  team: boolean; // Added team column
-  contactInfo: boolean; // This will show the old contactInfo field
+  team: boolean;
+  contactInfo: boolean;
   status: boolean;
   actions: boolean;
-  // No selection for staff initially
 }
 
 
@@ -87,8 +87,8 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string;
-  createdAt?: string | FieldValue;
-  updatedAt?: string | FieldValue;
+  createdAt?: string | FieldValue | undefined;
+  updatedAt?: string | FieldValue | undefined;
   avatarUrl?: string;
 }
 

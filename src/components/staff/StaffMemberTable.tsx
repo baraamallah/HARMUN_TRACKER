@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { StaffMemberStatusBadge } from './StaffMemberStatusBadge';
 import { StaffMemberActions } from './StaffMemberActions';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,10 @@ interface StaffMemberTableProps {
   isLoading: boolean;
   onEditStaffMember: (staffMember: StaffMember) => void;
   visibleColumns: StaffVisibleColumns;
+  selectedStaffMembers: string[];
+  onSelectStaffMember: (staffMemberId: string, isSelected: boolean) => void;
+  onSelectAll: (isSelected: boolean) => void;
+  isAllSelected: boolean;
 }
 
 type SortKey = keyof Pick<StaffMember, 'name' | 'role' | 'department' | 'team' | 'status'>;
@@ -33,7 +38,11 @@ export function StaffMemberTable({
   staffMembers,
   isLoading,
   onEditStaffMember,
-  visibleColumns
+  visibleColumns,
+  selectedStaffMembers,
+  onSelectStaffMember,
+  onSelectAll,
+  isAllSelected
 }: StaffMemberTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
   const [sortOrder, setSortOrder] = React.useState<SortOrder>('asc');
@@ -70,6 +79,7 @@ export function StaffMemberTable({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
+              {visibleColumns.selection && <TableHead className="w-[50px] pl-4"><Skeleton className="h-5 w-5" /></TableHead>}
               {visibleColumns.avatar && <TableHead className="w-[70px]"><Skeleton className="h-5 w-12" /></TableHead>}
               {visibleColumns.name && <TableHead><Skeleton className="h-5 w-32" /></TableHead>}
               {visibleColumns.role && <TableHead><Skeleton className="h-5 w-28" /></TableHead>}
@@ -83,6 +93,7 @@ export function StaffMemberTable({
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={`skel-staff-row-${i}`} className="bg-background">
+                {visibleColumns.selection && <TableCell className="pl-4"><Skeleton className="h-5 w-5" /></TableCell>}
                 {visibleColumns.avatar && <TableCell><Skeleton className="h-10 w-10 rounded-full" /></TableCell>}
                 {visibleColumns.name && <TableCell><Skeleton className="h-5 w-40" /></TableCell>}
                 {visibleColumns.role && <TableCell><Skeleton className="h-5 w-32" /></TableCell>}
@@ -116,6 +127,16 @@ export function StaffMemberTable({
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow>
+            {visibleColumns.selection && (
+              <TableHead className="w-[50px] pl-4">
+                <Checkbox
+                  checked={isAllSelected && sortedStaffMembers.length > 0}
+                  onCheckedChange={(checked) => onSelectAll(Boolean(checked))}
+                  aria-label="Select all staff members"
+                  disabled={sortedStaffMembers.length === 0}
+                />
+              </TableHead>
+            )}
             {visibleColumns.avatar && <TableHead className="pl-2 pr-2 md:pl-6 w-[60px] md:w-[70px]">Avatar</TableHead>}
             {visibleColumns.name && (
               <TableHead className="min-w-[150px]">
@@ -158,7 +179,20 @@ export function StaffMemberTable({
         </TableHeader>
         <TableBody>
           {sortedStaffMembers.map((staff) => (
-            <TableRow key={staff.id} className="hover:bg-muted/30 transition-colors">
+            <TableRow 
+              key={staff.id} 
+              className="hover:bg-muted/30 transition-colors"
+              data-state={selectedStaffMembers.includes(staff.id) ? 'selected' : undefined}
+            >
+              {visibleColumns.selection && (
+                <TableCell className="pl-4">
+                  <Checkbox
+                    checked={selectedStaffMembers.includes(staff.id)}
+                    onCheckedChange={(checked) => onSelectStaffMember(staff.id, Boolean(checked))}
+                    aria-label={`Select staff member ${staff.name}`}
+                  />
+                </TableCell>
+              )}
               {visibleColumns.avatar && (
                 <TableCell className="pl-2 pr-2 md:pl-6">
                    <Link href={`/staff/${staff.id}`} aria-label={`View profile of ${staff.name}`}>
