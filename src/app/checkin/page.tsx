@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
 import { processCheckinAction, type CheckinResult } from '@/lib/actions';
+import { cn } from '@/lib/utils';
 
 export default function CheckinPage() {
   const searchParams = useSearchParams();
@@ -22,43 +23,49 @@ export default function CheckinPage() {
 
   const performCheckin = React.useCallback(async (id: string | null) => {
     setIsLoading(true);
-    setResult(null); // Clear previous result
+    setResult(null); 
     const checkinOutcome = await processCheckinAction(id);
     setResult(checkinOutcome);
     setIsLoading(false);
 
     if (checkinOutcome.success) {
-      toast({ title: 'Check-in Successful', description: checkinOutcome.participantName ? `Welcome, ${checkinOutcome.participantName}!` : 'Checked in!' });
+      toast({ 
+        title: 'Check-in Successful', 
+        description: checkinOutcome.participantName ? `Welcome, ${checkinOutcome.participantName}!` : 'Checked in!',
+        className: 'bg-green-100 dark:bg-green-900 border-green-500'
+      });
     } else {
       let toastTitle = 'Check-in Info';
+      let toastVariant: 'destructive' | 'default' = 'default';
+      let toastClassName = '';
+
       if (checkinOutcome.errorType === 'not_found' || checkinOutcome.errorType === 'generic_error' || checkinOutcome.errorType === 'missing_id') {
         toastTitle = 'Check-in Failed';
+        toastVariant = 'destructive';
+      } else if (checkinOutcome.errorType === 'already_checked_in') {
+        toastTitle = 'Already Checked In';
+        toastClassName = 'bg-yellow-100 dark:bg-yellow-900 border-yellow-500';
       }
+      
       toast({
         title: toastTitle,
         description: checkinOutcome.message,
-        variant: (checkinOutcome.errorType === 'not_found' || checkinOutcome.errorType === 'generic_error' || checkinOutcome.errorType === 'missing_id') ? 'destructive' : 'default',
+        variant: toastVariant,
+        className: toastClassName,
       });
     }
   }, [toast]);
 
   React.useEffect(() => {
-    const currentId = searchParams.get('id'); // Get current ID from params for this effect run
+    const currentId = searchParams.get('id'); 
     if (currentId && !searchParams.has('processed_checkin')) {
       performCheckin(currentId);
-      // To prevent re-processing on refresh, we can add a flag to the URL.
-      // This is a simple client-side guard; the server action handles actual re-check-in logic.
       router.replace(`/checkin?id=${currentId}&processed_checkin=true`, { scroll: false });
     } else if (!currentId && !searchParams.has('processed_checkin_no_id')) {
-      performCheckin(null); // Handle case where ID is initially missing
+      performCheckin(null); 
       router.replace(`/checkin?processed_checkin_no_id=true`, { scroll: false });
     } else if (searchParams.has('processed_checkin') || searchParams.has('processed_checkin_no_id')) {
-      // If already marked as processed by the client, don't auto-run.
-      // Fetch the result again if needed or rely on existing state.
-      // For now, if 'result' is null, it means we navigated back or something cleared it.
-      // Re-running in this case without a user action (like retry) might be confusing.
-      // So, if 'processed_checkin' is true, we simply stop loading and show current 'result' or prompt retry.
-      if (!result && currentId) { // No result yet, but was processed. Show message for retry.
+      if (!result && currentId) { 
            setResult({
               success: false,
               message: `Check-in for ID ${currentId} was attempted. Scan again or click retry.`,
@@ -73,35 +80,50 @@ export default function CheckinPage() {
       }
       setIsLoading(false);
     }
-  }, [performCheckin, searchParams, router, result]); // Added 'result' to deps to avoid re-running if result is already set
+  }, [performCheckin, searchParams, router, result]);
 
 
+  const getCardStatusStyles = () => {
+    if (isLoading || !result) return 'border-primary';
+    if (result.success) return 'border-green-500 dark:border-green-400';
+    if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return 'border-destructive';
+    if (result.errorType === 'already_checked_in') return 'border-yellow-500 dark:border-yellow-400';
+    return 'border-primary';
+  };
+  
   const getIcon = () => {
-    if (isLoading) return <Loader2 className="h-16 w-16 animate-spin text-primary" />;
-    if (!result) return <AlertTriangle className="h-16 w-16 text-yellow-500" />;
-    if (result.success) return <CheckCircle className="h-16 w-16 text-green-500" />;
-    if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return <XCircle className="h-16 w-16 text-destructive" />;
-    if (result.errorType === 'already_checked_in') return <AlertTriangle className="h-16 w-16 text-yellow-500" />;
-    return <AlertTriangle className="h-16 w-16 text-yellow-500" />; 
+    const iconSize = "h-20 w-20 md:h-24 md:w-24"; // Larger icons
+    if (isLoading) return <Loader2 className={cn(iconSize, "animate-spin text-primary")} />;
+    if (!result) return <AlertTriangle className={cn(iconSize, "text-yellow-500 dark:text-yellow-400")} />;
+    if (result.success) return <CheckCircle className={cn(iconSize, "text-green-500 dark:text-green-400")} />;
+    if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return <XCircle className={cn(iconSize, "text-destructive")} />;
+    if (result.errorType === 'already_checked_in') return <AlertTriangle className={cn(iconSize, "text-yellow-500 dark:text-yellow-400")} />;
+    return <AlertTriangle className={cn(iconSize, "text-muted-foreground")} />; 
   };
   
   const handleRetry = () => {
     const currentId = searchParams.get('id');
     if (currentId) {
-      // Remove the 'processed_checkin' flag to allow performCheckin to run again via useEffect
       const newParams = new URLSearchParams(searchParams.toString());
       newParams.delete('processed_checkin');
       newParams.delete('processed_checkin_no_id');
       router.push(`/checkin?${newParams.toString()}`, { scroll: false });
-      // The useEffect will pick up the change and re-run performCheckin
     } else {
-      performCheckin(null); // Retry for missing ID case
+      performCheckin(null); 
     }
   };
 
+  const getMessageColor = () => {
+    if (isLoading || !result) return 'text-muted-foreground';
+    if (result.success) return 'text-green-600 dark:text-green-400';
+    if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return 'text-destructive';
+    if (result.errorType === 'already_checked_in') return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-muted-foreground';
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-      <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
+      <Card className={cn("w-full max-w-lg shadow-xl border-t-8 transition-colors duration-500", getCardStatusStyles())}>
         <CardHeader className="text-center pt-8">
           <div className="mb-6 flex justify-center">
             <Logo size="lg" />
@@ -111,32 +133,35 @@ export default function CheckinPage() {
             Participant Attendance System
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center space-y-4 text-center py-8">
+        <CardContent className="flex flex-col items-center space-y-6 text-center py-10 px-6">
           <div className="mb-4">{getIcon()}</div>
           {isLoading ? (
-            <p className="text-lg text-muted-foreground">Processing check-in for ID: {participantId || 'N/A'}...</p>
+            <p className="text-xl text-muted-foreground">Processing check-in for ID: {participantId || 'N/A'}...</p>
           ) : result ? (
             <>
-              <p className="text-xl font-semibold">
-                {result.message}
+              <p className={cn("text-2xl md:text-3xl font-semibold", getMessageColor())}>
+                {result.participantName && result.success ? `Welcome, ${result.participantName}!` : result.message}
               </p>
+              {result.participantName && !result.success && result.errorType !== 'not_found' && result.errorType !== 'missing_id' && (
+                <p className={cn("text-xl font-medium", getMessageColor())}>Participant: {result.participantName}</p>
+              )}
               {result.checkInDetails && (
-                <p className="text-md text-muted-foreground">{result.checkInDetails}</p>
+                <p className="text-lg text-muted-foreground">{result.checkInDetails}</p>
               )}
             </>
           ) : (
-             <p className="text-lg text-muted-foreground">Waiting for participant ID...</p>
+             <p className="text-xl text-muted-foreground">Waiting for participant ID...</p>
           )}
         </CardContent>
-        <CardFooter className="flex flex-col gap-3 pb-8">
-          {!isLoading && ( // Show retry always if not loading, logic inside handleRetry checks for ID
-            <Button onClick={handleRetry} variant="outline" className="w-full">
-              <RefreshCw className="mr-2 h-4 w-4" /> Retry Check-in {participantId ? `for ID: ${participantId}` : ''}
+        <CardFooter className="flex flex-col gap-4 pb-8 px-6">
+          {!isLoading && ( 
+            <Button onClick={handleRetry} variant="outline" className="w-full text-base py-3">
+              <RefreshCw className="mr-2 h-5 w-5" /> Retry Check-in {participantId ? `for ID: ${participantId}` : ''}
             </Button>
           )}
-          <Button asChild className="w-full" variant="default">
+          <Button asChild className="w-full text-base py-3" variant="default">
             <Link href="/">
-              <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
             </Link>
           </Button>
            <p className="text-xs text-muted-foreground pt-2">
@@ -147,4 +172,3 @@ export default function CheckinPage() {
     </div>
   );
 }
-
