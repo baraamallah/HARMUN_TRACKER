@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import { processCheckinAction, type CheckinResult } from '@/lib/actions';
+import { processCheckinAction } from '@/lib/actions';
+import type { CheckinResult } from '@/types'; // Corrected import source
 import { cn } from '@/lib/utils';
 
 export default function CheckinPage() {
