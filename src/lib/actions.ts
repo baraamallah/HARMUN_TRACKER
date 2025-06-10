@@ -82,8 +82,8 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         phone: data.phone,
         attended: data.attended || false, 
         checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, 
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt, // Keep original type if not Timestamp
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt, // Keep original type if not Timestamp
       } as Participant;
     });
 
@@ -134,8 +134,8 @@ export async function getParticipantById(id: string): Promise<Participant | null
         phone: data.phone,
         attended: data.attended || false,
         checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
     }
     return null;
@@ -233,7 +233,7 @@ export async function importParticipants(
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: data.email || '', 
+        email: '', // Corrected: Default to empty string as email is not in `data` from CSV
         phone: '',
         attended: false, 
         checkInTime: null, 
@@ -348,3 +348,4 @@ export async function processCheckinAction(participantId: string | null | undefi
     };
   }
 }
+
