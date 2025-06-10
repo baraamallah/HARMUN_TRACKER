@@ -3,13 +3,12 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
-// import Image from 'next/image'; // Removed
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
-  // CardFooter, // Removed as only one setting remains for now
+  CardFooter, // Re-added CardFooter
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -20,10 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-// import { Input } from '@/components/ui/input'; // Removed
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2 } from 'lucide-react'; // ImagePlus, Save removed
+import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2 } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { doc, setDoc, getDoc } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -32,7 +29,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getDefaultAttendanceStatusSetting, 
-  // getSystemLogoUrlSetting, // Removed
 } from '@/lib/actions';
 import type { AttendanceStatus } from '@/types';
 
@@ -52,12 +48,6 @@ export default function SystemSettingsPage() {
   const [isLoadingStatusSetting, setIsLoadingStatusSetting] = useState(true);
   const [isUpdatingStatusSetting, startUpdateStatusTransition] = useTransition();
 
-  // Removed state related to logo URL
-  // const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(null);
-  // const [newLogoUrlInput, setNewLogoUrlInput] = useState<string>('');
-  // const [isLoadingLogoSetting, setIsLoadingLogoSetting] = useState(true);
-  // const [isUpdatingLogoSetting, startUpdateLogoTransition] = useTransition();
-
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -65,7 +55,6 @@ export default function SystemSettingsPage() {
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
         fetchStatusSetting();
-        // fetchLogoSetting(); // Removed
       }
     });
     return () => unsubscribe();
@@ -83,8 +72,6 @@ export default function SystemSettingsPage() {
     }
   };
 
-  // Removed fetchLogoSetting
-
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -98,13 +85,10 @@ export default function SystemSettingsPage() {
     startUpdateStatusTransition(async () => {
       try {
         const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-        // Ensure the document exists before attempting to merge, or use setDoc without merge if creating new.
         const docSnap = await getDoc(configDocRef);
         if (docSnap.exists()) {
           await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
         } else {
-          // If the doc doesn't exist, create it with this setting.
-          // Add other default settings here if necessary.
           await setDoc(configDocRef, { defaultAttendanceStatus: newStatus });
         }
         setCurrentDefaultStatus(newStatus);
@@ -116,14 +100,12 @@ export default function SystemSettingsPage() {
           description: error.message || 'Could not update setting.', 
           variant: 'destructive' 
         });
-        fetchStatusSetting(); // Re-fetch on error
+        fetchStatusSetting(); 
       }
     });
   };
 
-  // Removed handleLogoUrlChange and isValidHttpUrl
-
-  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingStatusSetting)) { // Removed isLoadingLogoSetting
+  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingStatusSetting)) { 
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-lg shadow-2xl">
@@ -137,8 +119,6 @@ export default function SystemSettingsPage() {
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
-            {/* <Skeleton className="h-10 w-full" /> // Removed one skeleton for logo */}
-            {/* <Skeleton className="h-20 w-full" /> // Removed one skeleton for logo */}
           </CardContent>
         </Card>
       </div>
@@ -170,9 +150,9 @@ export default function SystemSettingsPage() {
               </p>
             )}
           </CardContent>
-          {/* <CardFooter className="flex-col gap-4 mt-4"> // Removed CardFooter as only one button remains in content */}
+          <CardFooter className="flex-col gap-4 mt-4">
             <Link href="/superior-admin" legacyBehavior passHref>
-              <Button variant="outline" className="w-full mt-4">
+              <Button variant="outline" className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin
               </Button>
             </Link>
@@ -181,7 +161,7 @@ export default function SystemSettingsPage() {
                 <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
               </Button>
             </Link>
-          {/* </CardFooter> */}
+          </CardFooter>
         </Card>
       </div>
     );
@@ -215,7 +195,6 @@ export default function SystemSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
-            {/* Default Attendance Status Setting */}
             <div className="space-y-3 p-4 border rounded-lg shadow-sm">
                 <Label htmlFor="defaultStatusSelect" className="text-lg font-semibold flex items-center">
                     <Settings className="mr-2 h-5 w-5 text-primary" /> Default Attendance Status
@@ -248,8 +227,6 @@ export default function SystemSettingsPage() {
                 )}
                 {isUpdatingStatusSetting && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
             </div>
-
-            {/* Separator and System Logo URL Setting Removed */}
             
             <div className="mt-8 p-4 border border-dashed rounded-lg text-center">
                 <Settings size={48} className="mx-auto text-muted-foreground opacity-30 mb-2" />
