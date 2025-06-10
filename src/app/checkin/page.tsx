@@ -3,117 +3,100 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Logo } from '@/components/shared/Logo'; // Added Logo import
+import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import { format } from 'date-fns';
-import type { Participant } from '@/types';
+import { processCheckinAction, type CheckinResult } from '@/lib/actions';
 
 export default function CheckinPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const router = useRouter(); 
   const { toast } = useToast();
   const participantId = searchParams.get('id');
 
   const [isLoading, setIsLoading] = React.useState(true);
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
-  const [participantName, setParticipantName] = React.useState<string | null>(null);
-  const [checkInDetails, setCheckInDetails] = React.useState<string | null>(null);
-  const [errorType, setErrorType] = React.useState<'not_found' | 'already_checked_in' | 'generic_error' | null>(null);
+  const [result, setResult] = React.useState<CheckinResult | null>(null);
 
-  const processCheckin = React.useCallback(async () => {
-    if (!participantId) {
-      setStatusMessage('Participant ID missing in URL.');
-      setErrorType('generic_error');
-      setIsLoading(false);
-      toast({ title: 'Error', description: 'Participant ID missing.', variant: 'destructive' });
-      return;
-    }
-
+  const performCheckin = React.useCallback(async (id: string | null) => {
     setIsLoading(true);
-    setErrorType(null);
-    setStatusMessage(null);
-    setParticipantName(null);
-    setCheckInDetails(null);
+    setResult(null); // Clear previous result
+    const checkinOutcome = await processCheckinAction(id);
+    setResult(checkinOutcome);
+    setIsLoading(false);
 
-    try {
-      const participantRef = doc(db, 'participants', participantId);
-      const participantSnap = await getDoc(participantRef);
-
-      if (!participantSnap.exists()) {
-        setStatusMessage(`Participant with ID "${participantId}" not found.`);
-        setErrorType('not_found');
-        toast({ title: 'Check-in Failed', description: 'Participant not found.', variant: 'destructive' });
-      } else {
-        const participantData = participantSnap.data() as Participant; 
-        setParticipantName(participantData.name);
-
-        if (participantData.attended) {
-          setStatusMessage(`${participantData.name} is already checked in.`);
-          if (participantData.checkInTime && typeof participantData.checkInTime === 'object' && 'seconds' in participantData.checkInTime) { // Firestore Timestamp
-            const checkInDate = (participantData.checkInTime as FirestoreTimestamp).toDate();
-            setCheckInDetails(`Checked in at: ${format(checkInDate, 'PPpp')}`);
-          } else if (typeof participantData.checkInTime === 'string') { // ISO String
-             try {
-              setCheckInDetails(`Checked in at: ${format(new Date(participantData.checkInTime), 'PPpp')}`);
-            } catch (e) {
-              setCheckInDetails(`Checked in previously. Time format error.`);
-            }
-          } else {
-            setCheckInDetails('Already checked in (time not recorded).');
-          }
-          setErrorType('already_checked_in');
-          toast({ title: 'Already Checked In', description: `${participantData.name} has already been checked in.` });
-        } else {
-          await updateDoc(participantRef, {
-            attended: true,
-            checkInTime: serverTimestamp(),
-            updatedAt: serverTimestamp(), 
-          });
-          setStatusMessage(`Welcome, ${participantData.name}! You have been successfully checked in.`);
-          setCheckInDetails(`Checked in at: ${format(new Date(), 'PPpp')} (pending server confirmation for exact time).`); 
-          setErrorType(null); 
-          toast({ title: 'Check-in Successful', description: `Welcome, ${participantData.name}!` });
-        }
+    if (checkinOutcome.success) {
+      toast({ title: 'Check-in Successful', description: checkinOutcome.participantName ? `Welcome, ${checkinOutcome.participantName}!` : 'Checked in!' });
+    } else {
+      let toastTitle = 'Check-in Info';
+      if (checkinOutcome.errorType === 'not_found' || checkinOutcome.errorType === 'generic_error' || checkinOutcome.errorType === 'missing_id') {
+        toastTitle = 'Check-in Failed';
       }
-    } catch (error: any) {
-      console.error('Check-in error:', error);
-      setStatusMessage('An error occurred during check-in. Please try again or contact support.');
-      setErrorType('generic_error');
       toast({
-        title: 'Check-in Error',
-        description: error.message || 'An unexpected error occurred.',
-        variant: 'destructive',
+        title: toastTitle,
+        description: checkinOutcome.message,
+        variant: (checkinOutcome.errorType === 'not_found' || checkinOutcome.errorType === 'generic_error' || checkinOutcome.errorType === 'missing_id') ? 'destructive' : 'default',
       });
-    } finally {
-      setIsLoading(false);
     }
-  }, [participantId, toast]);
+  }, [toast]);
 
   React.useEffect(() => {
-    if (participantId) {
-      processCheckin();
-    } else {
-      if (!searchParams.has('id_processed_once')) { 
-        setStatusMessage('No participant ID provided in the URL.');
-        setErrorType('generic_error');
-        setIsLoading(false);
-        router.replace('/checkin?id_processed_once=true', undefined); 
+    const currentId = searchParams.get('id'); // Get current ID from params for this effect run
+    if (currentId && !searchParams.has('processed_checkin')) {
+      performCheckin(currentId);
+      // To prevent re-processing on refresh, we can add a flag to the URL.
+      // This is a simple client-side guard; the server action handles actual re-check-in logic.
+      router.replace(`/checkin?id=${currentId}&processed_checkin=true`, { scroll: false });
+    } else if (!currentId && !searchParams.has('processed_checkin_no_id')) {
+      performCheckin(null); // Handle case where ID is initially missing
+      router.replace(`/checkin?processed_checkin_no_id=true`, { scroll: false });
+    } else if (searchParams.has('processed_checkin') || searchParams.has('processed_checkin_no_id')) {
+      // If already marked as processed by the client, don't auto-run.
+      // Fetch the result again if needed or rely on existing state.
+      // For now, if 'result' is null, it means we navigated back or something cleared it.
+      // Re-running in this case without a user action (like retry) might be confusing.
+      // So, if 'processed_checkin' is true, we simply stop loading and show current 'result' or prompt retry.
+      if (!result && currentId) { // No result yet, but was processed. Show message for retry.
+           setResult({
+              success: false,
+              message: `Check-in for ID ${currentId} was attempted. Scan again or click retry.`,
+              errorType: 'generic_error'
+            });
+      } else if (!result && !currentId) {
+          setResult({
+              success: false,
+              message: 'No participant ID. Scan a QR code.',
+              errorType: 'missing_id'
+          });
       }
+      setIsLoading(false);
     }
-  }, [participantId, processCheckin, searchParams, router]);
+  }, [performCheckin, searchParams, router, result]); // Added 'result' to deps to avoid re-running if result is already set
 
 
   const getIcon = () => {
     if (isLoading) return <Loader2 className="h-16 w-16 animate-spin text-primary" />;
-    if (errorType === 'not_found' || errorType === 'generic_error') return <XCircle className="h-16 w-16 text-destructive" />;
-    if (errorType === 'already_checked_in') return <AlertTriangle className="h-16 w-16 text-yellow-500" />;
-    return <CheckCircle className="h-16 w-16 text-green-500" />; 
+    if (!result) return <AlertTriangle className="h-16 w-16 text-yellow-500" />;
+    if (result.success) return <CheckCircle className="h-16 w-16 text-green-500" />;
+    if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return <XCircle className="h-16 w-16 text-destructive" />;
+    if (result.errorType === 'already_checked_in') return <AlertTriangle className="h-16 w-16 text-yellow-500" />;
+    return <AlertTriangle className="h-16 w-16 text-yellow-500" />; 
+  };
+  
+  const handleRetry = () => {
+    const currentId = searchParams.get('id');
+    if (currentId) {
+      // Remove the 'processed_checkin' flag to allow performCheckin to run again via useEffect
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete('processed_checkin');
+      newParams.delete('processed_checkin_no_id');
+      router.push(`/checkin?${newParams.toString()}`, { scroll: false });
+      // The useEffect will pick up the change and re-run performCheckin
+    } else {
+      performCheckin(null); // Retry for missing ID case
+    }
   };
 
   return (
@@ -132,21 +115,23 @@ export default function CheckinPage() {
           <div className="mb-4">{getIcon()}</div>
           {isLoading ? (
             <p className="text-lg text-muted-foreground">Processing check-in for ID: {participantId || 'N/A'}...</p>
-          ) : (
+          ) : result ? (
             <>
               <p className="text-xl font-semibold">
-                {statusMessage || 'Waiting for participant ID...'}
+                {result.message}
               </p>
-              {checkInDetails && (
-                <p className="text-md text-muted-foreground">{checkInDetails}</p>
+              {result.checkInDetails && (
+                <p className="text-md text-muted-foreground">{result.checkInDetails}</p>
               )}
             </>
+          ) : (
+             <p className="text-lg text-muted-foreground">Waiting for participant ID...</p>
           )}
         </CardContent>
         <CardFooter className="flex flex-col gap-3 pb-8">
-          {!isLoading && participantId && (
-            <Button onClick={processCheckin} variant="outline" className="w-full">
-              <RefreshCw className="mr-2 h-4 w-4" /> Retry Check-in for ID: {participantId}
+          {!isLoading && ( // Show retry always if not loading, logic inside handleRetry checks for ID
+            <Button onClick={handleRetry} variant="outline" className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" /> Retry Check-in {participantId ? `for ID: ${participantId}` : ''}
             </Button>
           )}
           <Button asChild className="w-full" variant="default">
@@ -155,10 +140,11 @@ export default function CheckinPage() {
             </Link>
           </Button>
            <p className="text-xs text-muted-foreground pt-2">
-            If you are not automatically redirected or see an error, please ensure the QR code is valid or contact event staff.
+            If you see an error, please ensure the QR code is valid or contact event staff.
           </p>
         </CardFooter>
       </Card>
     </div>
   );
 }
+

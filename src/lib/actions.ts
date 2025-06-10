@@ -16,9 +16,11 @@ import {
   writeBatch as fsWriteBatch,
   collection as fsCollection,
   doc as fsDoc,
-  FieldValue as FirestoreFieldValue, // Added for explicit type usage
+  FieldValue as FirestoreFieldValue, 
+  updateDoc, // Added updateDoc
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType } from '@/types';
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, CheckinResult } from '@/types';
+import { format } from 'date-fns';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
@@ -71,15 +73,15 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        status: data.status || 'Absent', // General MUN status
+        status: data.status || 'Absent', 
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
-        attended: data.attended || false, // Event check-in status
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, // Event check-in time
+        attended: data.attended || false, 
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, 
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
       } as Participant;
@@ -226,15 +228,15 @@ export async function importParticipants(
         name: data.name.trim(),
         school: trimmedSchool,
         committee: trimmedCommittee,
-        status: defaultMunStatus, // General MUN status
+        status: defaultMunStatus, 
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: data.email || '', // Ensure email is at least an empty string
+        email: data.email || '', 
         phone: '',
-        attended: false, // Default event check-in status
-        checkInTime: null, // Default event check-in time
+        attended: false, 
+        checkInTime: null, 
         createdAt: fsServerTimestamp(),
         updatedAt: fsServerTimestamp(),
       };
@@ -272,4 +274,77 @@ export async function importParticipants(
     detectedNewSchools: Array.from(detectedNewSchoolNames),
     detectedNewCommittees: Array.from(detectedNewCommitteeNames),
   };
+}
+
+export async function processCheckinAction(participantId: string | null | undefined): Promise<CheckinResult> {
+  if (!participantId) {
+    return {
+      success: false,
+      message: 'Participant ID missing in URL.',
+      errorType: 'missing_id',
+    };
+  }
+
+  try {
+    const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
+    const participantSnap = await getDoc(participantRef);
+
+    if (!participantSnap.exists()) {
+      return {
+        success: false,
+        message: `Participant with ID "${participantId}" not found.`,
+        errorType: 'not_found',
+      };
+    }
+
+    const participantData = participantSnap.data() as Participant;
+
+    if (participantData.attended) {
+      let details = 'Already checked in';
+      // Ensure checkInTime is treated as a Firestore Timestamp before calling toDate()
+      if (participantData.checkInTime && typeof (participantData.checkInTime as any).toDate === 'function') {
+        const checkInDate = (participantData.checkInTime as Timestamp).toDate();
+        details += ` at: ${format(checkInDate, 'PPpp')}`;
+      } else if (typeof participantData.checkInTime === 'string') { // Handle if it was stored as string
+         try {
+           details += ` at: ${format(new Date(participantData.checkInTime), 'PPpp')}`;
+         } catch (e) { /* ignore format error for old string dates */ }
+      }
+      return {
+        success: false, 
+        message: `${participantData.name} is already checked in.`,
+        participantName: participantData.name,
+        checkInDetails: details,
+        errorType: 'already_checked_in',
+      };
+    }
+
+    await updateDoc(participantRef, {
+      attended: true,
+      checkInTime: fsServerTimestamp(), 
+      updatedAt: fsServerTimestamp(),
+    });
+    
+    const optimisticCheckInTime = format(new Date(), 'PPpp');
+
+    revalidatePath(`/checkin?id=${participantId}`); 
+    revalidatePath(`/participants/${participantId}`);
+    revalidatePath(`/`); 
+    revalidatePath(`/public`);
+
+    return {
+      success: true,
+      message: `Welcome, ${participantData.name}! You have been successfully checked in.`,
+      participantName: participantData.name,
+      checkInDetails: `Checked in at: ${optimisticCheckInTime} (Server time will be synced).`,
+    };
+
+  } catch (error: any) {
+    console.error(`[Server Action - processCheckinAction] Error for ID ${participantId}:`, error);
+    return {
+      success: false,
+      message: 'An error occurred during check-in. Please try again or contact support.',
+      errorType: 'generic_error',
+    };
+  }
 }

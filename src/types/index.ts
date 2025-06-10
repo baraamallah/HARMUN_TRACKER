@@ -95,3 +95,11 @@ export interface AdminManagedUser {
   updatedAt?: string | FieldValueType | undefined;
   avatarUrl?: string;
 }
+
+export interface CheckinResult {
+  success: boolean;
+  message: string;
+  participantName?: string;
+  checkInDetails?: string;
+  errorType?: 'not_found' | 'already_checked_in' | 'generic_error' | 'missing_id';
+}
