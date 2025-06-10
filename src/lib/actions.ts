@@ -2,27 +2,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from './firebase'; 
+import { db } from './firebase';
 import {
   collection,
   getDocs,
-  // addDoc, 
-  // deleteDoc, 
   doc,
   query,
   where,
   orderBy,
   Timestamp,
-  // writeBatch, 
-  serverTimestamp as fsServerTimestamp, 
+  serverTimestamp as fsServerTimestamp,
   getDoc,
-  // setDoc, 
-  // updateDoc 
-  writeBatch as fsWriteBatch, 
-  collection as fsCollection, 
-  doc as fsDoc, 
+  writeBatch as fsWriteBatch,
+  collection as fsCollection,
+  doc as fsDoc,
+  FieldValue as FirestoreFieldValue, // Added for explicit type usage
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType } from '@/types'; // Updated FieldValueType
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType } from '@/types';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
@@ -31,7 +27,7 @@ const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
-// System Settings Actions (Read-only server actions)
+
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default status.`);
   try {
@@ -44,15 +40,10 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
     return 'Absent';
   } catch (error) {
     console.error("[Server Action] Error fetching default attendance status setting: ", error);
-    return 'Absent'; 
+    return 'Absent';
   }
 }
 
-// getSystemLogoUrlSetting function removed
-
-// Participant Actions (Data fetching for admin views moved client-side)
-// The getParticipants & getParticipantById server actions are now primarily for the public page 
-// or scenarios where client-side auth context isn't strictly necessary for the read operation itself.
 
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   try {
@@ -80,13 +71,15 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        status: data.status || 'Absent',
+        status: data.status || 'Absent', // General MUN status
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
+        attended: data.attended || false, // Event check-in status
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, // Event check-in time
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
       } as Participant;
@@ -137,6 +130,8 @@ export async function getParticipantById(id: string): Promise<Participant | null
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
+        attended: data.attended || false,
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined,
       } as Participant;
@@ -189,9 +184,9 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt'>[]
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt' | 'attended' | 'checkInTime'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
-  
+
   if (parsedParticipants.length === 0) {
     console.log("[Server Action: importParticipants] No parsed participants to import.");
     return { count: 0, errors: 0, detectedNewSchools: [], detectedNewCommittees: [] };
@@ -203,13 +198,13 @@ export async function importParticipants(
   const detectedNewCommitteeNames: Set<string> = new Set();
 
   const batch = fsWriteBatch(db);
-  const defaultStatus = await getDefaultAttendanceStatusSetting();
+  const defaultMunStatus = await getDefaultAttendanceStatusSetting();
 
   let existingSystemSchools: string[] = [];
   let existingSystemCommittees: string[] = [];
   try {
-    existingSystemSchools = await getSystemSchools(); 
-    existingSystemCommittees = await getSystemCommittees(); 
+    existingSystemSchools = await getSystemSchools();
+    existingSystemCommittees = await getSystemCommittees();
   } catch(e) {
     console.error("[Server Action: importParticipants] Error fetching system schools/committees during import pre-check:", e);
   }
@@ -227,20 +222,21 @@ export async function importParticipants(
       }
 
       const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
-      // Explicitly type the object being written to Firestore
-      const newParticipantData: Omit<Participant, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType } = {
+      const newParticipantData: Omit<Participant, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType, checkInTime: null } = {
         name: data.name.trim(),
         school: trimmedSchool,
         committee: trimmedCommittee,
-        status: defaultStatus,
+        status: defaultMunStatus, // General MUN status
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: '',
+        email: data.email || '', // Ensure email is at least an empty string
         phone: '',
-        createdAt: fsServerTimestamp(), 
-        updatedAt: fsServerTimestamp(), 
+        attended: false, // Default event check-in status
+        checkInTime: null, // Default event check-in time
+        createdAt: fsServerTimestamp(),
+        updatedAt: fsServerTimestamp(),
       };
       const participantRef = fsDoc(fsCollection(db, PARTICIPANTS_COLLECTION));
       batch.set(participantRef, newParticipantData);
@@ -260,7 +256,7 @@ export async function importParticipants(
     console.error(batchCommitError);
     return {
       count: 0,
-      errors: parsedParticipants.length, 
+      errors: parsedParticipants.length,
       detectedNewSchools: Array.from(detectedNewSchoolNames),
       detectedNewCommittees: Array.from(detectedNewCommitteeNames),
     };

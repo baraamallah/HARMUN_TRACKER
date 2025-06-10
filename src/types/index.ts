@@ -1,5 +1,5 @@
 
-import type { FieldValue as FirestoreFieldValue } from 'firebase/firestore'; // Renamed to avoid local conflicts
+import type { FieldValue as FirestoreFieldValue } from 'firebase/firestore';
 
 // Generic type for server timestamps used in writes
 export type FieldValueType = FirestoreFieldValue;
@@ -18,15 +18,17 @@ export interface Participant {
   name: string;
   school: string;
   committee: string;
-  status: AttendanceStatus;
+  status: AttendanceStatus; // This status is for general MUN session attendance
   imageUrl?: string;
   notes?: string;
   additionalDetails?: string;
   classGrade?: string;
   email?: string;
   phone?: string;
-  createdAt?: string | FieldValueType | undefined; // string when read, FieldValueType when writing
-  updatedAt?: string | FieldValueType | undefined; // string when read, FieldValueType when writing
+  attended?: boolean; // For QR code check-in, default false
+  checkInTime?: string | FieldValueType | null | undefined; // For QR code check-in time
+  createdAt?: string | FieldValueType | undefined;
+  updatedAt?: string | FieldValueType | undefined;
 }
 
 export type StaffAttendanceStatus =
@@ -38,9 +40,9 @@ export type StaffAttendanceStatus =
 export interface StaffMember {
   id: string;
   name: string;
-  role: string; 
-  department?: string; 
-  team?: string; 
+  role: string;
+  department?: string;
+  team?: string;
   email?: string;
   phone?: string;
   contactInfo?: string;
@@ -72,7 +74,7 @@ export interface VisibleColumns {
 }
 
 export interface StaffVisibleColumns {
-  selection?: boolean; 
+  selection?: boolean;
   avatar: boolean;
   name: boolean;
   role: boolean;
