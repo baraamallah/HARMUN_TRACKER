@@ -13,8 +13,8 @@ import {
   ShieldCheck, 
   LogIn,
   Users2, // Icon for Staff
-  QrCode, // Icon for Participant Check-in
-  Clipboard // Icon for Staff Check-in (Corrected from ClipboardUser)
+  QrCode, // Icon for Participant Check-in & QR Management
+  Clipboard // Icon for Staff Check-in
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -59,17 +59,15 @@ const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
-  { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' }, // Corrected icon
+  { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
-const superiorAdminNavItem: NavItem = {
-  href: '/superior-admin',
-  icon: ShieldCheck,
-  label: 'Superior Admin',
-  tooltip: 'Superior Admin Panel',
-  ownerOnly: true,
-};
+const ownerNavItems: NavItem[] = [
+  { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes', ownerOnly: true },
+  { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel', ownerOnly: true },
+];
+
 
 export function AppLayoutClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -109,11 +107,12 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const navItemsToRender = React.useMemo(() => {
     let items = [...baseNavItems];
     if (loggedInUser && loggedInUser.uid === OWNER_UID) {
+      // Insert owner items before the 'Public View' or at the end if 'Public View' isn't there
       const publicViewIndex = items.findIndex(item => item.href === '/public');
       if (publicViewIndex !== -1) {
-        items.splice(publicViewIndex, 0, superiorAdminNavItem);
+        items.splice(publicViewIndex, 0, ...ownerNavItems);
       } else {
-        items.push(superiorAdminNavItem);
+        items.push(...ownerNavItems);
       }
     }
     return items;

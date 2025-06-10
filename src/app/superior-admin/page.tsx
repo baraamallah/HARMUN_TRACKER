@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, QrCode as QrCodeIcon, Search, Clipboard } from 'lucide-react';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -36,11 +36,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import type { StaffMember, Participant } from '@/types';
+import type { StaffMember } from '@/types'; // Removed Participant type
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
-import { QrCodeDisplay } from '@/components/shared/QrCodeDisplay'; 
-import { useDebounce } from '@/hooks/use-debounce';
+// Removed QrCodeDisplay and useDebounce as they are no longer used here
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +55,7 @@ const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
-const PARTICIPANTS_COLLECTION = 'participants';
+// const PARTICIPANTS_COLLECTION = 'participants'; // No longer needed here
 
 
 export default function SuperiorAdminPage() {
@@ -83,82 +82,27 @@ export default function SuperiorAdminPage() {
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
   const [isStaffFormOpen, setIsStaffFormOpen] = useState(false);
 
-  // For Participant QR Codes
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
-  const [participantSearchTerm, setParticipantSearchTerm] = useState('');
-  const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
+  // Removed state related to Participant and Staff QR Codes
+  // const [participants, setParticipants] = useState<Participant[]>([]);
+  // const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  // const [participantSearchTerm, setParticipantSearchTerm] = useState('');
+  // const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
   
-  // For Staff QR Codes
-  const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]); // Separate state for staff QR list
-  const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
-  const [staffSearchTerm, setStaffSearchTerm] = useState('');
-  const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
+  // const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]);
+  // const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
+  // const [staffSearchTerm, setStaffSearchTerm] = useState('');
+  // const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
 
-  const [appBaseUrl, setAppBaseUrl] = useState('');
-  const [harmunLogoUrl, setHarmunLogoUrl] = useState<string | undefined>(undefined); 
+  // const [appBaseUrl, setAppBaseUrl] = useState(''); // No longer needed here for QR
+  // const [harmunLogoUrl, setHarmunLogoUrl] = useState<string | undefined>(undefined); 
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setAppBaseUrl(window.location.origin);
-      // setHarmunLogoUrl('https://example.com/path/to/harmun-logo.png'); 
-    }
-  }, []);
+  // useEffect(() => { // No longer needed here for QR
+  //   if (typeof window !== 'undefined') {
+  //     setAppBaseUrl(window.location.origin);
+  //   }
+  // }, []);
 
-  const fetchParticipantsData = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
-    setIsLoadingParticipants(true);
-    try {
-      const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-      const q = query(participantsColRef, orderBy('name'));
-      const querySnapshot = await getDocs(q);
-      const fetchedParticipants = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          school: data.school || '',
-          committee: data.committee || '',
-          status: data.status || 'Absent',
-          imageUrl: data.imageUrl,
-        } as Participant;
-      });
-      setParticipants(fetchedParticipants);
-    } catch (error: any) {
-      console.error("Error fetching participants for QR codes (Superior Admin): ", error);
-      toast({ title: 'Error Fetching Participants', description: error.message || "Failed to load participants for QR codes.", variant: 'destructive' });
-    } finally {
-      setIsLoadingParticipants(false);
-    }
-  }, [currentUser, toast]);
-
-  const fetchStaffForQrData = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
-    setIsLoadingStaffForQr(true);
-    try {
-      const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
-      const q = query(staffColRef, orderBy('name'));
-      const querySnapshot = await getDocs(q);
-      const fetchedStaff = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          role: data.role || '',
-          team: data.team,
-          imageUrl: data.imageUrl,
-          status: data.status || 'Off Duty', // Add status for completeness if needed
-        } as StaffMember; // Cast, acknowledge some fields might be missing
-      });
-      setStaffForQr(fetchedStaff);
-    } catch (error: any) {
-      console.error("Error fetching staff for QR codes (Superior Admin): ", error);
-      toast({ title: 'Error Fetching Staff (QR)', description: error.message || "Failed to load staff for QR codes.", variant: 'destructive' });
-    } finally {
-      setIsLoadingStaffForQr(false);
-    }
-  }, [currentUser, toast]);
-
+  // Removed fetchParticipantsData and fetchStaffForQrData
 
   const fetchSchools = useCallback(async () => {
     setIsLoadingSchools(true);
@@ -246,12 +190,11 @@ export default function SuperiorAdminPage() {
         fetchCommittees();
         fetchStaffTeams();
         fetchStaff();
-        fetchParticipantsData(); 
-        fetchStaffForQrData(); // Fetch staff for QR codes
+        // Removed calls to fetchParticipantsData & fetchStaffForQrData
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff, fetchParticipantsData, fetchStaffForQrData]);
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]); // Removed dependencies
 
   const handleAddItem = async (type: 'school' | 'committee' | 'staffTeam') => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -358,7 +301,7 @@ export default function SuperiorAdminPage() {
         else if (type === 'staffTeam') fetchStaffTeams();
         else if (type === 'staffMember') {
           fetchStaff();
-          fetchStaffForQrData(); // Also refresh staff list for QR codes
+          // Removed fetchStaffForQrData(); 
         }
 
       } catch (error: any) {
@@ -396,21 +339,11 @@ export default function SuperiorAdminPage() {
 
   const handleStaffFormSuccess = () => {
     fetchStaff();
-    fetchStaffForQrData(); // Also refresh staff list for QR codes
+    // Removed fetchStaffForQrData();
     setIsStaffFormOpen(false);
   };
 
-  const filteredParticipantsForQr = participants.filter(p => 
-    p.name.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
-    p.school.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
-    p.committee.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase())
-  );
-
-  const filteredStaffForQr = staffForQr.filter(s => 
-    s.name.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()) ||
-    (s.role && s.role.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase())) ||
-    (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))
-  );
+  // Removed filteredParticipantsForQr and filteredStaffForQr
 
   if (isLoadingAuth) {
     return (
@@ -564,115 +497,8 @@ export default function SuperiorAdminPage() {
             You have master control over the MUN Attendance Tracker. Manage system lists, user access, and global settings.
           </p>
         </div>
-
-        {/* Participant QR Code Management Card */}
-        <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-purple-500 mb-8">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-5">
-            <CardTitle className="text-2xl font-semibold flex items-center gap-2"><QrCodeIcon className="h-7 w-7 text-purple-500" />Participant Check-in QR Codes</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <p className="text-muted-foreground mb-4">
-              Generate and view QR codes for individual participant check-in. Each QR code links to <code>/checkin?id=PARTICIPANT_ID</code>.
-            </p>
-            <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search participants by name, school, or committee..."
-                value={participantSearchTerm}
-                onChange={(e) => setParticipantSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            {isLoadingParticipants ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => (
-                  <div key={`p-qr-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-40 w-40 mx-auto rounded-md" />
-                    <Skeleton className="h-8 w-full mt-2" />
-                    <Skeleton className="h-4 w-full mt-1" />
-                  </div>
-                ))}
-              </div>
-            ) : filteredParticipantsForQr.length > 0 && appBaseUrl ? (
-              <ScrollArea className="h-[500px] pr-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredParticipantsForQr.map(participant => (
-                    <div key={participant.id} className="flex flex-col items-center p-1 rounded-lg">
-                      <h3 className="text-md font-semibold mb-2 truncate w-full text-center" title={participant.name}>{participant.name}</h3>
-                      <QrCodeDisplay
-                        value={`${appBaseUrl}/checkin?id=${participant.id}`}
-                        initialSize={160}
-                        downloadFileName={`harmun-participant-qr-${participant.name.replace(/\s+/g, '_')}-${participant.id}.png`}
-                        eventLogoUrl={harmunLogoUrl} 
-                      />
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
-              <p className="text-center text-muted-foreground py-10">No participants match your search, or no participants available.</p>
-            ) : !appBaseUrl && !isLoadingParticipants ? (
-              <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* Staff QR Code Management Card */}
-        <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-cyan-500 mb-8">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-5">
-            <CardTitle className="text-2xl font-semibold flex items-center gap-2"><Clipboard className="h-7 w-7 text-cyan-500" />Staff Member Status QR Codes</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <p className="text-muted-foreground mb-4">
-              Generate and view QR codes for individual staff member status updates. Each QR code links to <code>/staff-checkin?id=STAFF_ID</code>.
-            </p>
-            <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search staff by name, role, or team..."
-                value={staffSearchTerm}
-                onChange={(e) => setStaffSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            {isLoadingStaffForQr ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => (
-                  <div key={`s-qr-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-40 w-40 mx-auto rounded-md" />
-                    <Skeleton className="h-8 w-full mt-2" />
-                    <Skeleton className="h-4 w-full mt-1" />
-                  </div>
-                ))}
-              </div>
-            ) : filteredStaffForQr.length > 0 && appBaseUrl ? (
-              <ScrollArea className="h-[500px] pr-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredStaffForQr.map(staff => (
-                    <div key={staff.id} className="flex flex-col items-center p-1 rounded-lg">
-                      <h3 className="text-md font-semibold mb-2 truncate w-full text-center" title={`${staff.name} (${staff.role})`}>{staff.name}</h3>
-                      <QrCodeDisplay
-                        value={`${appBaseUrl}/staff-checkin?id=${staff.id}`}
-                        initialSize={160}
-                        downloadFileName={`harmun-staff-qr-${staff.name.replace(/\s+/g, '_')}-${staff.id}.png`}
-                        eventLogoUrl={harmunLogoUrl} 
-                      />
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
-              <p className="text-center text-muted-foreground py-10">No staff members match your search, or no staff available.</p>
-            ) : !appBaseUrl && !isLoadingStaffForQr ? (
-              <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
-            ) : null}
-          </CardContent>
-        </Card>
         
+        {/* QR Code Sections Removed */}
         <Separator className="my-10" />
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
