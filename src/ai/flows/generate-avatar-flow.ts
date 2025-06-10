@@ -41,7 +41,7 @@ const generateAvatarFlow = ai.defineFlow(
     The avatar should be suitable for a profile picture. Square aspect ratio.`;
 
     try {
-      const {media, usage} = await ai.generate({
+      const {media, text, usage} = await ai.generate({ // Added 'text' to destructuring
         model: 'googleai/gemini-2.0-flash-exp',
         prompt: fullPrompt,
         config: {
@@ -55,7 +55,7 @@ const generateAvatarFlow = ai.defineFlow(
 
       return {
         imageDataUri: media.url,
-        revisedPrompt: usage?.promptTokenCount ? String(usage.promptTokenCount) : undefined, // Example of using usage data
+        revisedPrompt: text ?? undefined, // Use the 'text' field from the response
       };
     } catch (error: any) {
       console.error('Error in generateAvatarFlow:', error);
@@ -63,3 +63,4 @@ const generateAvatarFlow = ai.defineFlow(
     }
   }
 );
+
