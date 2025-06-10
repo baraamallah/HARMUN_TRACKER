@@ -96,10 +96,17 @@ export interface AdminManagedUser {
   avatarUrl?: string;
 }
 
-export interface CheckinResult {
+export interface CheckinResult { // Kept for reference if any part still uses it, but should be replaced by ActionResult
   success: boolean;
   message: string;
   participantName?: string;
   checkInDetails?: string;
   errorType?: 'not_found' | 'already_checked_in' | 'generic_error' | 'missing_id';
+}
+
+export interface ActionResult {
+  success: boolean;
+  message: string;
+  participant?: Participant; // Optionally return updated participant data
+  errorType?: string; // e.g., 'not_found', 'update_failed', 'missing_id'
 }

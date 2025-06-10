@@ -17,10 +17,11 @@ import {
   collection as fsCollection,
   doc as fsDoc,
   FieldValue as FirestoreFieldValue, 
-  updateDoc, // Added updateDoc
+  updateDoc,
+  setDoc,
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, CheckinResult } from '@/types';
-import { format } from 'date-fns';
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, ActionResult } from '@/types';
+// format from date-fns removed as it's not used directly in this file after recent changes.
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
@@ -82,8 +83,8 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         phone: data.phone,
         attended: data.attended || false, 
         checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, 
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt, // Keep original type if not Timestamp
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt, // Keep original type if not Timestamp
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
     });
 
@@ -233,7 +234,7 @@ export async function importParticipants(
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: '', // Corrected: Default to empty string as email is not in `data` from CSV
+        email: '', 
         phone: '',
         attended: false, 
         checkInTime: null, 
@@ -276,13 +277,13 @@ export async function importParticipants(
   };
 }
 
-export async function processCheckinAction(participantId: string | null | undefined): Promise<CheckinResult> {
+export async function quickSetParticipantStatusAction(
+  participantId: string,
+  newStatus: AttendanceStatus,
+  options?: { isCheckIn?: boolean }
+): Promise<ActionResult> {
   if (!participantId) {
-    return {
-      success: false,
-      message: 'Participant ID missing in URL.',
-      errorType: 'missing_id',
-    };
+    return { success: false, message: 'Participant ID is required.', errorType: 'missing_id' };
   }
 
   try {
@@ -290,62 +291,66 @@ export async function processCheckinAction(participantId: string | null | undefi
     const participantSnap = await getDoc(participantRef);
 
     if (!participantSnap.exists()) {
-      return {
-        success: false,
-        message: `Participant with ID "${participantId}" not found.`,
-        errorType: 'not_found',
-      };
+      return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
     }
 
-    const participantData = participantSnap.data() as Participant;
-
-    if (participantData.attended) {
-      let details = 'Already checked in';
-      // Ensure checkInTime is treated as a Firestore Timestamp before calling toDate()
-      if (participantData.checkInTime && typeof (participantData.checkInTime as any).toDate === 'function') {
-        const checkInDate = (participantData.checkInTime as Timestamp).toDate();
-        details += ` at: ${format(checkInDate, 'PPpp')}`;
-      } else if (typeof participantData.checkInTime === 'string') { // Handle if it was stored as string
-         try {
-           details += ` at: ${format(new Date(participantData.checkInTime), 'PPpp')}`;
-         } catch (e) { /* ignore format error for old string dates */ }
-      }
-      return {
-        success: false, 
-        message: `${participantData.name} is already checked in.`,
-        participantName: participantData.name,
-        checkInDetails: details,
-        errorType: 'already_checked_in',
-      };
-    }
-
-    await updateDoc(participantRef, {
-      attended: true,
-      checkInTime: fsServerTimestamp(), 
+    const participantData = participantSnap.data() as Participant; // Cast to Participant to access its fields
+    const updates: Partial<Participant> & { updatedAt: FieldValueType } = { // Ensure updatedAt is always included
+      status: newStatus,
       updatedAt: fsServerTimestamp(),
-    });
-    
-    const optimisticCheckInTime = format(new Date(), 'PPpp');
+    };
+
+    if (options?.isCheckIn && newStatus === 'Present') {
+      updates.attended = true;
+      // Only set checkInTime if participant was not previously marked as attended or if checkInTime is not already set.
+      // This preserves the original check-in time if they were already checked in.
+      if (!participantData.attended || !participantData.checkInTime) { 
+        updates.checkInTime = fsServerTimestamp();
+      }
+    }
+    // Note: No explicit 'check-out' logic to clear 'attended' or 'checkInTime' here. 
+    // Changing status to 'Absent' (or other non-'Present' statuses) doesn't undo the fact they were attended.
+
+    await updateDoc(participantRef, updates as { [x: string]: any; }); // Cast to avoid type issues with Partial<Participant>
+
+    // Fetch the updated participant data to return it, ensuring timestamps are converted
+    const updatedSnap = await getDoc(participantRef);
+    const updatedData = updatedSnap.data();
+    const updatedParticipant: Participant = {
+        id: updatedSnap.id,
+        name: updatedData?.name || '',
+        school: updatedData?.school || '',
+        committee: updatedData?.committee || '',
+        status: updatedData?.status || 'Absent',
+        imageUrl: updatedData?.imageUrl,
+        notes: updatedData?.notes,
+        additionalDetails: updatedData?.additionalDetails,
+        classGrade: updatedData?.classGrade,
+        email: updatedData?.email,
+        phone: updatedData?.phone,
+        attended: updatedData?.attended || false,
+        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : updatedData?.checkInTime,
+        createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
+        updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
+    };
+
 
     revalidatePath(`/checkin?id=${participantId}`); 
-    revalidatePath(`/participants/${participantId}`);
-    revalidatePath(`/`); 
-    revalidatePath(`/public`);
+    revalidatePath(`/participants/${participantId}`); 
+    revalidatePath('/'); 
+    revalidatePath('/public');
 
     return {
       success: true,
-      message: `Welcome, ${participantData.name}! You have been successfully checked in.`,
-      participantName: participantData.name,
-      checkInDetails: `Checked in at: ${optimisticCheckInTime} (Server time will be synced).`,
+      message: `Status for ${participantData.name} updated to ${newStatus}.`,
+      participant: updatedParticipant,
     };
-
   } catch (error: any) {
-    console.error(`[Server Action - processCheckinAction] Error for ID ${participantId}:`, error);
+    console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
     return {
       success: false,
-      message: 'An error occurred during check-in. Please try again or contact support.',
+      message: 'An error occurred while updating status. Please try again.',
       errorType: 'generic_error',
     };
   }
 }
-
