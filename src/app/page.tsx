@@ -41,7 +41,7 @@ import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getSystemSchools, getSystemCommittees } from '@/lib/actions'; // bulkDeleteParticipants removed
+import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -57,11 +57,13 @@ const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string
     { status: 'Stepped Out', label: 'Stepped Out', icon: LogOutIcon },
 ];
 
+type AuthStateType = 'loading' | 'authenticated' | 'unauthenticated';
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
+  const [authStatus, setAuthStatus] = React.useState<AuthStateType>('loading');
 
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
@@ -108,21 +110,25 @@ export default function AdminDashboardPage() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
+        setAuthStatus('authenticated');
       } else {
         setCurrentUser(null);
-        router.push('/auth/login'); 
+        setAuthStatus('unauthenticated');
       }
-      setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, []);
+
+  React.useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      router.push('/auth/login');
+    }
+  }, [authStatus, router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser && !isAuthLoading) {
-      if (!isAuthLoading) router.push('/auth/login');
+    if (authStatus !== 'authenticated' || !currentUser) {
       return;
     }
-    if (isAuthLoading && !currentUser) return;
     
     setIsLoadingData(true);
     try {
@@ -189,13 +195,13 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast, router, isAuthLoading]);
+  }, [currentUser, authStatus, selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
 
   React.useEffect(() => {
-    if (!isAuthLoading && currentUser) {
+    if (authStatus === 'authenticated' && currentUser) {
       fetchData();
     }
-  }, [fetchData, isAuthLoading, currentUser]);
+  }, [fetchData, authStatus, currentUser]);
 
   const handleAddParticipant = () => {
     setParticipantToEdit(null);
@@ -310,7 +316,7 @@ export default function AdminDashboardPage() {
   };
 
 
-  if (isAuthLoading) {
+  if (authStatus === 'loading') {
     return (
       <AppLayoutClientShell>
         <div className="flex flex-col gap-6">
@@ -338,11 +344,12 @@ export default function AdminDashboardPage() {
     );
   }
 
-  if (!currentUser) {
+  if (authStatus === 'unauthenticated' || !currentUser) { // After loading, if still no user, show redirect message
     return (
        <AppLayoutClientShell>
         <div className="flex items-center justify-center h-64">
-            <p className="text-lg text-muted-foreground">Redirecting to login...</p>
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-4 text-lg text-muted-foreground">Redirecting to login...</p>
         </div>
        </AppLayoutClientShell>
     );
@@ -471,7 +478,7 @@ export default function AdminDashboardPage() {
 
         <ParticipantTable
           participants={participants}
-          isLoading={isLoadingData}
+          isLoading={isLoadingData && authStatus === 'authenticated'} // Data is only loading if authenticated
           onEditParticipant={handleEditParticipant}
           visibleColumns={visibleColumns}
           selectedParticipants={selectedParticipantIds}
@@ -515,5 +522,3 @@ export default function AdminDashboardPage() {
     </AppLayoutClientShell>
   );
 }
-
-    
