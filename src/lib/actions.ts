@@ -20,9 +20,10 @@ import {
   updateDoc,
   setDoc,
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, ActionResult } from '@/types';
+import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
 
 const PARTICIPANTS_COLLECTION = 'participants';
+const STAFF_MEMBERS_COLLECTION = 'staff_members';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
@@ -233,7 +234,7 @@ export async function importParticipants(
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: '',
+        email: '', // Email is not parsed from CSV in ImportCsvDialog
         phone: '',
         attended: false, 
         checkInTime: null, 
@@ -342,10 +343,83 @@ export async function quickSetParticipantStatusAction(
     console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
     let message = 'An error occurred while updating status. Please try again.';
     let errorType = 'generic_error';
-    if (error.code === 'permission-denied') {
+     if (error.code === 'permission-denied') {
       message = 'Permission Denied: Could not update participant status. This action may require administrator privileges. Please ensure Firestore rules allow this update or the user has sufficient rights.';
       errorType = 'permission_denied';
     } else if (error.code) { 
+      message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
+      errorType = error.code;
+    }
+    return {
+      success: false,
+      message: message,
+      errorType: errorType,
+    };
+  }
+}
+
+export async function quickSetStaffStatusAction(
+  staffId: string,
+  newStatus: StaffAttendanceStatus
+): Promise<ActionResultStaff> {
+  if (!staffId) {
+    return { success: false, message: 'Staff Member ID is required.', errorType: 'missing_id' };
+  }
+
+  try {
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffId);
+    const staffMemberSnap = await getDoc(staffMemberRef);
+
+    if (!staffMemberSnap.exists()) {
+      return { success: false, message: `Staff member with ID "${staffId}" not found.`, errorType: 'not_found' };
+    }
+
+    const staffMemberData = staffMemberSnap.data() as StaffMember;
+    const updates: Partial<StaffMember> & { updatedAt: FieldValueType } = {
+      status: newStatus,
+      updatedAt: fsServerTimestamp(),
+    };
+
+    await updateDoc(staffMemberRef, updates as { [x: string]: any; });
+
+    // Fetch the updated document to return
+    const updatedSnap = await getDoc(staffMemberRef);
+    const updatedData = updatedSnap.data();
+    const updatedStaffMember: StaffMember = {
+        id: updatedSnap.id,
+        name: updatedData?.name || '',
+        role: updatedData?.role || '',
+        department: updatedData?.department,
+        team: updatedData?.team,
+        email: updatedData?.email,
+        phone: updatedData?.phone,
+        contactInfo: updatedData?.contactInfo,
+        status: updatedData?.status || 'Off Duty',
+        imageUrl: updatedData?.imageUrl,
+        notes: updatedData?.notes,
+        createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
+        updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
+    };
+    
+    revalidatePath(`/staff-checkin`, 'page');
+    revalidatePath(`/staff/${staffId}`);
+    revalidatePath('/staff');
+    revalidatePath('/superior-admin');
+
+
+    return {
+      success: true,
+      message: `Status for ${staffMemberData.name} updated to ${newStatus}.`,
+      staffMember: updatedStaffMember,
+    };
+  } catch (error: any) {
+    console.error(`[Server Action - quickSetStaffStatusAction] Error for ID ${staffId}, status ${newStatus}:`, error);
+    let message = 'An error occurred while updating staff status. Please try again.';
+    let errorType = 'generic_error';
+    if (error.code === 'permission-denied') {
+      message = 'Permission Denied: Could not update staff status. This action may require administrator privileges. Ensure Firestore rules allow this update or the user has sufficient rights.';
+      errorType = 'permission_denied';
+    } else if (error.code) {
       message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }

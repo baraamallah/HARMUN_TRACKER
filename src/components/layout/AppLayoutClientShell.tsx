@@ -13,7 +13,8 @@ import {
   ShieldCheck, 
   LogIn,
   Users2, // Icon for Staff
-  QrCode // Icon for Check-in
+  QrCode, // Icon for Participant Check-in
+  ClipboardUser // Icon for Staff Check-in
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -58,6 +59,7 @@ const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
+  { href: '/staff-checkin', icon: ClipboardUser, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
@@ -107,16 +109,13 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const navItemsToRender = React.useMemo(() => {
     let items = [...baseNavItems];
     if (loggedInUser && loggedInUser.uid === OWNER_UID) {
-      items.push(superiorAdminNavItem);
+      const publicViewIndex = items.findIndex(item => item.href === '/public');
+      if (publicViewIndex !== -1) {
+        items.splice(publicViewIndex, 0, superiorAdminNavItem);
+      } else {
+        items.push(superiorAdminNavItem);
+      }
     }
-    // Re-order if needed, for now appending Superior Admin if applicable
-    // Or insert it before public view:
-    // const publicViewIndex = items.findIndex(item => item.href === '/public');
-    // if (loggedInUser && loggedInUser.uid === OWNER_UID && publicViewIndex !== -1) {
-    //   items.splice(publicViewIndex, 0, superiorAdminNavItem);
-    // } else if (loggedInUser && loggedInUser.uid === OWNER_UID) {
-    //   items.push(superiorAdminNavItem);
-    // }
     return items;
   }, [loggedInUser]);
 
@@ -181,7 +180,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar>
-                    <AvatarImage src={loggedInUser.photoURL || `https://placehold.co/40x40.png?text=${getAvatarFallback()}`} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} data-ai-hint="user avatar" />
+                    <AvatarImage src={loggedInUser.photoURL || `https://placehold.co/40x40.png?text=${getAvatarFallback()}`} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} data-ai-hint="user avatar"/>
                     <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
                   </Avatar>
                 </Button>

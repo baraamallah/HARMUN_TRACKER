@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, QrCode as QrCodeIcon, Search } from 'lucide-react';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, QrCode as QrCodeIcon, Search, ClipboardUser } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -88,15 +88,20 @@ export default function SuperiorAdminPage() {
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
   const [participantSearchTerm, setParticipantSearchTerm] = useState('');
   const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
+  
+  // For Staff QR Codes
+  const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]); // Separate state for staff QR list
+  const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
+  const [staffSearchTerm, setStaffSearchTerm] = useState('');
+  const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
+
   const [appBaseUrl, setAppBaseUrl] = useState('');
-  const [harmunLogoUrl, setHarmunLogoUrl] = useState<string | undefined>(undefined); // State for HARMUN logo
+  const [harmunLogoUrl, setHarmunLogoUrl] = useState<string | undefined>(undefined); 
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setAppBaseUrl(window.location.origin);
-      // Example: Set a HARMUN logo URL if you have one hosted
       // setHarmunLogoUrl('https://example.com/path/to/harmun-logo.png'); 
-      // For now, it will be undefined, so QR codes won't have an embedded logo unless set
     }
   }, []);
 
@@ -116,8 +121,7 @@ export default function SuperiorAdminPage() {
           committee: data.committee || '',
           status: data.status || 'Absent',
           imageUrl: data.imageUrl,
-          // Omitting other fields for QR code list to keep it lighter
-        } as Participant; // Cast to Participant, acknowledge some fields might be missing
+        } as Participant;
       });
       setParticipants(fetchedParticipants);
     } catch (error: any) {
@@ -125,6 +129,33 @@ export default function SuperiorAdminPage() {
       toast({ title: 'Error Fetching Participants', description: error.message || "Failed to load participants for QR codes.", variant: 'destructive' });
     } finally {
       setIsLoadingParticipants(false);
+    }
+  }, [currentUser, toast]);
+
+  const fetchStaffForQrData = useCallback(async () => {
+    if (!currentUser || currentUser.uid !== OWNER_UID) return;
+    setIsLoadingStaffForQr(true);
+    try {
+      const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
+      const q = query(staffColRef, orderBy('name'));
+      const querySnapshot = await getDocs(q);
+      const fetchedStaff = querySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || '',
+          role: data.role || '',
+          team: data.team,
+          imageUrl: data.imageUrl,
+          status: data.status || 'Off Duty', // Add status for completeness if needed
+        } as StaffMember; // Cast, acknowledge some fields might be missing
+      });
+      setStaffForQr(fetchedStaff);
+    } catch (error: any) {
+      console.error("Error fetching staff for QR codes (Superior Admin): ", error);
+      toast({ title: 'Error Fetching Staff (QR)', description: error.message || "Failed to load staff for QR codes.", variant: 'destructive' });
+    } finally {
+      setIsLoadingStaffForQr(false);
     }
   }, [currentUser, toast]);
 
@@ -216,10 +247,11 @@ export default function SuperiorAdminPage() {
         fetchStaffTeams();
         fetchStaff();
         fetchParticipantsData(); 
+        fetchStaffForQrData(); // Fetch staff for QR codes
       }
     });
     return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff, fetchParticipantsData]);
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff, fetchParticipantsData, fetchStaffForQrData]);
 
   const handleAddItem = async (type: 'school' | 'committee' | 'staffTeam') => {
     if (!currentUser || currentUser.uid !== OWNER_UID) {
@@ -324,7 +356,10 @@ export default function SuperiorAdminPage() {
         if (type === 'school') fetchSchools();
         else if (type === 'committee') fetchCommittees();
         else if (type === 'staffTeam') fetchStaffTeams();
-        else if (type === 'staffMember') fetchStaff();
+        else if (type === 'staffMember') {
+          fetchStaff();
+          fetchStaffForQrData(); // Also refresh staff list for QR codes
+        }
 
       } catch (error: any) {
         console.error(`Client-side error deleting ${type} "${name}":`, error);
@@ -361,6 +396,7 @@ export default function SuperiorAdminPage() {
 
   const handleStaffFormSuccess = () => {
     fetchStaff();
+    fetchStaffForQrData(); // Also refresh staff list for QR codes
     setIsStaffFormOpen(false);
   };
 
@@ -368,6 +404,12 @@ export default function SuperiorAdminPage() {
     p.name.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
     p.school.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
     p.committee.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase())
+  );
+
+  const filteredStaffForQr = staffForQr.filter(s => 
+    s.name.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()) ||
+    (s.role && s.role.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase())) ||
+    (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))
   );
 
   if (isLoadingAuth) {
@@ -530,8 +572,7 @@ export default function SuperiorAdminPage() {
           </CardHeader>
           <CardContent className="pt-2">
             <p className="text-muted-foreground mb-4">
-              Generate and view QR codes for individual participant check-in. Each QR code links to a unique check-in URL.
-              Use the HARMUN logo URL in customization for branded QR codes.
+              Generate and view QR codes for individual participant check-in. Each QR code links to <code>/checkin?id=PARTICIPANT_ID</code>.
             </p>
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -546,7 +587,7 @@ export default function SuperiorAdminPage() {
             {isLoadingParticipants ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
+                  <div key={`p-qr-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
                     <Skeleton className="h-6 w-3/4" />
                     <Skeleton className="h-40 w-40 mx-auto rounded-md" />
                     <Skeleton className="h-8 w-full mt-2" />
@@ -563,7 +604,7 @@ export default function SuperiorAdminPage() {
                       <QrCodeDisplay
                         value={`${appBaseUrl}/checkin?id=${participant.id}`}
                         initialSize={160}
-                        downloadFileName={`harmun-qr-${participant.name.replace(/\s+/g, '_')}-${participant.id}.png`}
+                        downloadFileName={`harmun-participant-qr-${participant.name.replace(/\s+/g, '_')}-${participant.id}.png`}
                         eventLogoUrl={harmunLogoUrl} 
                       />
                     </div>
@@ -573,6 +614,60 @@ export default function SuperiorAdminPage() {
             ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
               <p className="text-center text-muted-foreground py-10">No participants match your search, or no participants available.</p>
             ) : !appBaseUrl && !isLoadingParticipants ? (
+              <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Staff QR Code Management Card */}
+        <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-cyan-500 mb-8">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-5">
+            <CardTitle className="text-2xl font-semibold flex items-center gap-2"><ClipboardUser className="h-7 w-7 text-cyan-500" />Staff Member Status QR Codes</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <p className="text-muted-foreground mb-4">
+              Generate and view QR codes for individual staff member status updates. Each QR code links to <code>/staff-checkin?id=STAFF_ID</code>.
+            </p>
+            <div className="relative mb-6">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search staff by name, role, or team..."
+                value={staffSearchTerm}
+                onChange={(e) => setStaffSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+            {isLoadingStaffForQr ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={`s-qr-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-40 w-40 mx-auto rounded-md" />
+                    <Skeleton className="h-8 w-full mt-2" />
+                    <Skeleton className="h-4 w-full mt-1" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredStaffForQr.length > 0 && appBaseUrl ? (
+              <ScrollArea className="h-[500px] pr-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredStaffForQr.map(staff => (
+                    <div key={staff.id} className="flex flex-col items-center p-1 rounded-lg">
+                      <h3 className="text-md font-semibold mb-2 truncate w-full text-center" title={`${staff.name} (${staff.role})`}>{staff.name}</h3>
+                      <QrCodeDisplay
+                        value={`${appBaseUrl}/staff-checkin?id=${staff.id}`}
+                        initialSize={160}
+                        downloadFileName={`harmun-staff-qr-${staff.name.replace(/\s+/g, '_')}-${staff.id}.png`}
+                        eventLogoUrl={harmunLogoUrl} 
+                      />
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
+              <p className="text-center text-muted-foreground py-10">No staff members match your search, or no staff available.</p>
+            ) : !appBaseUrl && !isLoadingStaffForQr ? (
               <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
             ) : null}
           </CardContent>
@@ -617,7 +712,7 @@ export default function SuperiorAdminPage() {
                         <TableRow key={staff.id}>
                            <TableCell>
                             <Avatar className="h-9 w-9">
-                              <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
+                              <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar"/>
                               <AvatarFallback>{staff.name.substring(0,1)}</AvatarFallback>
                             </Avatar>
                           </TableCell>

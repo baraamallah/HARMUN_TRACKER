@@ -110,3 +110,10 @@ export interface ActionResult {
   participant?: Participant; // Optionally return updated participant data
   errorType?: string; // e.g., 'not_found', 'update_failed', 'missing_id'
 }
+
+export interface ActionResultStaff {
+  success: boolean;
+  message: string;
+  staffMember?: StaffMember;
+  errorType?: string;
+}
