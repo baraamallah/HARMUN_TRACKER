@@ -4,7 +4,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import type { Participant } from '@/types';
+import type { Participant, AttendanceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,11 +33,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useTransition } from 'react';
+import { useEffect, useTransition, useState } from 'react'; // Added useState
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { getDefaultAttendanceStatusSetting } from '@/lib/actions'; // For default status
+import { getDefaultAttendanceStatusSetting } from '@/lib/actions'; 
 
 const participantFormSchema = z.object({
   id: z.string()
@@ -77,11 +77,18 @@ export function ParticipantForm({
 }: ParticipantFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [defaultStatus, setDefaultStatus] = useEffect(() => {
-    let status = 'Absent'; // Fallback
-    getDefaultAttendanceStatusSetting().then(s => status = s);
-    return status;
-  }, []);
+  const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent'); // Default to 'Absent'
+
+  useEffect(() => {
+    if (isOpen && !participantToEdit) { // Only fetch for new participants when dialog opens
+      getDefaultAttendanceStatusSetting().then(fetchedStatus => {
+        setDefaultStatus(fetchedStatus);
+      }).catch(err => {
+        console.error("Error fetching default status for ParticipantForm:", err);
+        // Keep the 'Absent' fallback if fetching fails
+      });
+    }
+  }, [isOpen, participantToEdit]);
 
 
   const form = useForm<ParticipantFormData>({
@@ -153,8 +160,13 @@ export function ParticipantForm({
         } else {
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
+             // If editing and had a real image, but it was cleared, use placeholder
              submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-          } else {
+          } else if (participantToEdit && participantToEdit.imageUrl) {
+            // If editing and had a placeholder, keep it or generate new if name changed
+            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          }
+          else { // New participant, or existing without any image
              submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
           }
         }
@@ -163,6 +175,8 @@ export function ParticipantForm({
         if (participantToEdit) {
           const participantRef = doc(db, 'participants', participantToEdit.id);
           // Retain existing attended and checkInTime if not explicitly changed by form
+          // Also retain status unless specifically changed by a different mechanism
+          submissionData.status = participantToEdit.status; 
           submissionData.attended = participantToEdit.attended || false;
           submissionData.checkInTime = participantToEdit.checkInTime || null;
           await updateDoc(participantRef, submissionData);
@@ -185,10 +199,9 @@ export function ParticipantForm({
             participantIdToUse = uuidv4();
           }
           
-          // For new participants, set event check-in defaults
-          submissionData.attended = false;
-          submissionData.checkInTime = null;
-          submissionData.status = defaultStatus; // General MUN status
+          submissionData.status = defaultStatus; 
+          submissionData.attended = false; 
+          submissionData.checkInTime = null; 
           submissionData.createdAt = serverTimestamp();
           
           const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);
