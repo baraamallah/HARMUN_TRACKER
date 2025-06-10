@@ -14,7 +14,7 @@ import {
   LogIn,
   Users2, // Icon for Staff
   QrCode, // Icon for Participant Check-in
-  ClipboardUser // Icon for Staff Check-in
+  Clipboard // Icon for Staff Check-in (Corrected from ClipboardUser)
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -59,7 +59,7 @@ const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
-  { href: '/staff-checkin', icon: ClipboardUser, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
+  { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' }, // Corrected icon
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 

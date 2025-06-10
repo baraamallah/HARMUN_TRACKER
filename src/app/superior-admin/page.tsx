@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, QrCode as QrCodeIcon, Search, ClipboardUser } from 'lucide-react';
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, QrCode as QrCodeIcon, Search, Clipboard } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -622,7 +622,7 @@ export default function SuperiorAdminPage() {
         {/* Staff QR Code Management Card */}
         <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-cyan-500 mb-8">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-5">
-            <CardTitle className="text-2xl font-semibold flex items-center gap-2"><ClipboardUser className="h-7 w-7 text-cyan-500" />Staff Member Status QR Codes</CardTitle>
+            <CardTitle className="text-2xl font-semibold flex items-center gap-2"><Clipboard className="h-7 w-7 text-cyan-500" />Staff Member Status QR Codes</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
             <p className="text-muted-foreground mb-4">
