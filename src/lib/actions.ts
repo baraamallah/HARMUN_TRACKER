@@ -21,7 +21,6 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, ActionResult } from '@/types';
-// format from date-fns removed as it's not used directly in this file after recent changes.
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
@@ -234,7 +233,7 @@ export async function importParticipants(
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: '', 
+        email: '',
         phone: '',
         attended: false, 
         checkInTime: null, 
@@ -294,26 +293,21 @@ export async function quickSetParticipantStatusAction(
       return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
     }
 
-    const participantData = participantSnap.data() as Participant; // Cast to Participant to access its fields
-    const updates: Partial<Participant> & { updatedAt: FieldValueType } = { // Ensure updatedAt is always included
+    const participantData = participantSnap.data() as Participant; 
+    const updates: Partial<Participant> & { updatedAt: FieldValueType } = { 
       status: newStatus,
       updatedAt: fsServerTimestamp(),
     };
 
     if (options?.isCheckIn && newStatus === 'Present') {
       updates.attended = true;
-      // Only set checkInTime if participant was not previously marked as attended or if checkInTime is not already set.
-      // This preserves the original check-in time if they were already checked in.
       if (!participantData.attended || !participantData.checkInTime) { 
         updates.checkInTime = fsServerTimestamp();
       }
     }
-    // Note: No explicit 'check-out' logic to clear 'attended' or 'checkInTime' here. 
-    // Changing status to 'Absent' (or other non-'Present' statuses) doesn't undo the fact they were attended.
+    
+    await updateDoc(participantRef, updates as { [x: string]: any; }); 
 
-    await updateDoc(participantRef, updates as { [x: string]: any; }); // Cast to avoid type issues with Partial<Participant>
-
-    // Fetch the updated participant data to return it, ensuring timestamps are converted
     const updatedSnap = await getDoc(participantRef);
     const updatedData = updatedSnap.data();
     const updatedParticipant: Participant = {
@@ -334,8 +328,7 @@ export async function quickSetParticipantStatusAction(
         updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
     };
 
-
-    revalidatePath(`/checkin?id=${participantId}`); 
+    revalidatePath(`/checkin`, 'page'); 
     revalidatePath(`/participants/${participantId}`); 
     revalidatePath('/'); 
     revalidatePath('/public');
@@ -347,10 +340,19 @@ export async function quickSetParticipantStatusAction(
     };
   } catch (error: any) {
     console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
+    let message = 'An error occurred while updating status. Please try again.';
+    let errorType = 'generic_error';
+    if (error.code === 'permission-denied') {
+      message = 'Permission Denied: Could not update participant status. This action may require administrator privileges. Please ensure Firestore rules allow this update or the user has sufficient rights.';
+      errorType = 'permission_denied';
+    } else if (error.code) { 
+      message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
+      errorType = error.code;
+    }
     return {
       success: false,
-      message: 'An error occurred while updating status. Please try again.',
-      errorType: 'generic_error',
+      message: message,
+      errorType: errorType,
     };
   }
 }
