@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, UserCircleIcon, RefreshCw, ListRestart, Edit3, Coffee, AlertOctagon, Wrench, LogOutIcon } from 'lucide-react'; // More specific icons
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, UserCircleIcon, RefreshCw, ListRestart, Edit3, Coffee, AlertOctagon, Wrench, LogOutIcon, UserSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,13 +20,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import { quickSetParticipantStatusAction } from '@/lib/actions'; 
-import type { Participant, AttendanceStatus, ActionResult } from '@/types'; 
+import { quickSetParticipantStatusAction } from '@/lib/actions';
+import type { Participant, AttendanceStatus, ActionResult } from '@/types';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore';
@@ -49,11 +50,20 @@ function CheckinPageContent() {
   const participantId = searchParams.get('id');
 
   const [participant, setParticipant] = React.useState<Participant | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(null);
-  const [pageError, setPageError] = React.useState<string | null>(null); // Renamed from errorMessage for clarity
+  const [isLoading, setIsLoading] = React.useState(!!participantId); // Only true if ID is present
+  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(participantId ? 'initial_load' : null);
+  const [pageError, setPageError] = React.useState<string | null>(null);
+
+  const [manualIdInput, setManualIdInput] = React.useState('');
+  const [isManualLookupLoading, setIsManualLookupLoading] = React.useState(false);
 
   const fetchParticipantData = React.useCallback(async (id: string) => {
+    if (!id) {
+      setIsLoading(false); // Ensure loading is false if no ID to fetch
+      setActionInProgress(null);
+      setParticipant(null);
+      return;
+    }
     setIsLoading(true);
     setPageError(null);
     setActionInProgress('initial_load');
@@ -70,10 +80,9 @@ function CheckinPageContent() {
             status: data.status || 'Absent',
             imageUrl: data.imageUrl,
             attended: data.attended || false,
-            checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : data.checkInTime,
+            checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : (data.checkInTime || null),
             createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
             updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-            // include other fields if needed by this page, e.g. notes, additionalDetails
         } as Participant;
         setParticipant(fetchedParticipant);
       } else {
@@ -82,12 +91,13 @@ function CheckinPageContent() {
         toast({ title: "Not Found", description: `Participant ID "${id}" not found.`, variant: "destructive" });
       }
     } catch (error: any) {
-      console.error("Error fetching participant (client-side for QR page):", error);
+      console.error("Error fetching participant (client-side for QR/Manual page):", error);
       setPageError("Failed to load participant data. Please check the console and try again.");
       toast({ title: "Error Loading Data", description: "Could not retrieve participant details.", variant: "destructive" });
     } finally {
       setIsLoading(false);
       setActionInProgress(null);
+      setIsManualLookupLoading(false); // Ensure this is reset
     }
   }, [toast]);
 
@@ -95,21 +105,22 @@ function CheckinPageContent() {
     if (participantId) {
       fetchParticipantData(participantId);
     } else {
-      setPageError("No Participant ID provided in the URL.");
+      // No ID in URL, ready for manual input, set loading states accordingly
       setIsLoading(false);
-      toast({ title: "Missing ID", description: "No Participant ID specified in URL.", variant: "destructive" });
+      setActionInProgress(null);
+      setParticipant(null);
     }
-  }, [participantId, fetchParticipantData, toast]);
+  }, [participantId, fetchParticipantData]);
 
   const handleStatusUpdate = async (newStatus: AttendanceStatus, isCheckInIntent?: boolean) => {
     if (!participant) return;
-    setActionInProgress(newStatus); // To disable the specific button being processed
+    setActionInProgress(newStatus);
     setPageError(null);
 
     const result: ActionResult = await quickSetParticipantStatusAction(participant.id, newStatus, { isCheckIn: isCheckInIntent });
 
     if (result.success && result.participant) {
-      setParticipant(result.participant); 
+      setParticipant(result.participant);
       toast({
         title: 'Status Updated Successfully',
         description: result.message,
@@ -122,11 +133,21 @@ function CheckinPageContent() {
         description: result.message,
         variant: 'destructive',
       });
-      // Re-fetch data on failure to ensure UI consistency with DB state
       if (participantId) fetchParticipantData(participantId);
     }
     setActionInProgress(null);
   };
+
+  const handleManualLookup = () => {
+    if (!manualIdInput.trim()) {
+      toast({ title: "ID Required", description: "Please enter a participant ID.", variant: "destructive" });
+      return;
+    }
+    setIsManualLookupLoading(true);
+    // The router.push will change participantId, triggering the useEffect to fetch data
+    router.push(`/checkin?id=${manualIdInput.trim()}`);
+  };
+
 
   const getStatusBadgeStyling = (status: AttendanceStatus): string => {
     switch (status) {
@@ -137,8 +158,55 @@ function CheckinPageContent() {
         default: return 'bg-gray-100 text-gray-700 border-gray-400 dark:bg-gray-700/50 dark:text-gray-300 dark:border-gray-500';
     }
   };
-  
+
   const cardBorderColor = participant?.status === 'Present' ? 'border-green-500' : participant?.status === 'Absent' ? 'border-red-500' : 'border-primary';
+
+  // Manual ID Input View
+  if (!participantId && !isLoading && !pageError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
+          <CardHeader className="text-center pt-8">
+            <div className="mb-6 flex justify-center">
+              <Logo size="lg" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">Manual Participant Lookup</CardTitle>
+            <CardDescription className="text-md text-muted-foreground">
+              Enter a participant ID to manage their status.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-6 py-8 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="manual-participant-id">Participant ID</Label>
+              <Input
+                id="manual-participant-id"
+                placeholder="Enter participant ID here"
+                value={manualIdInput}
+                onChange={(e) => setManualIdInput(e.target.value)}
+                disabled={isManualLookupLoading}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isManualLookupLoading) handleManualLookup(); }}
+              />
+            </div>
+            <Button onClick={handleManualLookup} className="w-full py-3 text-base" disabled={isManualLookupLoading || !manualIdInput.trim()}>
+              {isManualLookupLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserSearch className="mr-2 h-5 w-5" />}
+              Find Participant
+            </Button>
+          </CardContent>
+          <CardFooter className="flex-col items-center gap-3 pb-8 text-sm">
+            <p className="text-muted-foreground">
+              Alternatively, scan a participant's QR code.
+            </p>
+            <Button asChild className="w-full mt-2" variant="outline">
+              <Link href="/">
+                <Home className="mr-2 h-4 w-4" /> Go to Dashboard
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
 
   if (isLoading && actionInProgress === 'initial_load') {
     return (
@@ -168,30 +236,66 @@ function CheckinPageContent() {
             <p className="text-xl font-semibold text-destructive">Error</p>
             <p className="text-md text-muted-foreground">{pageError}</p>
             {participantId && <p className="text-sm text-muted-foreground">Attempted ID: {participantId}</p>}
-            <Button variant="outline" onClick={() => participantId && fetchParticipantData(participantId)} disabled={isLoading}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Retry
-            </Button>
+            <div className="flex flex-col gap-2 w-full">
+              <Button variant="outline" onClick={() => participantId && fetchParticipantData(participantId)} disabled={isLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {participantId}
+              </Button>
+              <Button variant="secondary" onClick={() => router.push('/checkin')}>
+                <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup
+              </Button>
+            </div>
           </CardContent>
-          <CardFooter className="flex-col gap-3 pb-8"><Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button></CardFooter>
+          <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
+            <Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
+          </CardFooter>
         </Card>
       </div>
     );
   }
 
-  if (!participant) { // Fallback if still no participant and not loading/error state
+  if (!participant && participantId) { // Fallback if ID was in URL but participant is null after loading/error
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
-            <p className="text-xl text-muted-foreground">Participant data unavailable or ID missing.</p>
-            <Button variant="outline" onClick={() => router.push('/')}> <Home className="mr-2 h-4 w-4" /> Go to Dashboard </Button>
+            <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {participantId}.</p>
+            <Button variant="outline" onClick={() => router.push('/checkin')}> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
+          </CardContent>
+           <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
+            <Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+  
+  // This should only be reached if participant object exists
+  if (!participant) {
+    // This is a safeguard, should ideally be handled by the manual input screen or error screen.
+    // If participantId was present but fetch failed, it's an error.
+    // If participantId was not present, it should show manual input.
+    // If somehow it reaches here without participant and without being in loading/error/manual input state,
+    // it implies an unexpected state, perhaps show a generic error or redirect.
+    // For now, redirecting to manual lookup if no ID, or showing a generic prompt.
+    if (!participantId) {
+         router.replace('/checkin'); // Soft redirect to manual lookup if somehow landed here without ID
+         return null; // Avoid rendering anything else
+    }
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
+          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
+            <AlertTriangle className="h-16 w-16 text-yellow-500" />
+             <p className="text-xl text-muted-foreground">Unexpected state. Participant data missing.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
+
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
@@ -244,8 +348,8 @@ function CheckinPageContent() {
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full text-md py-5" size="lg" disabled={!!actionInProgress}>
-                        {actionInProgress && actionInProgress !== 'initial_load' && actionInProgress !== 'Present' && actionInProgress !== 'Absent' 
-                          ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> 
+                        {actionInProgress && actionInProgress !== 'initial_load' && actionInProgress !== 'Present' && actionInProgress !== 'Absent'
+                          ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
                           : <ListRestart className="mr-2 h-5 w-5" />}
                         Update Other Status...
                     </Button>
@@ -269,13 +373,18 @@ function CheckinPageContent() {
             <Button onClick={() => participantId && fetchParticipantData(participantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
                 <RefreshCw className="mr-2 h-4 w-4"/> Refresh Participant Data
             </Button>
+             <Button variant="secondary" onClick={() => router.push('/checkin')} className="w-full">
+                <UserSearch className="mr-2 h-4 w-4" /> Lookup Another Participant
+            </Button>
             <div className="flex w-full gap-2">
-                <Button asChild className="flex-1" variant="secondary">
+                <Button asChild className="flex-1" variant="outline">
                     <Link href="/"> <Home className="mr-2 h-4 w-4"/> Dashboard </Link>
                 </Button>
-                <Button asChild className="flex-1" variant="outline">
-                    <Link href={`/participants/${participantId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
-                </Button>
+                {participantId && (
+                    <Button asChild className="flex-1" variant="outline">
+                        <Link href={`/participants/${participantId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
+                    </Button>
+                )}
             </div>
         </CardFooter>
       </Card>
@@ -304,3 +413,5 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
+
+    
