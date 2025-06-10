@@ -31,13 +31,13 @@ interface ParticipantTableProps {
   isAllSelected: boolean;
 }
 
-type SortKey = keyof Pick<Participant, 'name' | 'school' | 'committee' | 'status'>;
+type SortKey = keyof Pick<Participant, 'name' | 'school' | 'committee' | 'country' | 'status'>;
 type SortOrder = 'asc' | 'desc';
 
-export function ParticipantTable({ 
-  participants, 
-  isLoading, 
-  onEditParticipant, 
+export function ParticipantTable({
+  participants,
+  isLoading,
+  onEditParticipant,
   visibleColumns,
   selectedParticipants,
   onSelectParticipant,
@@ -49,8 +49,8 @@ export function ParticipantTable({
 
   const sortedParticipants = React.useMemo(() => {
     return [...participants].sort((a, b) => {
-      const valA = a[sortKey];
-      const valB = b[sortKey];
+      const valA = a[sortKey] || ''; // Handle undefined for optional fields like country
+      const valB = b[sortKey] || '';
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
@@ -84,6 +84,7 @@ export function ParticipantTable({
               {visibleColumns.name && <TableHead><Skeleton className="h-5 w-32" /></TableHead>}
               {visibleColumns.school && <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-28" /></TableHead>}
               {visibleColumns.committee && <TableHead className="hidden lg:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
+              {visibleColumns.country && <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableHead>}
               {visibleColumns.status && <TableHead><Skeleton className="h-5 w-24" /></TableHead>}
               {visibleColumns.actions && <TableHead className="text-right w-[80px]"><Skeleton className="h-5 w-10 ml-auto" /></TableHead>}
             </TableRow>
@@ -96,6 +97,7 @@ export function ParticipantTable({
                 {visibleColumns.name && <TableCell><Skeleton className="h-5 w-40" /></TableCell>}
                 {visibleColumns.school && <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-32" /></TableCell>}
                 {visibleColumns.committee && <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-28" /></TableCell>}
+                {visibleColumns.country && <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableCell>}
                 {visibleColumns.status && <TableCell><Skeleton className="h-6 w-28 rounded-full" /></TableCell>}
                 {visibleColumns.actions && <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded-md" /></TableCell>}
               </TableRow>
@@ -155,6 +157,13 @@ export function ParticipantTable({
                 </Button>
               </TableHead>
             )}
+            {visibleColumns.country && (
+              <TableHead className="hidden md:table-cell min-w-[120px]">
+                <Button variant="ghost" onClick={() => handleSort('country')} className="px-1 group">
+                  Country {renderSortIcon('country')}
+                </Button>
+              </TableHead>
+            )}
             {visibleColumns.status && (
               <TableHead className="min-w-[120px]">
                 <Button variant="ghost" onClick={() => handleSort('status')} className="px-1 group">
@@ -167,8 +176,8 @@ export function ParticipantTable({
         </TableHeader>
         <TableBody>
           {sortedParticipants.map((participant) => (
-            <TableRow 
-              key={participant.id} 
+            <TableRow
+              key={participant.id}
               className="hover:bg-muted/30 transition-colors"
               data-state={selectedParticipants.includes(participant.id) ? 'selected' : undefined}
             >
@@ -200,6 +209,7 @@ export function ParticipantTable({
               )}
               {visibleColumns.school && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.school}</TableCell>}
               {visibleColumns.committee && <TableCell className="hidden lg:table-cell text-muted-foreground">{participant.committee}</TableCell>}
+              {visibleColumns.country && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.country || 'N/A'}</TableCell>}
               {visibleColumns.status && (
                 <TableCell>
                   <AttendanceStatusBadge status={participant.status} />

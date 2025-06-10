@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone, Landmark, GraduationCap } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone, Landmark, GraduationCap, Globe } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -23,8 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db } from '@/lib/firebase'; 
-import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore'; 
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore';
 
 export default function ParticipantProfilePage() {
   const params = useParams();
@@ -35,7 +35,7 @@ export default function ParticipantProfilePage() {
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  
+
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
@@ -45,13 +45,13 @@ export default function ParticipantProfilePage() {
     if (!id) {
       setIsLoading(false);
       toast({ title: "Error", description: "Participant ID is missing.", variant: "destructive" });
-      router.push('/'); 
+      router.push('/');
       return;
     }
     setIsLoading(true);
     try {
       const participantRef = doc(db, 'participants', id);
-      const docSnap = await getDoc(participantRef); 
+      const docSnap = await getDoc(participantRef);
       let participantData: Participant | null = null;
       if (docSnap.exists()) {
           const data = docSnap.data();
@@ -60,6 +60,7 @@ export default function ParticipantProfilePage() {
             name: data.name || '',
             school: data.school || '',
             committee: data.committee || '',
+            country: data.country,
             status: data.status || 'Absent',
             imageUrl: data.imageUrl,
             notes: data.notes,
@@ -82,9 +83,9 @@ export default function ParticipantProfilePage() {
         setParticipant(participantData);
       } else {
         toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
-        router.push('/'); 
+        router.push('/');
       }
-      setSchools(systemSchools.filter(s => s !== 'All Schools')); 
+      setSchools(systemSchools.filter(s => s !== 'All Schools'));
       setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
 
     } catch (error: any) {
@@ -98,10 +99,10 @@ export default function ParticipantProfilePage() {
   React.useEffect(() => {
     fetchParticipantData();
   }, [fetchParticipantData]);
-  
+
   const handleFormSubmitSuccess = () => {
-    fetchParticipantData(); 
-    setIsParticipantFormOpen(false); 
+    fetchParticipantData();
+    setIsParticipantFormOpen(false);
   };
 
   const handleMarkAttendanceClientSide = async (status: AttendanceStatus) => {
@@ -110,7 +111,7 @@ export default function ParticipantProfilePage() {
     try {
       const participantRef = doc(db, 'participants', participant.id);
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
-      
+
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
 
       toast({
@@ -124,7 +125,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData(); 
+       fetchParticipantData();
     } finally {
       setIsSubmitting(false);
     }
@@ -174,7 +175,7 @@ export default function ParticipantProfilePage() {
       </div>
     );
   }
-  
+
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
        <Button asChild variant="outline" className="mb-6">
@@ -202,6 +203,10 @@ export default function ParticipantProfilePage() {
               <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><BookUser className="mr-2 h-4 w-4 text-primary/70" />Committee:</span>
                 <span className="text-right">{participant.committee}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4 text-primary/70" />Country:</span>
+                <span className="text-right">{participant.country || 'Not set'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><GraduationCap className="mr-2 h-4 w-4 text-primary/70" />Class/Grade:</span>

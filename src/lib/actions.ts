@@ -16,7 +16,7 @@ import {
   writeBatch as fsWriteBatch,
   collection as fsCollection,
   doc as fsDoc,
-  FieldValue as FirestoreFieldValue, 
+  FieldValue as FirestoreFieldValue,
   updateDoc,
   setDoc,
 } from 'firebase/firestore';
@@ -74,15 +74,16 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        status: data.status || 'Absent', 
+        country: data.country,
+        status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
         additionalDetails: data.additionalDetails,
         classGrade: data.classGrade,
         email: data.email,
         phone: data.phone,
-        attended: data.attended || false, 
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null, 
+        attended: data.attended || false,
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
@@ -93,7 +94,8 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       participantsData = participantsData.filter(p =>
         p.name.toLowerCase().includes(term) ||
         p.school.toLowerCase().includes(term) ||
-        p.committee.toLowerCase().includes(term)
+        p.committee.toLowerCase().includes(term) ||
+        (p.country && p.country.toLowerCase().includes(term))
       );
     }
     return participantsData;
@@ -126,6 +128,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
+        country: data.country,
         status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
@@ -187,7 +190,7 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt' | 'attended' | 'checkInTime'>[]
+  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt' | 'attended' | 'checkInTime' | 'country'>[]
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
 
   if (parsedParticipants.length === 0) {
@@ -229,15 +232,16 @@ export async function importParticipants(
         name: data.name.trim(),
         school: trimmedSchool,
         committee: trimmedCommittee,
-        status: defaultMunStatus, 
+        country: '', // Country is not imported from CSV by default
+        status: defaultMunStatus,
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
         notes: '',
         additionalDetails: '',
         classGrade: '',
-        email: '', // Email is not parsed from CSV in ImportCsvDialog
+        email: '',
         phone: '',
-        attended: false, 
-        checkInTime: null, 
+        attended: false,
+        checkInTime: null,
         createdAt: fsServerTimestamp(),
         updatedAt: fsServerTimestamp(),
       };
@@ -294,20 +298,20 @@ export async function quickSetParticipantStatusAction(
       return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
     }
 
-    const participantData = participantSnap.data() as Participant; 
-    const updates: Partial<Participant> & { updatedAt: FieldValueType } = { 
+    const participantData = participantSnap.data() as Participant;
+    const updates: Partial<Participant> & { updatedAt: FieldValueType } = {
       status: newStatus,
       updatedAt: fsServerTimestamp(),
     };
 
     if (options?.isCheckIn && newStatus === 'Present') {
       updates.attended = true;
-      if (!participantData.attended || !participantData.checkInTime) { 
+      if (!participantData.attended || !participantData.checkInTime) {
         updates.checkInTime = fsServerTimestamp();
       }
     }
-    
-    await updateDoc(participantRef, updates as { [x: string]: any; }); 
+
+    await updateDoc(participantRef, updates as { [x: string]: any; });
 
     const updatedSnap = await getDoc(participantRef);
     const updatedData = updatedSnap.data();
@@ -316,6 +320,7 @@ export async function quickSetParticipantStatusAction(
         name: updatedData?.name || '',
         school: updatedData?.school || '',
         committee: updatedData?.committee || '',
+        country: updatedData?.country,
         status: updatedData?.status || 'Absent',
         imageUrl: updatedData?.imageUrl,
         notes: updatedData?.notes,
@@ -329,9 +334,9 @@ export async function quickSetParticipantStatusAction(
         updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
     };
 
-    revalidatePath(`/checkin`, 'page'); 
-    revalidatePath(`/participants/${participantId}`); 
-    revalidatePath('/'); 
+    revalidatePath(`/checkin`, 'page');
+    revalidatePath(`/participants/${participantId}`);
+    revalidatePath('/');
     revalidatePath('/public');
 
     return {
@@ -346,7 +351,7 @@ export async function quickSetParticipantStatusAction(
      if (error.code === 'permission-denied') {
       message = 'Permission Denied: Could not update participant status. This action may require administrator privileges. Please ensure Firestore rules allow this update or the user has sufficient rights.';
       errorType = 'permission_denied';
-    } else if (error.code) { 
+    } else if (error.code) {
       message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
@@ -400,7 +405,7 @@ export async function quickSetStaffStatusAction(
         createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
         updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
     };
-    
+
     revalidatePath(`/staff-checkin`, 'page');
     revalidatePath(`/staff/${staffId}`);
     revalidatePath('/staff');

@@ -20,14 +20,15 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
       return;
     }
 
-    const headers = ['ID', 'Name', 'School', 'Committee', 'Status'];
+    const headers = ['ID', 'Name', 'School', 'Committee', 'Country', 'Status'];
     const csvContent = [
       headers.join(','),
       ...participants.map(p => [
-        p.id || '', 
+        p.id || '',
         `"${p.name.replace(/"/g, '""')}"`, // Escape double quotes
         `"${p.school.replace(/"/g, '""')}"`,
         `"${p.committee.replace(/"/g, '""')}"`,
+        `"${(p.country || '').replace(/"/g, '""')}"`,
         p.status
       ].join(',')),
     ].join('\n');

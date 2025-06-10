@@ -69,7 +69,7 @@ export default function AdminDashboardPage() {
   const [isLoadingData, setIsLoadingData] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
-  
+
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
@@ -86,6 +86,7 @@ export default function AdminDashboardPage() {
     name: true,
     school: true,
     committee: true,
+    country: true,
     status: true,
     actions: true,
   });
@@ -96,6 +97,7 @@ export default function AdminDashboardPage() {
     name: 'Name',
     school: 'School',
     committee: 'Committee',
+    country: 'Country',
     status: 'Status',
     actions: 'Actions',
   };
@@ -129,7 +131,7 @@ export default function AdminDashboardPage() {
     if (authStatus !== 'authenticated' || !currentUser) {
       return;
     }
-    
+
     setIsLoadingData(true);
     try {
       const participantsColRef = collection(db, 'participants');
@@ -144,7 +146,7 @@ export default function AdminDashboardPage() {
       if (quickStatusFilter !== 'All') {
         queryConstraints.push(where('status', '==', quickStatusFilter));
       }
-      
+
       const participantsQuery = query(participantsColRef, ...queryConstraints, orderBy('name'));
       const participantsSnapshot = await getDocs(participantsQuery);
       let fetchedParticipants = participantsSnapshot.docs.map(docSnap => {
@@ -154,6 +156,7 @@ export default function AdminDashboardPage() {
           name: data.name || '',
           school: data.school || '',
           committee: data.committee || '',
+          country: data.country,
           status: data.status || 'Absent',
           imageUrl: data.imageUrl,
           notes: data.notes,
@@ -171,7 +174,8 @@ export default function AdminDashboardPage() {
         fetchedParticipants = fetchedParticipants.filter(p =>
           p.name.toLowerCase().includes(term) ||
           p.school.toLowerCase().includes(term) ||
-          p.committee.toLowerCase().includes(term)
+          p.committee.toLowerCase().includes(term) ||
+          (p.country && p.country.toLowerCase().includes(term))
         );
       }
       setParticipants(fetchedParticipants);
@@ -182,7 +186,7 @@ export default function AdminDashboardPage() {
       ]);
       setSchools(['All Schools', ...schoolsData]);
       setCommittees(['All Committees', ...committeesData]);
-      setSelectedParticipantIds([]); 
+      setSelectedParticipantIds([]);
     } catch (error: any) {
       console.error("Failed to fetch data:", error);
       let errorMessage = "Failed to load dashboard data.";
@@ -212,9 +216,9 @@ export default function AdminDashboardPage() {
     setParticipantToEdit(participant);
     setIsParticipantFormOpen(true);
   };
-  
+
   const toggleAllColumns = (show: boolean) => {
-    setVisibleColumns(prev => 
+    setVisibleColumns(prev =>
       Object.keys(prev).reduce((acc, key) => {
         acc[key as keyof VisibleColumns] = show;
         return acc;
@@ -229,8 +233,8 @@ export default function AdminDashboardPage() {
   ];
 
   const handleSelectParticipant = (participantId: string, isSelected: boolean) => {
-    setSelectedParticipantIds(prevSelected => 
-      isSelected 
+    setSelectedParticipantIds(prevSelected =>
+      isSelected
         ? [...prevSelected, participantId]
         : prevSelected.filter(id => id !== participantId)
     );
@@ -243,7 +247,7 @@ export default function AdminDashboardPage() {
       setSelectedParticipantIds([]);
     }
   };
-  
+
   const isAllSelected = participants.length > 0 && selectedParticipantIds.length === participants.length;
 
   const handleBulkStatusUpdate = async (status: AttendanceStatus) => {
@@ -264,14 +268,14 @@ export default function AdminDashboardPage() {
         title: "Bulk Update Successful",
         description: `${selectedParticipantIds.length} participant(s) updated to ${status}.`,
       });
-      fetchData(); 
+      fetchData();
       setSelectedParticipantIds([]);
     } catch (error: any) {
       console.error("Client-side Error bulk marking attendance: ", error);
-      toast({ 
-        title: "Bulk Update Failed", 
-        description: error.message || "An unexpected error occurred during bulk update. Check Firestore rules.", 
-        variant: "destructive" 
+      toast({
+        title: "Bulk Update Failed",
+        description: error.message || "An unexpected error occurred during bulk update. Check Firestore rules.",
+        variant: "destructive"
       });
     } finally {
       setIsBulkUpdating(false);
@@ -300,7 +304,7 @@ export default function AdminDashboardPage() {
         title: "Bulk Delete Successful",
         description: `${selectedParticipantIds.length} participant(s) deleted.`,
       });
-      fetchData(); 
+      fetchData();
       setSelectedParticipantIds([]);
     } catch (error: any) {
       console.error("Client-side error during bulk deletion: ", error);
@@ -400,10 +404,10 @@ export default function AdminDashboardPage() {
             </Button>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
           <Input
-            placeholder="Search by name, school, committee..."
+            placeholder="Search by name, school, committee, country..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow"
@@ -502,7 +506,7 @@ export default function AdminDashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Bulk Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to permanently delete {selectedParticipantIds.length} selected participant(s)? 
+              Are you sure you want to permanently delete {selectedParticipantIds.length} selected participant(s)?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

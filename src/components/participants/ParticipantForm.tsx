@@ -33,11 +33,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useTransition, useState } from 'react'; 
+import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { getDefaultAttendanceStatusSetting } from '@/lib/actions'; 
+import { getDefaultAttendanceStatusSetting } from '@/lib/actions';
 import { generateAvatar, type GenerateAvatarInput } from '@/ai/flows/generate-avatar-flow';
 import { Sparkles, Loader2 } from 'lucide-react';
 
@@ -50,6 +50,7 @@ const participantFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
   school: z.string().min(1, 'School is required.'),
   committee: z.string().min(1, 'Committee is required.'),
+  country: z.string().max(100, 'Country must be at most 100 characters.').optional().default(''),
   classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''),
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
@@ -80,10 +81,10 @@ export function ParticipantForm({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
-  const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent'); 
+  const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent');
 
   useEffect(() => {
-    if (isOpen && !participantToEdit) { 
+    if (isOpen && !participantToEdit) {
       getDefaultAttendanceStatusSetting().then(fetchedStatus => {
         setDefaultStatus(fetchedStatus);
       }).catch(err => {
@@ -100,6 +101,7 @@ export function ParticipantForm({
       name: '',
       school: '',
       committee: '',
+      country: '',
       classGrade: '',
       email: '',
       phone: '',
@@ -117,6 +119,7 @@ export function ParticipantForm({
           name: participantToEdit.name,
           school: participantToEdit.school,
           committee: participantToEdit.committee,
+          country: participantToEdit.country || '',
           classGrade: participantToEdit.classGrade || '',
           email: participantToEdit.email || '',
           phone: participantToEdit.phone || '',
@@ -130,6 +133,7 @@ export function ParticipantForm({
           name: '',
           school: '',
           committee: '',
+          country: '',
           classGrade: '',
           email: '',
           phone: '',
@@ -187,6 +191,7 @@ export function ParticipantForm({
           name: data.name.trim(),
           school: data.school.trim(),
           committee: data.committee.trim(),
+          country: data.country?.trim() || '',
           classGrade: data.classGrade?.trim() || '',
           email: data.email?.trim() || '',
           phone: data.phone?.trim() || '',
@@ -196,16 +201,14 @@ export function ParticipantForm({
         };
 
         const formImageUrl = data.imageUrl?.trim();
-        if (formImageUrl && !formImageUrl.startsWith('https://placehold.co')) { // Also check it's not a placeholder
+        if (formImageUrl && !formImageUrl.startsWith('https://placehold.co')) { 
           submissionData.imageUrl = formImageUrl;
-        } else if (!formImageUrl) { // If truly empty, generate a placeholder
+        } else if (!formImageUrl) { 
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-           // If it is a placeholder, and we didn't generate an AI one, keep it or clear it based on desired logic
-           // For now, let's assume if it's a placeholder we clear it for a new placeholder to be made unless it's an AI image
            if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-             submissionData.imageUrl = participantToEdit.imageUrl; // Keep existing non-placeholder if no new AI image
+             submissionData.imageUrl = participantToEdit.imageUrl; 
            } else {
             const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
@@ -215,7 +218,7 @@ export function ParticipantForm({
 
         if (participantToEdit) {
           const participantRef = doc(db, 'participants', participantToEdit.id);
-          submissionData.status = participantToEdit.status; 
+          submissionData.status = participantToEdit.status;
           submissionData.attended = participantToEdit.attended || false;
           submissionData.checkInTime = participantToEdit.checkInTime || null;
           await updateDoc(participantRef, submissionData);
@@ -232,17 +235,17 @@ export function ParticipantForm({
                 description: `A participant with ID "${participantIdToUse}" already exists. Please use a unique ID or leave it blank for auto-generation.`,
                 variant: 'destructive',
               });
-              return; 
+              return;
             }
           } else {
             participantIdToUse = uuidv4();
           }
-          
-          submissionData.status = defaultStatus; 
-          submissionData.attended = false; 
-          submissionData.checkInTime = null; 
+
+          submissionData.status = defaultStatus;
+          submissionData.attended = false;
+          submissionData.checkInTime = null;
           submissionData.createdAt = serverTimestamp();
-          
+
           const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);
           await setDoc(newParticipantRefWithId, submissionData);
           toast({ title: 'Participant Added', description: `${data.name} (ID: ${participantIdToUse}) has been added.` });
@@ -259,13 +262,14 @@ export function ParticipantForm({
       }
     });
   };
-  
+
   const handleDialogClose = () => {
-    form.reset({ 
+    form.reset({
         id: '',
-        name: '', 
-        school: '', 
+        name: '',
+        school: '',
         committee: '',
+        country: '',
         classGrade: '',
         email: '',
         phone: '',
@@ -275,7 +279,7 @@ export function ParticipantForm({
     });
     onOpenChange(false);
   }
-  
+
   const currentImageUrl = form.watch('imageUrl');
   const showGenerateButton = !currentImageUrl || currentImageUrl.startsWith('https://placehold.co');
 
@@ -305,11 +309,11 @@ export function ParticipantForm({
                     Participant ID {participantToEdit ? '(Read-only)' : '(Optional - Leave blank to auto-generate)'}
                   </FormLabel>
                   <FormControl>
-                    <Input 
-                      id="form-id" 
-                      placeholder={participantToEdit ? '' : "e.g., CUS_123_XYZ (alphanumeric, -, _)"} 
-                      {...field} 
-                      disabled={isPending || !!participantToEdit || isGeneratingAvatar} 
+                    <Input
+                      id="form-id"
+                      placeholder={participantToEdit ? '' : "e.g., CUS_123_XYZ (alphanumeric, -, _)"}
+                      {...field}
+                      disabled={isPending || !!participantToEdit || isGeneratingAvatar}
                       aria-readonly={!!participantToEdit}
                     />
                   </FormControl>
@@ -391,9 +395,22 @@ export function ParticipantForm({
                 </FormItem>
               )}
             />
+             <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-country">Country (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="form-country" placeholder="e.g., United States" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
-              name="classGrade" 
+              name="classGrade"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor="form-classGrade">Class/Grade (Optional)</FormLabel>

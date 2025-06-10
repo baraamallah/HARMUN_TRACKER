@@ -18,6 +18,7 @@ export interface Participant {
   name: string;
   school: string;
   committee: string;
+  country?: string; // Added country field
   status: AttendanceStatus; // This status is for general MUN session attendance
   imageUrl?: string;
   notes?: string;
@@ -68,6 +69,7 @@ export interface VisibleColumns {
   name: boolean;
   school: boolean;
   committee: boolean;
+  country: boolean; // Added country visibility
   status: boolean;
   actions: boolean;
   selection?: boolean;
