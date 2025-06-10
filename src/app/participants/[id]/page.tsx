@@ -50,9 +50,8 @@ export default function ParticipantProfilePage() {
     }
     setIsLoading(true);
     try {
-      // Direct Firestore fetch
       const participantRef = doc(db, 'participants', id);
-      const docSnap = await getDoc(participantRef); // Corrected: use getDoc()
+      const docSnap = await getDoc(participantRef); 
       let participantData: Participant | null = null;
       if (docSnap.exists()) {
           const data = docSnap.data();
@@ -68,11 +67,12 @@ export default function ParticipantProfilePage() {
             classGrade: data.classGrade,
             email: data.email,
             phone: data.phone,
+            attended: data.attended || false,
+            checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : (data.checkInTime || null),
             createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
             updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
           } as Participant;
       }
-      // System lists can still be fetched via server actions if preferred / rules allow
       const [systemSchools, systemCommittees] = await Promise.all([
         getSystemSchools(),
         getSystemCommittees(),
@@ -112,8 +112,6 @@ export default function ParticipantProfilePage() {
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
       
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      // No need to call fetchParticipantData() immediately after client-side update if we update local state
-      // router.refresh() or fetchParticipantData() can be used if server-derived fields need re-fetching
 
       toast({
         title: 'Attendance Updated',
@@ -126,7 +124,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData(); // Re-fetch on error to ensure data consistency
+       fetchParticipantData(); 
     } finally {
       setIsSubmitting(false);
     }
@@ -220,15 +218,21 @@ export default function ParticipantProfilePage() {
                <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>
                 <span className="text-right">
-                  {participant.createdAt && isValid(parseISO(participant.createdAt as string)) ? format(parseISO(participant.createdAt as string), 'PPpp') : 'N/A'}
+                  {participant.createdAt && typeof participant.createdAt === 'string' && isValid(parseISO(participant.createdAt)) ? format(parseISO(participant.createdAt), 'PPpp') : 'N/A'}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Last Updated:</span>
                 <span className="text-right">
-                  {participant.updatedAt && isValid(parseISO(participant.updatedAt as string)) ? format(parseISO(participant.updatedAt as string), 'PPpp') : 'N/A'}
+                  {participant.updatedAt && typeof participant.updatedAt === 'string' && isValid(parseISO(participant.updatedAt)) ? format(parseISO(participant.updatedAt), 'PPpp') : 'N/A'}
                 </span>
               </div>
+              {participant.attended && participant.checkInTime && typeof participant.checkInTime === 'string' && isValid(parseISO(participant.checkInTime)) && (
+                <div className="flex justify-between text-xs text-green-600 dark:text-green-400">
+                    <span className="font-medium">Checked In:</span>
+                    <span className="text-right">{format(parseISO(participant.checkInTime), 'PPpp')}</span>
+                </div>
+              )}
             </CardContent>
             <CardFooter className="p-4 flex flex-col gap-2">
                <DropdownMenu>
@@ -305,10 +309,3 @@ export default function ParticipantProfilePage() {
     </div>
   );
 }
-
-// Local Timestamp helper, if FirestoreTimestampType is not resolving correctly for `instanceof`
-// However, importing FirestoreTimestampType from 'firebase/firestore' should work.
-// const Timestamp = { 
-//     fromDate: (date: Date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: (date.getTime() % 1000) * 1e6 }),
-//     toDate: (timestamp: { seconds: number, nanoseconds: number }) => new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1e6)
-// };

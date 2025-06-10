@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
 import { processCheckinAction } from '@/lib/actions';
-import type { CheckinResult } from '@/types'; // Corrected import source
+import type { CheckinResult } from '@/types'; 
 import { cn } from '@/lib/utils';
 
 export default function CheckinPage() {
@@ -58,21 +58,21 @@ export default function CheckinPage() {
   }, [toast]);
 
   React.useEffect(() => {
-    const currentId = searchParams.get('id'); 
-    if (currentId && !searchParams.has('processed_checkin')) {
-      performCheckin(currentId);
-      router.replace(`/checkin?id=${currentId}&processed_checkin=true`, { scroll: false });
-    } else if (!currentId && !searchParams.has('processed_checkin_no_id')) {
+    // Use participantId directly from the component's scope
+    if (participantId && !searchParams.has('processed_checkin')) {
+      performCheckin(participantId);
+      router.replace(`/checkin?id=${participantId}&processed_checkin=true`, { scroll: false });
+    } else if (!participantId && !searchParams.has('processed_checkin_no_id')) {
       performCheckin(null); 
       router.replace(`/checkin?processed_checkin_no_id=true`, { scroll: false });
     } else if (searchParams.has('processed_checkin') || searchParams.has('processed_checkin_no_id')) {
-      if (!result && currentId) { 
+      if (!result && participantId) { 
            setResult({
               success: false,
-              message: `Check-in for ID ${currentId} was attempted. Scan again or click retry.`,
+              message: `Check-in for ID ${participantId} was attempted. Scan again or click retry.`,
               errorType: 'generic_error'
             });
-      } else if (!result && !currentId) {
+      } else if (!result && !participantId) {
           setResult({
               success: false,
               message: 'No participant ID. Scan a QR code.',
@@ -81,7 +81,7 @@ export default function CheckinPage() {
       }
       setIsLoading(false);
     }
-  }, [performCheckin, searchParams, router, result]);
+  }, [performCheckin, searchParams, router, result, participantId]);
 
 
   const getCardStatusStyles = () => {
@@ -93,7 +93,7 @@ export default function CheckinPage() {
   };
   
   const getIcon = () => {
-    const iconSize = "h-20 w-20 md:h-24 md:w-24"; // Larger icons
+    const iconSize = "h-20 w-20 md:h-24 md:w-24"; 
     if (isLoading) return <Loader2 className={cn(iconSize, "animate-spin text-primary")} />;
     if (!result) return <AlertTriangle className={cn(iconSize, "text-yellow-500 dark:text-yellow-400")} />;
     if (result.success) return <CheckCircle className={cn(iconSize, "text-green-500 dark:text-green-400")} />;
@@ -103,8 +103,8 @@ export default function CheckinPage() {
   };
   
   const handleRetry = () => {
-    const currentId = searchParams.get('id');
-    if (currentId) {
+    // Use participantId directly from the component's scope
+    if (participantId) {
       const newParams = new URLSearchParams(searchParams.toString());
       newParams.delete('processed_checkin');
       newParams.delete('processed_checkin_no_id');

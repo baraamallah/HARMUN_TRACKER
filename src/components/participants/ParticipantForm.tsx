@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useTransition, useState } from 'react'; // Added useState
+import { useEffect, useTransition, useState } from 'react'; 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
@@ -77,15 +77,14 @@ export function ParticipantForm({
 }: ParticipantFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent'); // Default to 'Absent'
+  const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent'); 
 
   useEffect(() => {
-    if (isOpen && !participantToEdit) { // Only fetch for new participants when dialog opens
+    if (isOpen && !participantToEdit) { 
       getDefaultAttendanceStatusSetting().then(fetchedStatus => {
         setDefaultStatus(fetchedStatus);
       }).catch(err => {
         console.error("Error fetching default status for ParticipantForm:", err);
-        // Keep the 'Absent' fallback if fetching fails
       });
     }
   }, [isOpen, participantToEdit]);
@@ -159,23 +158,12 @@ export function ParticipantForm({
           submissionData.imageUrl = formImageUrl;
         } else {
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-             // If editing and had a real image, but it was cleared, use placeholder
-             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-          } else if (participantToEdit && participantToEdit.imageUrl) {
-            // If editing and had a placeholder, keep it or generate new if name changed
-            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-          }
-          else { // New participant, or existing without any image
-             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-          }
+          submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         }
 
 
         if (participantToEdit) {
           const participantRef = doc(db, 'participants', participantToEdit.id);
-          // Retain existing attended and checkInTime if not explicitly changed by form
-          // Also retain status unless specifically changed by a different mechanism
           submissionData.status = participantToEdit.status; 
           submissionData.attended = participantToEdit.attended || false;
           submissionData.checkInTime = participantToEdit.checkInTime || null;
