@@ -10,12 +10,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
 import { processCheckinAction } from '@/lib/actions';
-import type { CheckinResult } from '@/types'; 
+import type { CheckinResult } from '@/types';
 import { cn } from '@/lib/utils';
 
-export default function CheckinPage() {
+function CheckinPageContent() {
   const searchParams = useSearchParams();
-  const router = useRouter(); 
+  const router = useRouter();
   const { toast } = useToast();
   const participantId = searchParams.get('id');
 
@@ -24,14 +24,14 @@ export default function CheckinPage() {
 
   const performCheckin = React.useCallback(async (id: string | null) => {
     setIsLoading(true);
-    setResult(null); 
+    setResult(null);
     const checkinOutcome = await processCheckinAction(id);
     setResult(checkinOutcome);
     setIsLoading(false);
 
     if (checkinOutcome.success) {
-      toast({ 
-        title: 'Check-in Successful', 
+      toast({
+        title: 'Check-in Successful',
         description: checkinOutcome.participantName ? `Welcome, ${checkinOutcome.participantName}!` : 'Checked in!',
         className: 'bg-green-100 dark:bg-green-900 border-green-500'
       });
@@ -47,7 +47,7 @@ export default function CheckinPage() {
         toastTitle = 'Already Checked In';
         toastClassName = 'bg-yellow-100 dark:bg-yellow-900 border-yellow-500';
       }
-      
+
       toast({
         title: toastTitle,
         description: checkinOutcome.message,
@@ -58,15 +58,14 @@ export default function CheckinPage() {
   }, [toast]);
 
   React.useEffect(() => {
-    // Use participantId directly from the component's scope
     if (participantId && !searchParams.has('processed_checkin')) {
       performCheckin(participantId);
       router.replace(`/checkin?id=${participantId}&processed_checkin=true`, { scroll: false });
     } else if (!participantId && !searchParams.has('processed_checkin_no_id')) {
-      performCheckin(null); 
+      performCheckin(null);
       router.replace(`/checkin?processed_checkin_no_id=true`, { scroll: false });
     } else if (searchParams.has('processed_checkin') || searchParams.has('processed_checkin_no_id')) {
-      if (!result && participantId) { 
+      if (!result && participantId) {
            setResult({
               success: false,
               message: `Check-in for ID ${participantId} was attempted. Scan again or click retry.`,
@@ -91,26 +90,25 @@ export default function CheckinPage() {
     if (result.errorType === 'already_checked_in') return 'border-yellow-500 dark:border-yellow-400';
     return 'border-primary';
   };
-  
+
   const getIcon = () => {
-    const iconSize = "h-20 w-20 md:h-24 md:w-24"; 
+    const iconSize = "h-20 w-20 md:h-24 md:w-24";
     if (isLoading) return <Loader2 className={cn(iconSize, "animate-spin text-primary")} />;
     if (!result) return <AlertTriangle className={cn(iconSize, "text-yellow-500 dark:text-yellow-400")} />;
     if (result.success) return <CheckCircle className={cn(iconSize, "text-green-500 dark:text-green-400")} />;
     if (result.errorType === 'not_found' || result.errorType === 'generic_error' || result.errorType === 'missing_id') return <XCircle className={cn(iconSize, "text-destructive")} />;
     if (result.errorType === 'already_checked_in') return <AlertTriangle className={cn(iconSize, "text-yellow-500 dark:text-yellow-400")} />;
-    return <AlertTriangle className={cn(iconSize, "text-muted-foreground")} />; 
+    return <AlertTriangle className={cn(iconSize, "text-muted-foreground")} />;
   };
-  
+
   const handleRetry = () => {
-    // Use participantId directly from the component's scope
     if (participantId) {
       const newParams = new URLSearchParams(searchParams.toString());
       newParams.delete('processed_checkin');
       newParams.delete('processed_checkin_no_id');
       router.push(`/checkin?${newParams.toString()}`, { scroll: false });
     } else {
-      performCheckin(null); 
+      performCheckin(null);
     }
   };
 
@@ -155,7 +153,7 @@ export default function CheckinPage() {
           )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4 pb-8 px-6">
-          {!isLoading && ( 
+          {!isLoading && (
             <Button onClick={handleRetry} variant="outline" className="w-full text-base py-3">
               <RefreshCw className="mr-2 h-5 w-5" /> Retry Check-in {participantId ? `for ID: ${participantId}` : ''}
             </Button>
@@ -171,5 +169,38 @@ export default function CheckinPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function CheckinPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-lg shadow-xl border-t-8 border-primary">
+          <CardHeader className="text-center pt-8">
+            <div className="mb-6 flex justify-center">
+              <Logo size="lg" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">HARMUN Check-in</CardTitle>
+            <CardDescription className="text-md text-muted-foreground">
+              Participant Attendance System
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6 text-center py-10 px-6">
+            <Loader2 className="h-20 w-20 md:h-24 md:w-24 animate-spin text-primary" />
+            <p className="text-xl text-muted-foreground">Loading check-in information...</p>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4 pb-8 px-6">
+            <Button asChild className="w-full text-base py-3" variant="default" disabled>
+              <Link href="/">
+                <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    }>
+      <CheckinPageContent />
+    </React.Suspense>
   );
 }
