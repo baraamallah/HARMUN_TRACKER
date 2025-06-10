@@ -12,7 +12,8 @@ import {
   SettingsIcon, 
   ShieldCheck, 
   LogIn,
-  Users2 // Icon for Staff
+  Users2, // Icon for Staff
+  QrCode // Icon for Check-in
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -44,8 +45,6 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
 import { OWNER_UID } from '@/lib/constants'; 
 import { useToast } from '@/hooks/use-toast';
-// import { getSystemLogoUrlSetting } from '@/lib/actions'; // Removed
-
 
 interface NavItem {
   href: string;
@@ -58,6 +57,7 @@ interface NavItem {
 const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
+  { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
@@ -74,8 +74,6 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const { toast } = useToast();
   const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
-  // const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null); // Removed
-  // const [isLoadingLogo, setIsLoadingLogo] = React.useState(true); // Removed
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -83,18 +81,6 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
       setAuthSessionLoading(false);
     });
     
-    // const fetchLogo = async () => { // Removed
-    //   try {
-    //     const url = await getSystemLogoUrlSetting();
-    //     setMunLogoUrl(url);
-    //   } catch (error) {
-    //     console.error("Failed to fetch logo URL for layout:", error);
-    //   } finally {
-    //     setIsLoadingLogo(false);
-    //   }
-    // };
-
-    // fetchLogo(); // Removed
     return () => unsubscribe();
   }, []);
 
@@ -123,6 +109,14 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     if (loggedInUser && loggedInUser.uid === OWNER_UID) {
       items.push(superiorAdminNavItem);
     }
+    // Re-order if needed, for now appending Superior Admin if applicable
+    // Or insert it before public view:
+    // const publicViewIndex = items.findIndex(item => item.href === '/public');
+    // if (loggedInUser && loggedInUser.uid === OWNER_UID && publicViewIndex !== -1) {
+    //   items.splice(publicViewIndex, 0, superiorAdminNavItem);
+    // } else if (loggedInUser && loggedInUser.uid === OWNER_UID) {
+    //   items.push(superiorAdminNavItem);
+    // }
     return items;
   }, [loggedInUser]);
 
