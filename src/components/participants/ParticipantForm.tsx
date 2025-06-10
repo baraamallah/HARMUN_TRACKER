@@ -38,6 +38,8 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { getDefaultAttendanceStatusSetting } from '@/lib/actions'; 
+import { generateAvatar, type GenerateAvatarInput } from '@/ai/flows/generate-avatar-flow';
+import { Sparkles, Loader2 } from 'lucide-react';
 
 const participantFormSchema = z.object({
   id: z.string()
@@ -51,7 +53,7 @@ const participantFormSchema = z.object({
   classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''),
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  imageUrl: z.string().optional().or(z.literal('')), // Allow URL or empty string, data URI will be a string
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   additionalDetails: z.string().max(1000, 'Details must be at most 1000 characters.').optional().default(''),
 });
@@ -77,6 +79,7 @@ export function ParticipantForm({
 }: ParticipantFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent'); 
 
   useEffect(() => {
@@ -138,6 +141,45 @@ export function ParticipantForm({
     }
   }, [participantToEdit, form, isOpen]);
 
+  const handleGenerateAvatar = async () => {
+    const currentName = form.getValues('name');
+    const currentSchool = form.getValues('school');
+    const currentCommittee = form.getValues('committee');
+
+    if (!currentName || !currentSchool || !currentCommittee) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please fill in Name, School, and Committee before generating an avatar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeneratingAvatar(true);
+    try {
+      const avatarPrompt: GenerateAvatarInput = {
+        prompt: `A student diplomat representing ${currentSchool} in the ${currentCommittee} committee.`,
+        name: currentName,
+      };
+      const result = await generateAvatar(avatarPrompt);
+      if (result.imageDataUri) {
+        form.setValue('imageUrl', result.imageDataUri, { shouldDirty: true, shouldValidate: true });
+        toast({ title: 'Avatar Generated!', description: 'AI has created a new avatar.' });
+      } else {
+        throw new Error('No image data URI returned from AI.');
+      }
+    } catch (error: any) {
+      console.error("Error generating AI avatar:", error);
+      toast({
+        title: 'Avatar Generation Failed',
+        description: error.message || 'Could not generate avatar. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingAvatar(false);
+    }
+  };
+
   const onSubmit = (data: ParticipantFormData) => {
     startTransition(async () => {
       try {
@@ -154,11 +196,20 @@ export function ParticipantForm({
         };
 
         const formImageUrl = data.imageUrl?.trim();
-        if (formImageUrl) {
+        if (formImageUrl && !formImageUrl.startsWith('https://placehold.co')) { // Also check it's not a placeholder
           submissionData.imageUrl = formImageUrl;
-        } else {
+        } else if (!formImageUrl) { // If truly empty, generate a placeholder
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+        } else {
+           // If it is a placeholder, and we didn't generate an AI one, keep it or clear it based on desired logic
+           // For now, let's assume if it's a placeholder we clear it for a new placeholder to be made unless it's an AI image
+           if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
+             submissionData.imageUrl = participantToEdit.imageUrl; // Keep existing non-placeholder if no new AI image
+           } else {
+            const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
+            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+           }
         }
 
 
@@ -224,6 +275,9 @@ export function ParticipantForm({
     });
     onOpenChange(false);
   }
+  
+  const currentImageUrl = form.watch('imageUrl');
+  const showGenerateButton = !currentImageUrl || currentImageUrl.startsWith('https://placehold.co');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -255,7 +309,7 @@ export function ParticipantForm({
                       id="form-id" 
                       placeholder={participantToEdit ? '' : "e.g., CUS_123_XYZ (alphanumeric, -, _)"} 
                       {...field} 
-                      disabled={isPending || !!participantToEdit} 
+                      disabled={isPending || !!participantToEdit || isGeneratingAvatar} 
                       aria-readonly={!!participantToEdit}
                     />
                   </FormControl>
@@ -271,7 +325,7 @@ export function ParticipantForm({
                 <FormItem>
                   <FormLabel htmlFor="form-name">Full Name <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
-                    <Input id="form-name" placeholder="e.g., Jane Doe" {...field} disabled={isPending} aria-required="true" />
+                    <Input id="form-name" placeholder="e.g., Jane Doe" {...field} disabled={isPending || isGeneratingAvatar} aria-required="true" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -287,7 +341,7 @@ export function ParticipantForm({
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
-                    disabled={isPending}
+                    disabled={isPending || isGeneratingAvatar}
                   >
                     <FormControl>
                       <SelectTrigger id="form-school" aria-required="true">
@@ -317,7 +371,7 @@ export function ParticipantForm({
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
-                    disabled={isPending}
+                    disabled={isPending || isGeneratingAvatar}
                   >
                     <FormControl>
                       <SelectTrigger id="form-committee" aria-required="true">
@@ -344,7 +398,7 @@ export function ParticipantForm({
                 <FormItem>
                   <FormLabel htmlFor="form-classGrade">Class/Grade (Optional)</FormLabel>
                   <FormControl>
-                    <Input id="form-classGrade" placeholder="e.g., 10th Grade, Year 12" {...field} value={field.value ?? ''} disabled={isPending} />
+                    <Input id="form-classGrade" placeholder="e.g., 10th Grade, Year 12" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -357,7 +411,7 @@ export function ParticipantForm({
                 <FormItem>
                   <FormLabel htmlFor="form-email">Email (Optional)</FormLabel>
                   <FormControl>
-                    <Input id="form-email" type="email" placeholder="participant@example.com" {...field} value={field.value ?? ''} disabled={isPending} />
+                    <Input id="form-email" type="email" placeholder="participant@example.com" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -370,7 +424,7 @@ export function ParticipantForm({
                 <FormItem>
                   <FormLabel htmlFor="form-phone">Phone (Optional)</FormLabel>
                   <FormControl>
-                    <Input id="form-phone" type="tel" placeholder="e.g., +1 555-123-4567" {...field} value={field.value ?? ''} disabled={isPending} />
+                    <Input id="form-phone" type="tel" placeholder="e.g., +1 555-123-4567" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -382,9 +436,24 @@ export function ParticipantForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor="form-imageUrl">Image URL (Optional)</FormLabel>
-                  <FormControl>
-                    <Input id="form-imageUrl" placeholder="https://example.com/image.png" {...field} value={field.value ?? ''} disabled={isPending} />
-                  </FormControl>
+                  <div className="flex items-center gap-2">
+                    <FormControl className="flex-grow">
+                      <Input id="form-imageUrl" placeholder="https://example.com/image.png or AI generated" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
+                    </FormControl>
+                    {showGenerateButton && (
+                       <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleGenerateAvatar}
+                        disabled={isPending || isGeneratingAvatar}
+                        className="shrink-0"
+                        size="icon"
+                        title="Generate Avatar with AI"
+                      >
+                        {isGeneratingAvatar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -401,7 +470,7 @@ export function ParticipantForm({
                       placeholder="Any relevant notes about the participant..."
                       {...field}
                       value={field.value ?? ''}
-                      disabled={isPending}
+                      disabled={isPending || isGeneratingAvatar}
                       rows={3}
                     />
                   </FormControl>
@@ -421,7 +490,7 @@ export function ParticipantForm({
                       placeholder="Other important information..."
                       {...field}
                       value={field.value ?? ''}
-                      disabled={isPending}
+                      disabled={isPending || isGeneratingAvatar}
                       rows={3}
                     />
                   </FormControl>
@@ -431,11 +500,11 @@ export function ParticipantForm({
             />
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={isPending} onClick={handleDialogClose}>
+                <Button type="button" variant="outline" disabled={isPending || isGeneratingAvatar} onClick={handleDialogClose}>
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isPending || (!form.formState.isDirty && !!participantToEdit)}>
+              <Button type="submit" disabled={isPending || isGeneratingAvatar || (!form.formState.isDirty && !!participantToEdit)}>
                 {isPending ? (participantToEdit ? 'Saving...' : 'Adding...') : (participantToEdit ? 'Save Changes' : 'Add Participant')}
               </Button>
             </DialogFooter>
