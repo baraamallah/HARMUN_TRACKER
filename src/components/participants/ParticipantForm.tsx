@@ -35,9 +35,15 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
 const participantFormSchema = z.object({
+  id: z.string()
+    .max(100, "ID must be 100 characters or less.")
+    .regex(/^[a-zA-Z0-9_-]*$/, "ID can only contain letters, numbers, underscores, and hyphens, or be empty for auto-generation.")
+    .optional()
+    .default(''), // Default to empty string, meaning auto-generate
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
   school: z.string().min(1, 'School is required.'),
   committee: z.string().min(1, 'Committee is required.'),
@@ -74,6 +80,7 @@ export function ParticipantForm({
   const form = useForm<ParticipantFormData>({
     resolver: zodResolver(participantFormSchema),
     defaultValues: {
+      id: '',
       name: '',
       school: '',
       committee: '',
@@ -90,6 +97,7 @@ export function ParticipantForm({
     if (isOpen) {
       if (participantToEdit) {
         form.reset({
+          id: participantToEdit.id, // Display existing ID
           name: participantToEdit.name,
           school: participantToEdit.school,
           committee: participantToEdit.committee,
@@ -102,6 +110,7 @@ export function ParticipantForm({
         });
       } else {
         form.reset({
+          id: '', // Empty for new participant, allowing custom input or auto-generation
           name: '',
           school: '', 
           committee: '', 
@@ -119,7 +128,7 @@ export function ParticipantForm({
   const onSubmit = (data: ParticipantFormData) => {
     startTransition(async () => {
       try {
-        const submissionData: any = {
+        const submissionData: any = { // Omit 'id' from here, it's handled by doc path
           name: data.name.trim(),
           school: data.school.trim(),
           committee: data.committee.trim(),
@@ -132,35 +141,55 @@ export function ParticipantForm({
         };
 
         const formImageUrl = data.imageUrl?.trim();
-
         if (formImageUrl) {
           submissionData.imageUrl = formImageUrl;
         } else { 
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          if (participantToEdit) { 
-            if (participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-              submissionData.imageUrl = '';
-            } else {
-              submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-            }
-          } else { 
-            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
+             // If editing and had a real image, clearing the field means no image or revert to placeholder if that's the desired logic.
+             // For now, let's make it revert to a new placeholder if cleared. Or "" to truly remove.
+             // If they clear a custom URL, a new placeholder will be generated.
+             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          } else {
+             submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
           }
         }
 
 
         if (participantToEdit) {
+          // Editing existing participant
           const participantRef = doc(db, 'participants', participantToEdit.id);
           await updateDoc(participantRef, submissionData);
           toast({ title: 'Participant Updated', description: `${data.name} has been updated.` });
         } else {
-          const newParticipantData = {
+          // Adding new participant
+          let participantIdToUse = data.id?.trim();
+
+          if (participantIdToUse) {
+            // User provided a custom ID
+            const newParticipantRef = doc(db, 'participants', participantIdToUse);
+            const docSnap = await getDoc(newParticipantRef);
+            if (docSnap.exists()) {
+              toast({
+                title: 'Error: ID already exists',
+                description: `A participant with ID "${participantIdToUse}" already exists. Please use a unique ID or leave it blank for auto-generation.`,
+                variant: 'destructive',
+              });
+              return; // Abort submission
+            }
+          } else {
+            // No custom ID provided, generate one
+            participantIdToUse = uuidv4();
+          }
+          
+          const newParticipantFinalData = {
             ...submissionData,
             status: 'Absent' as const, 
             createdAt: serverTimestamp(),
           };
-          await addDoc(collection(db, 'participants'), newParticipantData);
-          toast({ title: 'Participant Added', description: `${data.name} has been added.` });
+          const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);
+          await setDoc(newParticipantRefWithId, newParticipantFinalData);
+          toast({ title: 'Participant Added', description: `${data.name} (ID: ${participantIdToUse}) has been added.` });
         }
         onOpenChange(false);
         onFormSubmitSuccess?.();
@@ -177,6 +206,7 @@ export function ParticipantForm({
   
   const handleDialogClose = () => {
     form.reset({ 
+        id: '',
         name: '', 
         school: '', 
         committee: '',
@@ -207,6 +237,28 @@ export function ParticipantForm({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+            <FormField
+              control={form.control}
+              name="id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="form-id">
+                    Participant ID {participantToEdit ? '(Read-only)' : '(Optional - Leave blank to auto-generate)'}
+                  </FormLabel>
+                  <FormControl>
+                    <Input 
+                      id="form-id" 
+                      placeholder={participantToEdit ? '' : "e.g., CUS_123_XYZ"} 
+                      {...field} 
+                      disabled={isPending || !!participantToEdit} 
+                      aria-readonly={!!participantToEdit}
+                    />
+                  </FormControl>
+                  {!participantToEdit && <p className="text-xs text-muted-foreground pt-1">If you provide an ID, it must be unique.</p>}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="name"
