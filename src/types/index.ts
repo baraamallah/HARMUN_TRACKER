@@ -18,16 +18,16 @@ export interface Participant {
   name: string;
   school: string;
   committee: string;
-  country?: string; // Added country field
-  status: AttendanceStatus; // This status is for general MUN session attendance
+  country?: string;
+  status: AttendanceStatus;
   imageUrl?: string;
   notes?: string;
   additionalDetails?: string;
   classGrade?: string;
   email?: string;
   phone?: string;
-  attended?: boolean; // For QR code check-in, default false
-  checkInTime?: string | FieldValueType | null | undefined; // For QR code check-in time
+  attended?: boolean;
+  checkInTime?: string | FieldValueType | null | undefined;
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;
 }
@@ -44,8 +44,8 @@ export interface StaffMember {
   role: string;
   department?: string;
   team?: string;
-  email?: string;
-  phone?: string;
+  email?: string; // Ensure this exists for import/export
+  phone?: string; // Ensure this exists for import/export
   contactInfo?: string;
   status: StaffAttendanceStatus;
   notes?: string;
@@ -69,7 +69,7 @@ export interface VisibleColumns {
   name: boolean;
   school: boolean;
   committee: boolean;
-  country: boolean; // Added country visibility
+  country: boolean;
   status: boolean;
   actions: boolean;
   selection?: boolean;
@@ -82,7 +82,7 @@ export interface StaffVisibleColumns {
   role: boolean;
   department: boolean;
   team: boolean;
-  contactInfo: boolean;
+  contactInfo: boolean; // Keep this, could be other forms of contact
   status: boolean;
   actions: boolean;
 }
@@ -98,7 +98,7 @@ export interface AdminManagedUser {
   avatarUrl?: string;
 }
 
-export interface CheckinResult { // Kept for reference if any part still uses it, but should be replaced by ActionResult
+export interface CheckinResult {
   success: boolean;
   message: string;
   participantName?: string;
@@ -109,8 +109,8 @@ export interface CheckinResult { // Kept for reference if any part still uses it
 export interface ActionResult {
   success: boolean;
   message: string;
-  participant?: Participant; // Optionally return updated participant data
-  errorType?: string; // e.g., 'not_found', 'update_failed', 'missing_id'
+  participant?: Participant;
+  errorType?: string;
 }
 
 export interface ActionResultStaff {

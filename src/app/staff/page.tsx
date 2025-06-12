@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square } from 'lucide-react';
+import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react'; // Added UploadCloud, DownloadCloud
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -44,6 +44,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog'; // Added
+import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton'; // Added
 
 const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
     { status: 'All', label: 'All Statuses' },
@@ -54,7 +56,7 @@ const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; 
 ];
 
 const STAFF_BULK_STATUS_OPTIONS: { status: StaffAttendanceStatus; label: string; icon: React.ElementType }[] = [
-    { status: 'On Duty', label: 'On Duty', icon: Users2 }, // Placeholder icon, consider specific icons
+    { status: 'On Duty', label: 'On Duty', icon: Users2 },
     { status: 'Off Duty', label: 'Off Duty', icon: Users2 },
     { status: 'On Break', label: 'On Break', icon: Users2 },
     { status: 'Away', label: 'Away', icon: Users2 },
@@ -148,6 +150,8 @@ export default function StaffDashboardPage() {
           role: data.role || '',
           department: data.department,
           team: data.team,
+          email: data.email,
+          phone: data.phone,
           contactInfo: data.contactInfo,
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
@@ -247,7 +251,7 @@ export default function StaffDashboardPage() {
         title: "Bulk Update Successful",
         description: `${selectedStaffMemberIds.length} staff member(s) updated to ${status}.`,
       });
-      fetchData();
+      fetchData(); // Refresh data
     } catch (error: any) {
       console.error("Client-side Error bulk updating staff status: ", error);
       toast({
@@ -282,7 +286,7 @@ export default function StaffDashboardPage() {
         title: "Bulk Delete Successful",
         description: `${selectedStaffMemberIds.length} staff member(s) deleted.`,
       });
-      fetchData();
+      fetchData(); // Refresh data
     } catch (error: any) {
       console.error("Client-side error during staff bulk deletion: ", error);
       toast({ title: "Bulk Delete Failed", description: error.message || "An error occurred.", variant: "destructive" });
@@ -326,6 +330,8 @@ export default function StaffDashboardPage() {
             <p className="text-muted-foreground">Manage staff members, their roles, teams, and status.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <ImportStaffCsvDialog onImportSuccess={fetchData} />
+            <ExportStaffCsvButton staffMembers={staffMembers} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">

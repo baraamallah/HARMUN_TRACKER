@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -58,7 +57,18 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
         
         const lines = text.split(/\r\n|\n/).slice(1); // Skip header, handle both CRLF and LF
-        const parsedParticipants: Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }[] = [];
+        // Correctly type parsedParticipants to allow all fields being assigned
+        const parsedParticipants: {
+          name: string;
+          school: string;
+          committee: string;
+          country?: string;
+          classGrade?: string;
+          email?: string;
+          phone?: string;
+          notes?: string;
+          additionalDetails?: string;
+        }[] = [];
         let skippedLineCount = 0;
         
         // Expected CSV Column Order:
@@ -166,7 +176,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           <DialogDescription className="space-y-2">
             <p>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</p>
             <p><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</p>
-            <p><strong className="text-foreground">Recommended Column Order:</strong></p>
+            <p><strong className="text-foreground">Column Order (Recommended):</strong></p>
             <ol className="list-decimal list-inside text-xs space-y-0.5 pl-4">
               <li>Name (e.g., "Jane Doe")</li>
               <li>School (e.g., "International School of Example")</li>

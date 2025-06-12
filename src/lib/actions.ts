@@ -74,7 +74,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        country: data.country || '', // Ensure country is fetched
+        country: data.country || '',
         status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
@@ -128,7 +128,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        country: data.country || '', // Ensure country is fetched
+        country: data.country || '',
         status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
@@ -190,7 +190,6 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 
 // Import Participants Action
 export async function importParticipants(
-  // Updated to accept more optional fields
   parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
 
@@ -388,7 +387,6 @@ export async function quickSetStaffStatusAction(
 
     await updateDoc(staffMemberRef, updates as { [x: string]: any; });
 
-    // Fetch the updated document to return
     const updatedSnap = await getDoc(staffMemberRef);
     const updatedData = updatedSnap.data();
     const updatedStaffMember: StaffMember = {
@@ -435,4 +433,82 @@ export async function quickSetStaffStatusAction(
       errorType: errorType,
     };
   }
+}
+
+// Import Staff Members Action
+export async function importStaffMembers(
+  parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
+): Promise<{ count: number; errors: number; detectedNewTeams: string[] }> {
+
+  if (parsedStaffMembers.length === 0) {
+    console.log("[Server Action: importStaffMembers] No parsed staff members to import.");
+    return { count: 0, errors: 0, detectedNewTeams: [] };
+  }
+
+  let importedCount = 0;
+  let errorCount = 0;
+  const detectedNewTeamNames: Set<string> = new Set();
+  const batch = fsWriteBatch(db);
+
+  let existingSystemStaffTeams: string[] = [];
+  try {
+    existingSystemStaffTeams = await getSystemStaffTeams();
+  } catch(e) {
+    console.error("[Server Action: importStaffMembers] Error fetching system staff teams during import pre-check:", e);
+  }
+
+  for (const data of parsedStaffMembers) {
+    try {
+      const trimmedTeam = data.team?.trim();
+      if (trimmedTeam && !existingSystemStaffTeams.includes(trimmedTeam)) {
+        detectedNewTeamNames.add(trimmedTeam);
+      }
+
+      const nameInitial = (data.name.trim() || 'S').substring(0,2).toUpperCase();
+      const newStaffData: Omit<StaffMember, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType, status: StaffAttendanceStatus } = {
+        name: data.name.trim(),
+        role: data.role.trim(),
+        department: data.department?.trim() || '',
+        team: trimmedTeam || '',
+        email: data.email?.trim() || '',
+        phone: data.phone?.trim() || '',
+        contactInfo: data.contactInfo?.trim() || '',
+        notes: data.notes?.trim() || '',
+        status: 'Off Duty', // Default status
+        imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+        createdAt: fsServerTimestamp(),
+        updatedAt: fsServerTimestamp(),
+      };
+      const staffRef = fsDoc(fsCollection(db, STAFF_MEMBERS_COLLECTION));
+      batch.set(staffRef, newStaffData);
+      importedCount++;
+    } catch (error) {
+      console.error("[Server Action: importStaffMembers] Error preparing staff member for batch import: ", data, error);
+      errorCount++;
+    }
+  }
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    console.error("[Server Action: importStaffMembers] Error committing batch import: ", error);
+    const firebaseError = error as { code?: string; message?: string };
+    const batchCommitError = `Batch commit for staff members failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`;
+    console.error(batchCommitError);
+    return {
+      count: 0,
+      errors: parsedStaffMembers.length,
+      detectedNewTeams: Array.from(detectedNewTeamNames),
+    };
+  }
+
+  if (importedCount > 0) {
+    revalidatePath('/staff');
+    revalidatePath('/superior-admin'); // Staff list is also shown here
+  }
+  return {
+    count: importedCount,
+    errors: errorCount,
+    detectedNewTeams: Array.from(detectedNewTeamNames),
+  };
 }
