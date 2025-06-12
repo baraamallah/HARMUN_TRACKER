@@ -20,17 +20,41 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
       return;
     }
 
-    const headers = ['ID', 'Name', 'School', 'Committee', 'Country', 'Status'];
+    const headers = [
+      'ID', 
+      'Name', 
+      'School', 
+      'Committee', 
+      'Country', 
+      'Class/Grade',
+      'Email',
+      'Phone',
+      'Status',
+      'Notes',
+      'Additional Details',
+      'Attended',
+      'CheckInTime'
+    ];
+    
+    const csvRows = participants.map(p => [
+      p.id || '',
+      `"${(p.name || '').replace(/"/g, '""')}"`,
+      `"${(p.school || '').replace(/"/g, '""')}"`,
+      `"${(p.committee || '').replace(/"/g, '""')}"`,
+      `"${(p.country || '').replace(/"/g, '""')}"`,
+      `"${(p.classGrade || '').replace(/"/g, '""')}"`,
+      `"${(p.email || '').replace(/"/g, '""')}"`,
+      `"${(p.phone || '').replace(/"/g, '""')}"`,
+      p.status || 'Absent',
+      `"${(p.notes || '').replace(/"/g, '""')}"`,
+      `"${(p.additionalDetails || '').replace(/"/g, '""')}"`,
+      p.attended ? 'Yes' : 'No',
+      p.checkInTime ? `"${new Date(p.checkInTime as string).toLocaleString()}"` : ''
+    ].join(','));
+
     const csvContent = [
       headers.join(','),
-      ...participants.map(p => [
-        p.id || '',
-        `"${p.name.replace(/"/g, '""')}"`, // Escape double quotes
-        `"${p.school.replace(/"/g, '""')}"`,
-        `"${p.committee.replace(/"/g, '""')}"`,
-        `"${(p.country || '').replace(/"/g, '""')}"`,
-        p.status
-      ].join(',')),
+      ...csvRows,
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

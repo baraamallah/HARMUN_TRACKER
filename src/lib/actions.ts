@@ -74,7 +74,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        country: data.country,
+        country: data.country || '', // Ensure country is fetched
         status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
@@ -128,7 +128,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
-        country: data.country,
+        country: data.country || '', // Ensure country is fetched
         status: data.status || 'Absent',
         imageUrl: data.imageUrl,
         notes: data.notes,
@@ -190,7 +190,8 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 
 // Import Participants Action
 export async function importParticipants(
-  parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl' | 'notes' | 'additionalDetails' | 'classGrade' | 'email' | 'phone' | 'createdAt' | 'updatedAt' | 'attended' | 'checkInTime' | 'country'>[]
+  // Updated to accept more optional fields
+  parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
 
   if (parsedParticipants.length === 0) {
@@ -232,14 +233,14 @@ export async function importParticipants(
         name: data.name.trim(),
         school: trimmedSchool,
         committee: trimmedCommittee,
-        country: '', // Country is not imported from CSV by default
+        country: data.country?.trim() || '',
+        classGrade: data.classGrade?.trim() || '',
+        email: data.email?.trim() || '',
+        phone: data.phone?.trim() || '',
+        notes: data.notes?.trim() || '',
+        additionalDetails: data.additionalDetails?.trim() || '',
         status: defaultMunStatus,
         imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
-        notes: '',
-        additionalDetails: '',
-        classGrade: '',
-        email: '',
-        phone: '',
         attended: false,
         checkInTime: null,
         createdAt: fsServerTimestamp(),
@@ -320,7 +321,7 @@ export async function quickSetParticipantStatusAction(
         name: updatedData?.name || '',
         school: updatedData?.school || '',
         committee: updatedData?.committee || '',
-        country: updatedData?.country,
+        country: updatedData?.country || '',
         status: updatedData?.status || 'Absent',
         imageUrl: updatedData?.imageUrl,
         notes: updatedData?.notes,

@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, AlertTriangle } from 'lucide-react';
+import { UploadCloud, AlertTriangle, Info } from 'lucide-react';
 import { importParticipants } from '@/lib/actions';
 import type { Participant } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -58,9 +58,20 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
         
         const lines = text.split(/\r\n|\n/).slice(1); // Skip header, handle both CRLF and LF
-        const parsedParticipants: Omit<Participant, 'id' | 'status' | 'imageUrl'>[] = [];
+        const parsedParticipants: Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }[] = [];
         let skippedLineCount = 0;
         
+        // Expected CSV Column Order:
+        // 0: Name (Required)
+        // 1: School (Required)
+        // 2: Committee (Required)
+        // 3: Country (Optional)
+        // 4: Class/Grade (Optional)
+        // 5: Email (Optional)
+        // 6: Phone (Optional)
+        // 7: Notes (Optional)
+        // 8: Additional Details (Optional)
+
         lines.forEach((line, index) => {
           if (line.trim() === '') return; // Skip empty lines
           
@@ -72,20 +83,27 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               name: cleanedValues[0],
               school: cleanedValues[1],
               committee: cleanedValues[2],
+              country: cleanedValues[3] || '',
+              classGrade: cleanedValues[4] || '',
+              email: cleanedValues[5] || '',
+              phone: cleanedValues[6] || '',
+              notes: cleanedValues[7] || '',
+              additionalDetails: cleanedValues[8] || '',
             });
           } else if (line.trim()) { 
-            console.warn(`Skipping malformed CSV line ${index + 2}: "${line}" (Expected Name,School,Committee)`);
+            console.warn(`Skipping malformed CSV line ${index + 2}: "${line}" (Expected at least Name,School,Committee)`);
             skippedLineCount++;
           }
         });
 
         if (parsedParticipants.length === 0 && skippedLineCount === lines.filter(l => l.trim()).length && lines.filter(l => l.trim()).length > 0) {
-          toast({ title: 'No valid data found', description: `The CSV file might be empty or incorrectly formatted. ${skippedLineCount > 0 ? `${skippedLineCount} line(s) could not be parsed.` : ''} Expected: Name,School,Committee`, variant: 'default' });
+          toast({ title: 'No valid data found', description: `The CSV file might be empty or incorrectly formatted. ${skippedLineCount > 0 ? `${skippedLineCount} line(s) could not be parsed.` : ''} At least Name, School, and Committee are required.`, variant: 'default' });
           return;
         }
 
         try {
-          const result = await importParticipants(parsedParticipants);
+          // Type assertion to match the expected server action input
+          const result = await importParticipants(parsedParticipants as Array<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>>);
           let description = `${result.count} participants processed.`;
           if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
           if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check console).`;
@@ -142,13 +160,34 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           Import CSV
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md"> {/* Adjusted width for better summary display */}
+      <DialogContent className="sm:max-w-lg"> {/* Adjusted width for better summary display */}
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
-          <DialogDescription>
-            Upload a CSV file with participant data. Columns must be: Name, School, Committee.
-            <br />
-            <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first.
+          <DialogDescription className="space-y-2">
+            <p>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</p>
+            <p><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</p>
+            <p><strong className="text-foreground">Recommended Column Order:</strong></p>
+            <ol className="list-decimal list-inside text-xs space-y-0.5 pl-4">
+              <li>Name (e.g., "Jane Doe")</li>
+              <li>School (e.g., "International School of Example")</li>
+              <li>Committee (e.g., "Security Council")</li>
+              <li>Country (e.g., "United States")</li>
+              <li>Class/Grade (e.g., "10th Grade")</li>
+              <li>Email (e.g., "jane.doe@example.com")</li>
+              <li>Phone (e.g., "+1-555-1234")</li>
+              <li>Notes (any relevant notes)</li>
+              <li>Additional Details (other info)</li>
+            </ol>
+            <p className="mt-2">
+              <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees listed in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first.
+            </p>
+             <Alert variant="default" className="mt-3 bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700 text-blue-700 dark:text-blue-300">
+                <Info className="h-5 w-5" />
+                <AlertTitle className="font-semibold">Tip for CSVs from Spreadsheets</AlertTitle>
+                <AlertDescription>
+                  When exporting from Google Sheets or Excel, choose "Comma-separated values (.csv)". Ensure text fields containing commas (e.g., in Notes) are enclosed in double quotes by your spreadsheet software.
+                </AlertDescription>
+            </Alert>
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
