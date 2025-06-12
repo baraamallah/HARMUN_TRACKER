@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
+  DialogTrigger, // Added DialogTrigger
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,7 +58,6 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
         
         const lines = text.split(/\r\n|\n/).slice(1); // Skip header, handle both CRLF and LF
-        // Correctly type parsedParticipants to allow all fields being assigned
         const parsedParticipants: {
           name: string;
           school: string;
