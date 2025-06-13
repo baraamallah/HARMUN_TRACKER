@@ -2,10 +2,9 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'; // Added usePathname, useRouter, useSearchParams
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore';
-import { ListFilter, CheckSquare, Square, Loader2, Users, Clock } from 'lucide-react';
+import { ListFilter, CheckSquare, Square, Loader2, Clock, CalendarDays } from 'lucide-react'; // Added Clock, CalendarDays
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,24 +21,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem, // Ensure this is imported
+  DropdownMenuItem, // Ensured this is imported
 } from '@/components/ui/dropdown-menu';
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
-import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format } from 'date-fns'; // For formatting date and time
 
-const initialVisibleColumns: Omit<VisibleColumns, "selection" | "actions"> = {
+const initialVisibleColumns: Omit<VisibleColumns, 'actions' | 'selection'> = {
   avatar: true,
   name: true,
   school: true,
   committee: true,
-  country: true, // Added country
+  country: true, // Added country here
   status: true,
 };
 
@@ -52,62 +50,43 @@ const columnLabels: Record<keyof typeof initialVisibleColumns, string> = {
   status: 'Status',
 };
 
-const statusFilterOptions: { label: string; value: AttendanceStatus | 'All' }[] = [
-  { label: 'All Participants', value: 'All' },
-  { label: 'Present', value: 'Present' },
-  { label: 'Absent', value: 'Absent' },
-];
+type PublicVisibleColumns = typeof initialVisibleColumns;
 
-function PublicDashboardPageContent() {
+export default function PublicDashboardPage() {
   const { toast } = useToast();
-  const searchParams = useSearchParams(); // For potential future direct linking with filters
-
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
 
-  const [searchTerm, setSearchTerm] = React.useState(searchParams.get('search') || '');
-  const [selectedSchool, setSelectedSchool] = React.useState(searchParams.get('school') || 'All Schools');
-  const [selectedCommittee, setSelectedCommittee] = React.useState(searchParams.get('committee') || 'All Committees');
-  const [quickStatusFilter, setQuickStatusFilter] = React.useState<AttendanceStatus | 'All'>(
-    (searchParams.get('status') as AttendanceStatus | 'All') || 'All'
-  );
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
+  const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
+  const [quickStatusFilter, setQuickStatusFilter] = React.useState<AttendanceStatus | 'All'>('All');
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const [visibleColumns, setVisibleColumns] = React.useState(initialVisibleColumns);
+  const [visibleColumns, setVisibleColumns] = React.useState<PublicVisibleColumns>(initialVisibleColumns);
 
-  const [currentTimeDisplay, setCurrentTimeDisplay] = React.useState<string>('');
+  const [currentTime, setCurrentTime] = React.useState<string | null>(null); // Initialize with null
+  const [currentDate, setCurrentDate] = React.useState<string | null>(null); // Initialize with null
 
   React.useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTimeDisplay(format(new Date(), 'PPPPpppp')); // e.g., July 21st, 2024 at 10:30:00 AM
-    }, 1000);
-    return () => clearInterval(timer);
+    // Set initial time/date and start interval only on client-side
+    const updateDateTime = () => {
+      const now = new Date();
+      setCurrentTime(format(now, 'p')); // e.g., 12:00:00 PM
+      setCurrentDate(format(now, 'PPPP')); // e.g., Monday, January 1st, 2023
+    };
+
+    updateDateTime(); // Initial call
+    const timerId = setInterval(updateDateTime, 1000); // Update every second
+
+    return () => clearInterval(timerId); // Cleanup interval on component unmount
   }, []);
 
-  const fetchData = React.useCallback(async () => {
-    setIsLoadingData(true);
-    try {
-      const [schoolsData, committeesData] = await Promise.all([
-        getSystemSchools(),
-        getSystemCommittees(),
-      ]);
-      setSchools(['All Schools', ...schoolsData]);
-      setCommittees(['All Committees', ...committeesData]);
-    } catch (error: any) {
-      console.error("Failed to fetch system lists for public view:", error);
-      toast({title: "Error", description: "Could not load filter options.", variant: "destructive"})
-    }
-  }, [toast]);
 
-
-  React.useEffect(() => {
-    fetchData(); // Fetch schools and committees once
-  }, [fetchData]);
-
-  React.useEffect(() => {
+  const fetchData = React.useCallback(() => {
     setIsLoadingData(true);
     const participantsColRef = collection(db, 'participants');
     const queryConstraints = [];
@@ -132,9 +111,11 @@ function PublicDashboardPageContent() {
           name: data.name || '',
           school: data.school || '',
           committee: data.committee || '',
-          country: data.country || '',
+          country: data.country,
           status: data.status || 'Absent',
           imageUrl: data.imageUrl,
+          attended: data.attended || false,
+          checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Participant;
@@ -152,78 +133,93 @@ function PublicDashboardPageContent() {
       setParticipants(fetchedParticipants);
       setIsLoadingData(false);
     }, (error) => {
-      console.error("Error fetching participants with onSnapshot:", error);
+      console.error("Failed to fetch real-time participant data:", error);
       let errorMessage = "Failed to load participant data.";
-      if (error.code === 'permission-denied') {
-        errorMessage = "Permission denied. Ensure Firestore rules allow public read access for participants.";
-      } else if ((error.message || '').includes('requires an index')) {
-        errorMessage = "A Firestore index is required. Check browser console for a link to create it.";
+      if ((error as any).code === 'permission-denied') {
+        errorMessage = "Permission denied. Ensure you have rights to view participant data, and check Firestore rules.";
+      } else if ((error as any).message && (error as any).message.includes('requires an index')) {
+        errorMessage = "A Firestore index is required for the current filters. Check browser console for a link to create it.";
       }
-      toast({title: "Error", description: errorMessage, variant: "destructive"});
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
       setIsLoadingData(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on component unmount or when dependencies change
+    return unsubscribe; // Return the unsubscribe function for cleanup
 
-  }, [selectedSchool, selectedCommittee, quickStatusFilter, debouncedSearchTerm, toast]);
+  }, [selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
+
+  React.useEffect(() => {
+    const unsubscribe = fetchData();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [fetchData]);
+
+
+  React.useEffect(() => {
+    // Fetch schools and committees once on mount
+    const fetchDropdownData = async () => {
+      try {
+        const [schoolsData, committeesData] = await Promise.all([
+          getSystemSchools(),
+          getSystemCommittees(),
+        ]);
+        setSchools(['All Schools', ...schoolsData]);
+        setCommittees(['All Committees', ...committeesData]);
+      } catch (error) {
+        console.error("Failed to fetch schools/committees for public view:", error);
+        toast({title: "Error", description: "Could not load filter options.", variant: "destructive"});
+      }
+    };
+    fetchDropdownData();
+  }, [toast]);
 
 
   const toggleAllColumns = (show: boolean) => {
     setVisibleColumns(prev =>
       Object.keys(prev).reduce((acc, key) => {
-        acc[key as keyof typeof initialVisibleColumns] = show;
+        acc[key as keyof PublicVisibleColumns] = show;
         return acc;
-      }, {} as typeof initialVisibleColumns)
+      }, {} as PublicVisibleColumns)
     );
   };
 
+  const statusFilterOptions: { label: string; value: AttendanceStatus | 'All' }[] = [
+    { label: 'All Participants', value: 'All' },
+    { label: 'Present', value: 'Present' },
+    { label: 'Absent', value: 'Absent' },
+  ];
 
   return (
     <PublicLayout>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Public Attendance View</h1>
-            <p className="text-muted-foreground">View participant attendance status (read-only).</p>
-          </div>
-          {currentTimeDisplay && (
-            <div className="text-sm text-muted-foreground p-2 border rounded-md shadow-sm bg-card flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>{currentTimeDisplay}</span>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border rounded-lg shadow-sm bg-card">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Public Participant View</h1>
+                <p className="text-muted-foreground">View participant attendance status.</p>
             </div>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <ListFilter className="mr-2 h-4 w-4" /> Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
-                <CheckSquare className="mr-2 h-4 w-4" /> Show All
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
-                <Square className="mr-2 h-4 w-4" /> Hide All
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {(Object.keys(initialVisibleColumns) as Array<keyof typeof initialVisibleColumns>).map((key) => (
-                <DropdownMenuCheckboxItem
-                  key={key}
-                  checked={visibleColumns[key]}
-                  onCheckedChange={(checked) =>
-                    setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
-                  }
-                >
-                  {columnLabels[key]}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <div className="text-right">
+              {currentTime && currentDate ? (
+                <>
+                  <p className="text-2xl font-semibold text-primary flex items-center justify-end gap-2">
+                    <Clock className="h-6 w-6" /> {currentTime}
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center justify-end gap-2">
+                    <CalendarDays className="h-4 w-4" /> {currentDate}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-8 w-32 mb-1" />
+                  <Skeleton className="h-5 w-48" />
+                </>
+              )}
+            </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-4 p-4 border rounded-lg shadow-sm bg-card items-end">
           <Input
             placeholder="Search by name, school, committee, country..."
             value={searchTerm}
@@ -254,26 +250,54 @@ function PublicDashboardPageContent() {
               ))}
             </SelectContent>
           </Select>
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full md:w-auto">
+                  <ListFilter className="mr-2 h-4 w-4" /> Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toggleAllColumns(true)}>
+                  <CheckSquare className="mr-2 h-4 w-4" /> Show All
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toggleAllColumns(false)}>
+                  <Square className="mr-2 h-4 w-4" /> Hide All
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {(Object.keys(initialVisibleColumns) as Array<keyof PublicVisibleColumns>).map((key) => (
+                  <DropdownMenuCheckboxItem
+                    key={key}
+                    checked={visibleColumns[key]}
+                    onCheckedChange={(checked) =>
+                      setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
+                    }
+                  >
+                    {columnLabels[key]}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          {statusFilterOptions.map(opt => (
-            <Button
-              key={opt.value}
-              variant={quickStatusFilter === opt.value ? "default" : "outline"}
-              onClick={() => setQuickStatusFilter(opt.value)}
-              className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2 dark:ring-offset-background")}
-            >
-              {opt.label}
-            </Button>
-          ))}
+            {statusFilterOptions.map(opt => (
+              <Button
+                key={opt.value}
+                variant={quickStatusFilter === opt.value ? "default" : "outline"}
+                onClick={() => setQuickStatusFilter(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            ))}
         </div>
-
+        
         <ParticipantTable
           participants={participants}
           isLoading={isLoadingData}
-          onEditParticipant={() => { /* No edit on public page */ }}
-          visibleColumns={{ ...visibleColumns, selection: false, actions: false }}
+          onEditParticipant={() => { /* No edit action on public page */ }}
+          visibleColumns={{ ...visibleColumns, actions: false, selection: false }} // Actions and selection not needed for public
           selectedParticipants={[]}
           onSelectParticipant={() => {}}
           onSelectAll={() => {}}
@@ -281,25 +305,5 @@ function PublicDashboardPageContent() {
         />
       </div>
     </PublicLayout>
-  );
-}
-
-
-export default function PublicDashboardPage() {
-  // Wrap content with Suspense for useSearchParams
-  return (
-    <React.Suspense fallback={
-      <PublicLayout>
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg text-muted-foreground">Loading Public View...</p>
-          </div>
-           <Skeleton className="h-96 w-full rounded-lg" />
-        </div>
-      </PublicLayout>
-    }>
-      <PublicDashboardPageContent />
-    </React.Suspense>
   );
 }
