@@ -154,7 +154,7 @@ export function ParticipantForm({
       toast({
         title: 'Missing Information',
         description: 'Please fill in Name, School, and Committee before generating an avatar.',
-        variant: 'destructive',
+        variant: 'default',
       });
       return;
     }
@@ -162,7 +162,7 @@ export function ParticipantForm({
     setIsGeneratingAvatar(true);
     try {
       const avatarPrompt: GenerateAvatarInput = {
-        prompt: `A student diplomat representing ${currentSchool} in the ${currentCommittee} committee.`,
+        prompt: `A student diplomat profile picture, representing ${currentSchool} in the ${currentCommittee} committee. Focus on a clear, friendly, professional portrait.`,
         name: currentName,
       };
       const result = await generateAvatar(avatarPrompt);
@@ -280,8 +280,10 @@ export function ParticipantForm({
     onOpenChange(false);
   }
 
-  const currentImageUrl = form.watch('imageUrl');
-  const showGenerateButton = !currentImageUrl || currentImageUrl.startsWith('https://placehold.co');
+  const currentName = form.watch('name');
+  const currentSchool = form.watch('school');
+  const currentCommittee = form.watch('committee');
+  const canGenerateAvatar = !!currentName && !!currentSchool && !!currentCommittee;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -452,25 +454,24 @@ export function ParticipantForm({
               name="imageUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="form-imageUrl">Image URL (Optional)</FormLabel>
+                  <FormLabel htmlFor="form-imageUrl">Image URL (Optional) or Generate AI Avatar</FormLabel>
                   <div className="flex items-center gap-2">
                     <FormControl className="flex-grow">
                       <Input id="form-imageUrl" placeholder="https://example.com/image.png or AI generated" {...field} value={field.value ?? ''} disabled={isPending || isGeneratingAvatar} />
                     </FormControl>
-                    {showGenerateButton && (
-                       <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleGenerateAvatar}
-                        disabled={isPending || isGeneratingAvatar}
-                        className="shrink-0"
-                        size="icon"
-                        title="Generate Avatar with AI"
-                      >
-                        {isGeneratingAvatar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleGenerateAvatar}
+                      disabled={isPending || isGeneratingAvatar || !canGenerateAvatar}
+                      className="shrink-0"
+                      size="icon"
+                      title="Generate Avatar with AI"
+                    >
+                      {isGeneratingAvatar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    </Button>
                   </div>
+                  {!canGenerateAvatar && <p className="text-xs text-muted-foreground pt-1">Fill Name, School, and Committee to enable AI Avatar.</p>}
                   <FormMessage />
                 </FormItem>
               )}

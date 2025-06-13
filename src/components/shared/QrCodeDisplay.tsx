@@ -19,17 +19,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// Define more specific types for styling options if needed
 const dotTypes: DotType[] = ["rounded", "dots", "classy", "classy-rounded", "square", "extra-rounded"];
 const cornerSquareTypes: CornerSquareType[] = ["dot", "square", "extra-rounded"];
 const cornerDotTypes: CornerDotType[] = ["dot", "square"];
-
 
 interface QrCodeDisplayProps {
   value: string;
   initialSize?: number;
   downloadFileName?: string;
-  eventLogoUrl?: string; // For HARMUN logo or similar
+  eventLogoUrl?: string;
 }
 
 interface QrStylingState {
@@ -41,15 +39,14 @@ interface QrStylingState {
   dotsType: DotType;
   cornersSquareType: CornerSquareType;
   cornersDotType: CornerDotType;
-  image?: string; // URL for an image to embed in the QR code (e.g., event logo)
+  image?: string;
 }
-
 
 export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
   value,
   initialSize = 180,
   downloadFileName = 'harmun-checkin-qr.png',
-  eventLogoUrl, // Pass your HARMUN logo URL here
+  eventLogoUrl,
 }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -58,38 +55,54 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
   const [copied, setCopied] = React.useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
 
+  // Initialize styling with non-theme-dependent defaults
   const [styling, setStyling] = React.useState<QrStylingState>({
     size: initialSize,
-    dotsColor: resolvedTheme === 'dark' ? '#A5D6A7' : '#2E7D32', // Light Green (Dark) / Dark Green (Light)
-    backgroundColor: resolvedTheme === 'dark' ? '#263238' : '#FFFFFF', // Darker BG (Dark) / White (Light)
-    cornersSquareColor: resolvedTheme === 'dark' ? '#64B5F6' : '#1976D2', // Light Blue (Dark) / Dark Blue (Light)
-    cornersDotColor: resolvedTheme === 'dark' ? '#81C784' : '#388E3C', // Accent Green (Dark) / Medium Green (Light)
+    dotsColor: '#000000', // Default black
+    backgroundColor: '#FFFFFF', // Default white
+    cornersSquareColor: '#000000', // Default black
+    cornersDotColor: '#000000', // Default black
     dotsType: 'rounded',
     cornersSquareType: 'extra-rounded',
     cornersDotType: 'dot',
-    image: eventLogoUrl,
+    image: undefined, // Will be set by prop effect
   });
 
+  // Effect to update base styling (size, image) when props change
   React.useEffect(() => {
-    // Update colors based on theme change
     setStyling(prev => ({
       ...prev,
-      dotsColor: resolvedTheme === 'dark' ? '#A5D6A7' : '#2E7D32',
-      backgroundColor: resolvedTheme === 'dark' ? '#263238' : '#FFFFFF',
-      cornersSquareColor: resolvedTheme === 'dark' ? '#64B5F6' : '#1976D2',
-      cornersDotColor: resolvedTheme === 'dark' ? '#81C784' : '#388E3C',
+      size: initialSize,
+      image: eventLogoUrl,
     }));
+  }, [initialSize, eventLogoUrl]);
+
+  // Effect to update colors based on theme, only runs client-side after theme is resolved
+  React.useEffect(() => {
+    if (resolvedTheme) { // Ensure resolvedTheme is available
+      setStyling(prev => ({
+        ...prev,
+        dotsColor: resolvedTheme === 'dark' ? '#A5D6A7' : '#2E7D32',
+        backgroundColor: resolvedTheme === 'dark' ? '#263238' : '#FFFFFF',
+        cornersSquareColor: resolvedTheme === 'dark' ? '#64B5F6' : '#1976D2',
+        cornersDotColor: resolvedTheme === 'dark' ? '#81C784' : '#388E3C',
+      }));
+    }
   }, [resolvedTheme]);
 
-
+  // Main effect to generate and append/update the QR code
   React.useEffect(() => {
-    if (typeof window === 'undefined') return; 
+    if (typeof window === 'undefined' || !ref.current || !resolvedTheme) {
+      // Wait for client-side and for theme to be resolved before rendering QR
+      // This helps prevent rendering with intermediate/default colors causing a flash or mismatch
+      return;
+    }
 
     const qrOptions: QRCodeStylingOptions = {
       width: styling.size,
       height: styling.size,
       margin: 10,
-      qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' }, // High error correction for logo
+      qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
       imageOptions: { hideBackgroundDots: true, imageSize: 0.35, margin: 8, crossOrigin: 'anonymous' },
       dotsOptions: { type: styling.dotsType, color: styling.dotsColor },
       backgroundOptions: { color: styling.backgroundColor },
@@ -99,19 +112,21 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
       image: styling.image || undefined,
     };
     
-    const newQrCode = new QRCodeStyling(qrOptions);
-    setQrCode(newQrCode);
+    const newQrCodeInstance = new QRCodeStyling(qrOptions);
+    setQrCode(newQrCodeInstance); // Keep a reference if needed for download
 
-    if (ref.current) {
-      ref.current.innerHTML = ''; 
-      newQrCode.append(ref.current);
-    }
-  }, [value, styling, resolvedTheme]); // Re-render on any styling change
+    // Clear previous QR code and append new one
+    ref.current.innerHTML = ''; 
+    newQrCodeInstance.append(ref.current);
+
+  }, [value, styling, resolvedTheme]); // Depend on `styling` (which includes colors, size, image) and `resolvedTheme`
 
   const handleDownload = () => {
     if (qrCode) {
       qrCode.download({ name: downloadFileName, extension: 'png' });
       toast({ title: 'QR Code Downloading', description: `${downloadFileName} will be saved.` });
+    } else {
+      toast({ title: 'Error', description: 'QR code not ready for download.', variant: 'destructive'});
     }
   };
 
@@ -130,16 +145,17 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
     setStyling(prev => ({ ...prev, [field]: val }));
   };
 
-
   return (
     <div className="flex flex-col items-center gap-3 p-4 border rounded-xl shadow-lg bg-card hover:shadow-xl transition-shadow duration-300 relative">
       <div 
         ref={ref} 
         style={{ width: styling.size, height: styling.size, overflow: 'hidden' }} 
-        className="rounded-lg border-2 border-primary/20" 
+        className="rounded-lg border-2 border-primary/20 flex items-center justify-center bg-muted" // Added bg-muted for placeholder
         aria-label={`QR code for link: ${value}`}
         role="img"
-      />
+      >
+        {!resolvedTheme && <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />} 
+      </div>
       <div className="flex items-center justify-center gap-2 mt-3 w-full">
         <Button onClick={handleCopyLink} variant="outline" size="sm" className="flex-1">
           {copied ? <Check className="mr-2 h-4 w-4 text-green-500" /> : <Copy className="mr-2 h-4 w-4" />}
@@ -169,7 +185,7 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
                 <Input
                   id="qr-size"
                   type="number"
-                  defaultValue={styling.size}
+                  value={styling.size} // Use value for controlled component
                   onChange={(e) => handleStylingChange('size', parseInt(e.target.value, 10) || 100)}
                   className="col-span-2 h-8"
                   min="50"
@@ -182,7 +198,7 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
                 <Input
                   id="qr-dotsColor"
                   type="color"
-                  defaultValue={styling.dotsColor}
+                  value={styling.dotsColor} // Use value
                   onChange={(e) => handleStylingChange('dotsColor', e.target.value)}
                   className="col-span-2 h-8 p-0.5"
                 />
@@ -192,7 +208,7 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
                 <Input
                   id="qr-backgroundColor"
                   type="color"
-                  defaultValue={styling.backgroundColor}
+                  value={styling.backgroundColor} // Use value
                   onChange={(e) => handleStylingChange('backgroundColor', e.target.value)}
                   className="col-span-2 h-8 p-0.5"
                 />
@@ -217,7 +233,7 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
                   id="qr-image"
                   type="url"
                   placeholder="https://example.com/logo.png"
-                  defaultValue={styling.image}
+                  value={styling.image || ''} // Use value
                   onChange={(e) => handleStylingChange('image', e.target.value)}
                   className="col-span-2 h-8"
                 />
