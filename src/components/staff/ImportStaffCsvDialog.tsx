@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-  DialogTrigger, // Ensured DialogTrigger is imported
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -163,9 +163,9 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         <DialogHeader>
           <DialogTitle>Import Staff Members from CSV</DialogTitle>
           <DialogDescription className="space-y-2">
-            <p>Upload a CSV file with staff data. The first row should be headers (they will be skipped).</p>
-            <p><strong className="text-foreground">Required Columns:</strong> Name, Role.</p>
-            <p><strong className="text-foreground">Column Order (Recommended):</strong></p>
+            <div>Upload a CSV file with staff data. The first row should be headers (they will be skipped).</div>
+            <div><strong className="text-foreground">Required Columns:</strong> Name, Role.</div>
+            <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
             <ol className="list-decimal list-inside text-xs space-y-0.5 pl-4">
               <li>Name (e.g., "John Smith")</li>
               <li>Role (e.g., "Security Lead")</li>
@@ -176,9 +176,9 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
               <li>ContactInfo (e.g., "Radio Channel 5")</li>
               <li>Notes (any relevant notes)</li>
             </ol>
-            <p className="mt-2">
+            <div className="mt-2">
               <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Staff Teams listed in the CSV must already exist in the system. New teams will <strong className="underline">not</strong> be automatically created. Please add them via the Superior Admin panel first.
-            </p>
+            </div>
              <Alert variant="default" className="mt-3 bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700 text-blue-700 dark:text-blue-300">
                 <Info className="h-5 w-5" />
                 <AlertTitle className="font-semibold">Tip for CSVs</AlertTitle>

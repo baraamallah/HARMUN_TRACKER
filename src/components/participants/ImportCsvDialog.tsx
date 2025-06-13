@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-  DialogTrigger, // Ensured DialogTrigger is imported
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,19 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 interface ImportCsvDialogProps {
   onImportSuccess?: () => void; // Callback to refresh data on parent page
 }
+
+const participantCsvSchema: {
+  name: string;
+  school: string;
+  committee: string;
+  country?: string;
+  classGrade?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  additionalDetails?: string;
+}[] = [];
+
 
 export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -58,17 +71,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
         
         const lines = text.split(/\r\n|\n/).slice(1); // Skip header, handle both CRLF and LF
-        const parsedParticipants: {
-          name: string;
-          school: string;
-          committee: string;
-          country?: string;
-          classGrade?: string;
-          email?: string;
-          phone?: string;
-          notes?: string;
-          additionalDetails?: string;
-        }[] = [];
+        const parsedParticipants: typeof participantCsvSchema = [];
         let skippedLineCount = 0;
         
         // Expected CSV Column Order:
@@ -174,9 +177,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
           <DialogDescription className="space-y-2">
-            <p>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</p>
-            <p><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</p>
-            <p><strong className="text-foreground">Column Order (Recommended):</strong></p>
+            <div>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</div>
+            <div><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</div>
+            <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
             <ol className="list-decimal list-inside text-xs space-y-0.5 pl-4">
               <li>Name (e.g., "Jane Doe")</li>
               <li>School (e.g., "International School of Example")</li>
@@ -188,9 +191,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               <li>Notes (any relevant notes)</li>
               <li>Additional Details (other info)</li>
             </ol>
-            <p className="mt-2">
+            <div className="mt-2">
               <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees listed in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first.
-            </p>
+            </div>
              <Alert variant="default" className="mt-3 bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700 text-blue-700 dark:text-blue-300">
                 <Info className="h-5 w-5" />
                 <AlertTitle className="font-semibold">Tip for CSVs from Spreadsheets</AlertTitle>
