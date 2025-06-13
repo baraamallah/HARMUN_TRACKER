@@ -213,7 +213,7 @@ export async function importParticipants(
     throw new Error(`Failed to load essential system data (schools/committees) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
   }
   
-  const defaultMunStatus = await getDefaultAttendanceStatusSetting(); // This is designed to fallback to 'Absent' if error
+  const defaultMunStatus = await getDefaultAttendanceStatusSetting();
   const batch = fsWriteBatch(db);
 
   for (const data of parsedParticipants) {
@@ -258,10 +258,14 @@ export async function importParticipants(
   try {
     await batch.commit();
   } catch (error: any) {
-    console.error("[Server Action: importParticipants] Error committing batch import: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
-    console.error(detailedErrorMessage);
+    let detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
+    if (firebaseError.code === 'permission-denied') {
+      detailedErrorMessage += `\n\nThis PERMISSION_DENIED error usually means your Firestore Security Rules are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nTo fix this:\n1. Verify your Firestore rules allow writes to the '${PARTICIPANTS_COLLECTION}' collection. The rules might require an 'Admin' or 'Owner' role, which the server action's execution context isn't fulfilling.\n2. The most robust solution for backend/server-side operations is to use the Firebase Admin SDK, which can perform writes with privileged access.\n3. Ensure the user account performing this import via the UI has the necessary 'admin' or 'owner' role defined in your '/users/{uid}' Firestore documents, if your client-side logic relies on this before calling the server action.\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
+    } else {
+      detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
+    }
+    console.error("[Server Action: importParticipants] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
   }
 
@@ -488,10 +492,14 @@ export async function importStaffMembers(
   try {
     await batch.commit();
   } catch (error: any) {
-    console.error("[Server Action: importStaffMembers] Error committing batch import: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation or a network issue. Check server logs.`;
-    console.error(detailedErrorMessage);
+    let detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
+    if (firebaseError.code === 'permission-denied') {
+      detailedErrorMessage += `\n\nThis PERMISSION_DENIED error usually means your Firestore Security Rules are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nTo fix this:\n1. Verify your Firestore rules allow writes to the '${STAFF_MEMBERS_COLLECTION}' collection. The rules might require an 'Admin' or 'Owner' role, which the server action's execution context isn't fulfilling.\n2. The most robust solution for backend/server-side operations is to use the Firebase Admin SDK, which can perform writes with privileged access.\n3. Ensure the user account performing this import via the UI has the necessary 'admin' or 'owner' role defined in your '/users/{uid}' Firestore documents, if your client-side logic relies on this before calling the server action.\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
+    } else {
+      detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
+    }
+    console.error("[Server Action: importStaffMembers] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
   }
 
@@ -505,4 +513,6 @@ export async function importStaffMembers(
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
 }
+    
+
     
