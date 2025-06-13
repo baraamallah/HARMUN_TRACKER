@@ -52,10 +52,14 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         const text = e.target?.result as string;
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
+            setFile(null);
             return;
         }
         
-        const lines = text.split(/\r\n|\n/).slice(1); // Skip header
+        const allLines = text.split(/\r\n|\n/);
+        const headerLine = allLines[0];
+        const dataLines = allLines.slice(1);
+
         const parsedStaff: {
           name: string;
           role: string;
@@ -68,7 +72,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         }[] = [];
         let skippedLineCount = 0;
 
-        lines.forEach((line, index) => {
+        dataLines.forEach((line, index) => {
           if (line.trim() === '') return;
           
           const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
@@ -91,23 +95,36 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           }
         });
 
-        if (parsedStaff.length === 0 && skippedLineCount === lines.filter(l => l.trim()).length && lines.filter(l => l.trim()).length > 0) {
-          toast({ title: 'No valid staff data found', description: `The CSV file might be empty or incorrectly formatted. ${skippedLineCount > 0 ? `${skippedLineCount} line(s) could not be parsed.` : ''} At least Name and Role are required.`, variant: 'default' });
+        console.log('Parsed staff CSV data being sent to server:', parsedStaff);
+
+        if (parsedStaff.length === 0 && dataLines.filter(l => l.trim()).length > 0) {
+          toast({ 
+            title: 'No Valid Staff Data Found', 
+            description: `The CSV file might be empty or all lines were incorrectly formatted. ${skippedLineCount} line(s) were skipped. Required columns: Name, Role. Please check your CSV file and try again. Header row: "${headerLine}"`, 
+            variant: 'default',
+            duration: 10000 
+          });
           return;
         }
+        if (parsedStaff.length === 0 && dataLines.filter(l => l.trim()).length === 0) {
+          toast({ title: 'Empty CSV', description: 'The CSV file for staff appears to be empty or contains only a header row.', variant: 'default' });
+          return;
+        }
+
 
         try {
           const result = await importStaffMembers(parsedStaff as Array<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>>);
           let description = `${result.count} staff members processed.`;
           if (result.errors > 0) description += ` ${result.errors} staff members failed to import (check server console for details).`;
-          if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check console).`;
+          if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
           
           const importHadIssues = result.errors > 0 || (parsedStaff.length === 0 && skippedLineCount > 0 && result.count === 0);
 
           toast({ 
             title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
             description: description,
-            variant: importHadIssues ? 'default' : 'default' 
+            variant: importHadIssues ? 'default' : 'default',
+            duration: result.detectedNewTeams.length > 0 ? 15000 : 5000,
           });
           
           if (result.detectedNewTeams.length > 0) {
@@ -118,12 +135,19 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           }
           onImportSuccess?.();
         } catch (error: any) {
-          console.error("Staff import error:", error);
-          toast({ title: 'Staff Import Failed', description: error.message || 'An error occurred. Check server console.', variant: 'destructive' });
+          console.error("Staff import error (client-side catch):", error);
+          toast({ 
+            title: 'Staff Import Failed', 
+            description: `Server Action Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
+            variant: 'destructive',
+            duration: 10000
+          });
         }
       };
       reader.onerror = () => {
         toast({ title: 'Error reading file', description: 'Could not read the selected file.', variant: 'destructive' });
+        console.error("FileReader error (staff import):", reader.error);
+        setFile(null);
       }
       reader.readAsText(file);
     });
@@ -152,12 +176,12 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import Staff Members from CSV</DialogTitle>
-          <DialogDescription>
-            Upload a CSV file to add new staff members. See instructions below.
+           <DialogDescription>
+            Upload a CSV. Required columns: Name, Role. Ensure system lists (Staff Teams) are up-to-date.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="text-sm text-muted-foreground space-y-3 py-3 border-y">
+        <div className="text-sm text-muted-foreground space-y-2 py-3 border-y my-4">
             <div>Upload a CSV file with staff data. The first row should be headers (they will be skipped).</div>
             <div><strong className="text-foreground">Required Columns:</strong> Name, Role.</div>
             <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
