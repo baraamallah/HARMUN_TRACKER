@@ -74,17 +74,6 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         const parsedParticipants: typeof participantCsvSchema = [];
         let skippedLineCount = 0;
         
-        // Expected CSV Column Order:
-        // 0: Name (Required)
-        // 1: School (Required)
-        // 2: Committee (Required)
-        // 3: Country (Optional)
-        // 4: Class/Grade (Optional)
-        // 5: Email (Optional)
-        // 6: Phone (Optional)
-        // 7: Notes (Optional)
-        // 8: Additional Details (Optional)
-
         lines.forEach((line, index) => {
           if (line.trim() === '') return; // Skip empty lines
           
@@ -115,7 +104,6 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
 
         try {
-          // Type assertion to match the expected server action input
           const result = await importParticipants(parsedParticipants as Array<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>>);
           let description = `${result.count} participants processed.`;
           if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
@@ -173,10 +161,15 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           Import CSV
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg"> {/* Adjusted width for better summary display */}
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
-          <DialogDescription className="space-y-2">
+          <DialogDescription>
+            Upload a CSV file to add new participants. See instructions below for format.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="text-sm text-muted-foreground space-y-3 py-3 border-y">
             <div>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</div>
             <div><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</div>
             <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
@@ -201,9 +194,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
                   When exporting from Google Sheets or Excel, choose "Comma-separated values (.csv)". Ensure text fields containing commas (e.g., in Notes) are enclosed in double quotes by your spreadsheet software.
                 </AlertDescription>
             </Alert>
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
+        </div>
+
+        <div className="grid gap-4 pt-2 pb-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
             <Label htmlFor="csv-file">CSV File (.csv)</Label>
             <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={isPending} />

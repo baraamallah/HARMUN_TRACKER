@@ -68,16 +68,6 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         }[] = [];
         let skippedLineCount = 0;
 
-        // Expected CSV Column Order:
-        // 0: Name (Required)
-        // 1: Role (Required)
-        // 2: Department (Optional)
-        // 3: Team (Optional)
-        // 4: Email (Optional)
-        // 5: Phone (Optional)
-        // 6: ContactInfo (Optional)
-        // 7: Notes (Optional)
-
         lines.forEach((line, index) => {
           if (line.trim() === '') return;
           
@@ -162,7 +152,12 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import Staff Members from CSV</DialogTitle>
-          <DialogDescription className="space-y-2">
+          <DialogDescription>
+            Upload a CSV file to add new staff members. See instructions below.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="text-sm text-muted-foreground space-y-3 py-3 border-y">
             <div>Upload a CSV file with staff data. The first row should be headers (they will be skipped).</div>
             <div><strong className="text-foreground">Required Columns:</strong> Name, Role.</div>
             <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
@@ -186,9 +181,9 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
                   Ensure text fields with commas are enclosed in double quotes (e.g., "Note with, a comma").
                 </AlertDescription>
             </Alert>
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
+        </div>
+
+        <div className="grid gap-4 pt-2 pb-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
             <Label htmlFor="staff-csv-file">CSV File (.csv)</Label>
             <Input id="staff-csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={isPending} />
