@@ -15,6 +15,17 @@ import {
 
 export function ThemeToggleButton() {
   const { setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    // Render a placeholder or null on the server and initial client render
+    // to avoid hydration mismatch. A disabled button of the same size can prevent layout shift.
+    return <Button variant="outline" size="icon" disabled className="h-10 w-10 opacity-0 pointer-events-none" aria-hidden="true" />
+  }
 
   return (
     <DropdownMenu>
