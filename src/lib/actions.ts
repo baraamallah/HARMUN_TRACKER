@@ -203,17 +203,18 @@ export async function importParticipants(
   const detectedNewSchoolNames: Set<string> = new Set();
   const detectedNewCommitteeNames: Set<string> = new Set();
 
-  const batch = fsWriteBatch(db);
-  const defaultMunStatus = await getDefaultAttendanceStatusSetting();
-
-  let existingSystemSchools: string[] = [];
-  let existingSystemCommittees: string[] = [];
+  let existingSystemSchools: string[];
+  let existingSystemCommittees: string[];
   try {
     existingSystemSchools = await getSystemSchools();
     existingSystemCommittees = await getSystemCommittees();
-  } catch(e) {
-    console.error("[Server Action: importParticipants] Error fetching system schools/committees during import pre-check:", e);
+  } catch(e: any) {
+    console.error("[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check:", e);
+    throw new Error(`Failed to load essential system data (schools/committees) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
   }
+  
+  const defaultMunStatus = await getDefaultAttendanceStatusSetting(); // This is designed to fallback to 'Absent' if error
+  const batch = fsWriteBatch(db);
 
   for (const data of parsedParticipants) {
     try {
@@ -256,17 +257,12 @@ export async function importParticipants(
 
   try {
     await batch.commit();
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Server Action: importParticipants] Error committing batch import: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const batchCommitError = `Batch commit for participants failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}. This likely means the security rules for writing to '${PARTICIPANTS_COLLECTION}' were not met (e.g., isAdmin() check failing due to server action context).`;
-    console.error(batchCommitError);
-    return {
-      count: 0,
-      errors: parsedParticipants.length,
-      detectedNewSchools: Array.from(detectedNewSchoolNames),
-      detectedNewCommittees: Array.from(detectedNewCommitteeNames),
-    };
+    const detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
+    console.error(detailedErrorMessage);
+    throw new Error(detailedErrorMessage);
   }
 
   if (importedCount > 0) {
@@ -448,15 +444,16 @@ export async function importStaffMembers(
   let importedCount = 0;
   let errorCount = 0;
   const detectedNewTeamNames: Set<string> = new Set();
-  const batch = fsWriteBatch(db);
-
-  let existingSystemStaffTeams: string[] = [];
+  
+  let existingSystemStaffTeams: string[];
   try {
     existingSystemStaffTeams = await getSystemStaffTeams();
-  } catch(e) {
-    console.error("[Server Action: importStaffMembers] Error fetching system staff teams during import pre-check:", e);
+  } catch(e: any) {
+    console.error("[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check:", e);
+    throw new Error(`Failed to load essential system data (staff teams) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
   }
 
+  const batch = fsWriteBatch(db);
   for (const data of parsedStaffMembers) {
     try {
       const trimmedTeam = data.team?.trim();
@@ -490,21 +487,17 @@ export async function importStaffMembers(
 
   try {
     await batch.commit();
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Server Action: importStaffMembers] Error committing batch import: ", error);
     const firebaseError = error as { code?: string; message?: string };
-    const batchCommitError = `Batch commit for staff members failed (Server Action). Firebase Error Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`;
-    console.error(batchCommitError);
-    return {
-      count: 0,
-      errors: parsedStaffMembers.length,
-      detectedNewTeams: Array.from(detectedNewTeamNames),
-    };
+    const detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation or a network issue. Check server logs.`;
+    console.error(detailedErrorMessage);
+    throw new Error(detailedErrorMessage);
   }
 
   if (importedCount > 0) {
     revalidatePath('/staff');
-    revalidatePath('/superior-admin'); // Staff list is also shown here
+    revalidatePath('/superior-admin'); 
   }
   return {
     count: importedCount,
@@ -512,3 +505,4 @@ export async function importStaffMembers(
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
 }
+    
