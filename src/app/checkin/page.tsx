@@ -47,26 +47,43 @@ function CheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
-  const participantId = searchParams.get('id');
 
+  const [effectiveParticipantId, setEffectiveParticipantId] = React.useState<string | null>(null);
   const [participant, setParticipant] = React.useState<Participant | null>(null);
-  const [isLoading, setIsLoading] = React.useState(!!participantId); // Only true if ID is present
-  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(participantId ? 'initial_load' : null);
+  const [isLoading, setIsLoading] = React.useState(true); // Start true for consistent initial render
+  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
 
   const [manualIdInput, setManualIdInput] = React.useState('');
   const [isManualLookupLoading, setIsManualLookupLoading] = React.useState(false);
 
+  // Effect to process searchParams and set the effective ID
+  React.useEffect(() => {
+    const idFromParams = searchParams.get('id');
+    setEffectiveParticipantId(idFromParams); // Update the ID state
+
+    if (idFromParams) {
+      // If there's an ID, we intend to load it. Keep isLoading true until fetch.
+      // actionInProgress might be set to 'initial_load' here or in fetchParticipantData
+    } else {
+      // No ID, means we're not loading a specific participant initially.
+      setIsLoading(false); // Show manual lookup or default view
+      setActionInProgress(null);
+      setParticipant(null);
+    }
+  }, [searchParams]);
+
+
   const fetchParticipantData = React.useCallback(async (id: string) => {
     if (!id) {
-      setIsLoading(false); // Ensure loading is false if no ID to fetch
+      setIsLoading(false);
       setActionInProgress(null);
       setParticipant(null);
       return;
     }
-    setIsLoading(true);
-    setPageError(null);
+    setIsLoading(true); // Explicitly set loading before fetch
     setActionInProgress('initial_load');
+    setPageError(null);
     try {
       const participantRef = doc(db, 'participants', id);
       const docSnap = await getDoc(participantRef);
@@ -96,21 +113,20 @@ function CheckinPageContent() {
       toast({ title: "Error Loading Data", description: "Could not retrieve participant details.", variant: "destructive" });
     } finally {
       setIsLoading(false);
-      setActionInProgress(null);
-      setIsManualLookupLoading(false); // Ensure this is reset
+      setActionInProgress(null); // Reset actionInProgress after fetch attempt
+      setIsManualLookupLoading(false);
     }
   }, [toast]);
 
+  // Effect to fetch data based on the effectiveParticipantId
   React.useEffect(() => {
-    if (participantId) {
-      fetchParticipantData(participantId);
-    } else {
-      // No ID in URL, ready for manual input, set loading states accordingly
-      setIsLoading(false);
-      setActionInProgress(null);
-      setParticipant(null);
+    if (effectiveParticipantId) {
+      fetchParticipantData(effectiveParticipantId);
     }
-  }, [participantId, fetchParticipantData]);
+    // If effectiveParticipantId is null, the previous useEffect already set isLoading to false
+    // and cleared participant, so no explicit 'else' needed here to trigger manual view.
+  }, [effectiveParticipantId, fetchParticipantData]);
+
 
   const handleStatusUpdate = async (newStatus: AttendanceStatus, isCheckInIntent?: boolean) => {
     if (!participant) return;
@@ -133,7 +149,7 @@ function CheckinPageContent() {
         description: result.message,
         variant: 'destructive',
       });
-      if (participantId) fetchParticipantData(participantId);
+      if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId);
     }
     setActionInProgress(null);
   };
@@ -144,7 +160,6 @@ function CheckinPageContent() {
       return;
     }
     setIsManualLookupLoading(true);
-    // The router.push will change participantId, triggering the useEffect to fetch data
     router.push(`/checkin?id=${manualIdInput.trim()}`);
   };
 
@@ -161,8 +176,28 @@ function CheckinPageContent() {
 
   const cardBorderColor = participant?.status === 'Present' ? 'border-green-500' : participant?.status === 'Absent' ? 'border-red-500' : 'border-primary';
 
-  // Manual ID Input View
-  if (!participantId && !isLoading && !pageError) {
+  // Show generic loader while effectiveParticipantId is being determined by the first useEffect
+  // or when actively fetching based on effectiveParticipantId
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className={cn("w-full max-w-md shadow-xl border-t-8", cardBorderColor || 'border-primary')}>
+          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <p className="text-xl text-muted-foreground">Loading Participant Data...</p>
+            {effectiveParticipantId && actionInProgress === 'initial_load' && <p className="text-sm text-muted-foreground">ID: {effectiveParticipantId}</p>}
+          </CardContent>
+          <CardFooter className="flex-col gap-3 pb-8">
+             <Button asChild className="w-full" variant="outline" disabled><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // Manual ID Input View: Only if not loading, no effectiveParticipantId (after params processed), and no page error
+  if (!isLoading && !effectiveParticipantId && !pageError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
@@ -208,25 +243,7 @@ function CheckinPageContent() {
   }
 
 
-  if (isLoading && actionInProgress === 'initial_load') {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-        <Card className={cn("w-full max-w-md shadow-xl border-t-8", cardBorderColor)}>
-          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
-            <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            <p className="text-xl text-muted-foreground">Loading Participant Data...</p>
-            {participantId && <p className="text-sm text-muted-foreground">ID: {participantId}</p>}
-          </CardContent>
-          <CardFooter className="flex-col gap-3 pb-8">
-             <Button asChild className="w-full" variant="outline" disabled><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-
-  if (pageError && !participant) {
+  if (pageError && !participant) { // Error occurred and no participant data to show
      return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-destructive">
@@ -235,10 +252,10 @@ function CheckinPageContent() {
             <XCircle className="h-16 w-16 text-destructive" />
             <p className="text-xl font-semibold text-destructive">Error</p>
             <p className="text-md text-muted-foreground">{pageError}</p>
-            {participantId && <p className="text-sm text-muted-foreground">Attempted ID: {participantId}</p>}
+            {effectiveParticipantId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveParticipantId}</p>}
             <div className="flex flex-col gap-2 w-full">
-              <Button variant="outline" onClick={() => participantId && fetchParticipantData(participantId)} disabled={isLoading}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {participantId}
+              <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveParticipantId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/checkin')}>
                 <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup
@@ -253,14 +270,15 @@ function CheckinPageContent() {
     );
   }
 
-  if (!participant && participantId) { // Fallback if ID was in URL but participant is null after loading/error
+  // Fallback if ID was in URL but participant is null after loading/error (should be caught by pageError usually)
+  if (!participant && effectiveParticipantId) { 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
-            <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {participantId}.</p>
+            <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {effectiveParticipantId}.</p>
             <Button variant="outline" onClick={() => router.push('/checkin')}> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
@@ -274,22 +292,18 @@ function CheckinPageContent() {
   // This should only be reached if participant object exists
   if (!participant) {
     // This is a safeguard, should ideally be handled by the manual input screen or error screen.
-    // If participantId was present but fetch failed, it's an error.
-    // If participantId was not present, it should show manual input.
-    // If somehow it reaches here without participant and without being in loading/error/manual input state,
-    // it implies an unexpected state, perhaps show a generic error or redirect.
-    // For now, redirecting to manual lookup if no ID, or showing a generic prompt.
-    if (!participantId) {
-         router.replace('/checkin'); // Soft redirect to manual lookup if somehow landed here without ID
-         return null; // Avoid rendering anything else
+    if (!effectiveParticipantId) { // If somehow landed here without ID, after initial param processing
+         router.replace('/checkin'); // Soft redirect to manual lookup
+         return null;
     }
+    // If there was an ID, but still no participant and no error, it's an unexpected state
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
-             <p className="text-xl text-muted-foreground">Unexpected state. Participant data missing.</p>
+             <p className="text-xl text-muted-foreground">Unexpected state. Participant data missing for ID: {effectiveParticipantId}.</p>
           </CardContent>
         </Card>
       </div>
@@ -370,7 +384,7 @@ function CheckinPageContent() {
             </DropdownMenu>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
-            <Button onClick={() => participantId && fetchParticipantData(participantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
+            <Button onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
                 <RefreshCw className="mr-2 h-4 w-4"/> Refresh Participant Data
             </Button>
              <Button variant="secondary" onClick={() => router.push('/checkin')} className="w-full">
@@ -380,9 +394,9 @@ function CheckinPageContent() {
                 <Button asChild className="flex-1" variant="outline">
                     <Link href="/"> <Home className="mr-2 h-4 w-4"/> Dashboard </Link>
                 </Button>
-                {participantId && (
+                {effectiveParticipantId && (
                     <Button asChild className="flex-1" variant="outline">
-                        <Link href={`/participants/${participantId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
+                        <Link href={`/participants/${effectiveParticipantId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
                     </Button>
                 )}
             </div>
@@ -413,5 +427,3 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
-
-    

@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'; // Badge was unused, but keeping for StaffMemberStatusBadge if used inline later
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
 import { quickSetStaffStatusAction } from '@/lib/actions';
@@ -45,15 +45,29 @@ function StaffCheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
-  const staffId = searchParams.get('id');
-
+  
+  const [effectiveStaffId, setEffectiveStaffId] = React.useState<string | null>(null);
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
-  const [isLoading, setIsLoading] = React.useState(!!staffId);
-  const [actionInProgress, setActionInProgress] = React.useState<StaffAttendanceStatus | 'initial_load' | null>(staffId ? 'initial_load' : null);
+  const [isLoading, setIsLoading] = React.useState(true); // Start true
+  const [actionInProgress, setActionInProgress] = React.useState<StaffAttendanceStatus | 'initial_load' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
 
   const [manualIdInput, setManualIdInput] = React.useState('');
   const [isManualLookupLoading, setIsManualLookupLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    const idFromParams = searchParams.get('id');
+    setEffectiveStaffId(idFromParams);
+
+    if (idFromParams) {
+      // setIsLoading(true); // Handled by fetchStaffMemberData
+      // setActionInProgress('initial_load'); // Handled by fetchStaffMemberData
+    } else {
+      setIsLoading(false);
+      setActionInProgress(null);
+      setStaffMember(null);
+    }
+  }, [searchParams]);
 
   const fetchStaffMemberData = React.useCallback(async (id: string) => {
     if (!id) {
@@ -63,8 +77,8 @@ function StaffCheckinPageContent() {
       return;
     }
     setIsLoading(true);
-    setPageError(null);
     setActionInProgress('initial_load');
+    setPageError(null);
     try {
       const staffMemberRef = doc(db, 'staff_members', id);
       const docSnap = await getDoc(staffMemberRef);
@@ -103,14 +117,10 @@ function StaffCheckinPageContent() {
   }, [toast]);
 
   React.useEffect(() => {
-    if (staffId) {
-      fetchStaffMemberData(staffId);
-    } else {
-      setIsLoading(false);
-      setActionInProgress(null);
-      setStaffMember(null);
+    if (effectiveStaffId) {
+      fetchStaffMemberData(effectiveStaffId);
     }
-  }, [staffId, fetchStaffMemberData]);
+  }, [effectiveStaffId, fetchStaffMemberData]);
 
   const handleStatusUpdate = async (newStatus: StaffAttendanceStatus) => {
     if (!staffMember) return;
@@ -133,7 +143,7 @@ function StaffCheckinPageContent() {
         description: result.message,
         variant: 'destructive',
       });
-      if (staffId) fetchStaffMemberData(staffId); // Re-fetch data on failure to ensure UI is consistent
+      if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId);
     }
     setActionInProgress(null);
   };
@@ -154,7 +164,25 @@ function StaffCheckinPageContent() {
                           'border-primary';
 
 
-  if (!staffId && !isLoading && !pageError) {
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className={cn("w-full max-w-md shadow-xl border-t-8", cardBorderColor || 'border-primary')}>
+          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <p className="text-xl text-muted-foreground">Loading Staff Data...</p>
+            {effectiveStaffId && actionInProgress === 'initial_load' && <p className="text-sm text-muted-foreground">ID: {effectiveStaffId}</p>}
+          </CardContent>
+           <CardFooter className="flex-col gap-3 pb-8">
+             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (!isLoading && !effectiveStaffId && !pageError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
@@ -198,24 +226,6 @@ function StaffCheckinPageContent() {
       </div>
     );
   }
-
-  if (isLoading && actionInProgress === 'initial_load') {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-        <Card className={cn("w-full max-w-md shadow-xl border-t-8", cardBorderColor)}>
-          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
-            <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            <p className="text-xl text-muted-foreground">Loading Staff Data...</p>
-            {staffId && <p className="text-sm text-muted-foreground">ID: {staffId}</p>}
-          </CardContent>
-           <CardFooter className="flex-col gap-3 pb-8">
-             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
   
   if (pageError && !staffMember) {
      return (
@@ -226,10 +236,10 @@ function StaffCheckinPageContent() {
             <XCircle className="h-16 w-16 text-destructive" />
             <p className="text-xl font-semibold text-destructive">Error</p>
             <p className="text-md text-muted-foreground">{pageError}</p>
-            {staffId && <p className="text-sm text-muted-foreground">Attempted ID: {staffId}</p>}
+            {effectiveStaffId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveStaffId}</p>}
             <div className="flex flex-col gap-2 w-full">
-              <Button variant="outline" onClick={() => staffId && fetchStaffMemberData(staffId)} disabled={isLoading}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {staffId}
+              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveStaffId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/staff-checkin')}>
                 <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup
@@ -244,14 +254,14 @@ function StaffCheckinPageContent() {
     );
   }
 
-  if (!staffMember && staffId) {
+  if (!staffMember && effectiveStaffId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
-            <p className="text-xl text-muted-foreground">Staff data unavailable for ID: {staffId}.</p>
+            <p className="text-xl text-muted-foreground">Staff data unavailable for ID: {effectiveStaffId}.</p>
             <Button variant="outline" onClick={() => router.push('/staff-checkin')}> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
@@ -263,7 +273,7 @@ function StaffCheckinPageContent() {
   }
   
   if (!staffMember) {
-    if (!staffId) {
+    if (!effectiveStaffId) {
          router.replace('/staff-checkin'); 
          return null; 
     }
@@ -273,7 +283,7 @@ function StaffCheckinPageContent() {
           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
-             <p className="text-xl text-muted-foreground">Unexpected state. Staff data missing.</p>
+             <p className="text-xl text-muted-foreground">Unexpected state. Staff data missing for ID: {effectiveStaffId}.</p>
           </CardContent>
         </Card>
       </div>
@@ -329,7 +339,7 @@ function StaffCheckinPageContent() {
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="secondary" className="w-full text-md py-5" size="lg" disabled={!!actionInProgress}>
-                        {actionInProgress && actionInProgress !== 'initial_load' && !['On Duty', 'Off Duty'].includes(actionInProgress)
+                        {actionInProgress && actionInProgress !== 'initial_load' && !['On Duty', 'Off Duty'].includes(actionInProgress as string)
                           ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
                           : <ListRestart className="mr-2 h-5 w-5" />}
                         Other Statuses...
@@ -337,7 +347,7 @@ function StaffCheckinPageContent() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="w-[calc(100%-2rem)] max-w-sm mx-auto sm:w-72">
                     {ALL_STAFF_ATTENDANCE_STATUSES_OPTIONS
-                      .filter(opt => opt.status !== 'On Duty' && opt.status !== 'Off Duty') // Filter out main button actions
+                      .filter(opt => opt.status !== 'On Duty' && opt.status !== 'Off Duty')
                       .map(opt => (
                         <DropdownMenuItem
                             key={opt.status}
@@ -353,7 +363,7 @@ function StaffCheckinPageContent() {
             </DropdownMenu>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
-            <Button onClick={() => staffId && fetchStaffMemberData(staffId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
+            <Button onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
                 <RefreshCw className="mr-2 h-4 w-4"/> Refresh Staff Data
             </Button>
              <Button variant="secondary" onClick={() => router.push('/staff-checkin')} className="w-full">
@@ -363,9 +373,9 @@ function StaffCheckinPageContent() {
                 <Button asChild className="flex-1" variant="outline">
                     <Link href="/staff"> <Home className="mr-2 h-4 w-4"/> Staff Dashboard </Link>
                 </Button>
-                {staffId && (
+                {effectiveStaffId && (
                     <Button asChild className="flex-1" variant="outline">
-                        <Link href={`/staff/${staffId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
+                        <Link href={`/staff/${effectiveStaffId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
                     </Button>
                 )}
             </div>
