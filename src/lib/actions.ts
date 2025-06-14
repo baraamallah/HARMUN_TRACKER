@@ -192,7 +192,17 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 export async function importParticipants(
   parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
 ): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
+  console.warn("[Server Action: importParticipants] Participant import functionality is currently paused pending further refactoring to client-side or Admin SDK implementation to resolve permission issues.");
+  return {
+    count: 0,
+    errors: 0,
+    detectedNewSchools: [],
+    detectedNewCommittees: [],
+    message: "Participant import via Server Action is currently paused due to ongoing permission investigations. No participants were imported."
+  } as any; // Added 'any' to satisfy return type if message is added
 
+  // Original logic commented out:
+  /*
   if (parsedParticipants.length === 0) {
     console.log("[Server Action: importParticipants] No parsed participants to import.");
     return { count: 0, errors: 0, detectedNewSchools: [], detectedNewCommittees: [] };
@@ -260,8 +270,8 @@ export async function importParticipants(
   } catch (error: any) {
     const firebaseError = error as { code?: string; message?: string };
     let detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
-    if (firebaseError.code === 'permission-denied') {
-      detailedErrorMessage += `\n\nThis PERMISSION_DENIED error usually means your Firestore Security Rules are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nTo fix this:\n1. Verify your Firestore rules allow writes to the '${PARTICIPANTS_COLLECTION}' collection. The rules might require an 'Admin' or 'Owner' role, which the server action's execution context isn't fulfilling.\n2. The most robust solution for backend/server-side operations is to use the Firebase Admin SDK, which can perform writes with privileged access.\n3. Ensure the user account performing this import via the UI has the necessary 'admin' or 'owner' role defined in your '/users/{uid}' Firestore documents, if your client-side logic relies on this before calling the server action.\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
+     if (firebaseError.code === 'permission-denied') {
+      detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
     } else {
       detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
     }
@@ -279,6 +289,7 @@ export async function importParticipants(
     detectedNewSchools: Array.from(detectedNewSchoolNames),
     detectedNewCommittees: Array.from(detectedNewCommitteeNames),
   };
+  */
 }
 
 export async function quickSetParticipantStatusAction(
@@ -438,8 +449,17 @@ export async function quickSetStaffStatusAction(
 // Import Staff Members Action
 export async function importStaffMembers(
   parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
-): Promise<{ count: number; errors: number; detectedNewTeams: string[] }> {
-
+): Promise<{ count: number; errors: number; detectedNewTeams: string[]; message?: string }> {
+  console.warn("[Server Action: importStaffMembers] Staff import functionality is currently paused pending further refactoring to client-side or Admin SDK implementation to resolve permission issues.");
+  return {
+    count: 0,
+    errors: 0,
+    detectedNewTeams: [],
+    message: "Staff import via Server Action is currently paused due to ongoing permission investigations. No staff members were imported."
+  };
+  
+  // Original logic commented out:
+  /*
   if (parsedStaffMembers.length === 0) {
     console.log("[Server Action: importStaffMembers] No parsed staff members to import.");
     return { count: 0, errors: 0, detectedNewTeams: [] };
@@ -495,7 +515,7 @@ export async function importStaffMembers(
     const firebaseError = error as { code?: string; message?: string };
     let detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
     if (firebaseError.code === 'permission-denied') {
-      detailedErrorMessage += `\n\nThis PERMISSION_DENIED error usually means your Firestore Security Rules are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nTo fix this:\n1. Verify your Firestore rules allow writes to the '${STAFF_MEMBERS_COLLECTION}' collection. The rules might require an 'Admin' or 'Owner' role, which the server action's execution context isn't fulfilling.\n2. The most robust solution for backend/server-side operations is to use the Firebase Admin SDK, which can perform writes with privileged access.\n3. Ensure the user account performing this import via the UI has the necessary 'admin' or 'owner' role defined in your '/users/{uid}' Firestore documents, if your client-side logic relies on this before calling the server action.\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
+      detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
     } else {
       detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
     }
@@ -512,6 +532,7 @@ export async function importStaffMembers(
     errors: errorCount,
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
+  */
 }
     
 
