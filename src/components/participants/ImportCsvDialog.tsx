@@ -97,7 +97,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               additionalDetails: cleanedValues[8] || '',
             });
           } else if (line.trim()) { 
-            console.warn(`Skipping malformed CSV line ${index + 2} for participant: "${line}" (Expected at least Name,School,Committee)`);
+            console.warn(`Skipping malformed CSV line ${index + 2} for participant: "${line}" (Expected at least Name,School,Committee). Header was: "${headerLine}"`);
             skippedLineCount++;
           }
         });
@@ -118,30 +118,42 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
             return;
         }
 
-
         try {
           const result = await importParticipants(parsedParticipants as Array<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>>);
-          let description = `${result.count} participants processed.`;
-          if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
-          if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
           
-          const importHadIssues = result.errors > 0 || (parsedParticipants.length === 0 && skippedLineCount > 0 && result.count === 0);
-
-          toast({ 
-            title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Processed',
-            description: description,
-            variant: importHadIssues ? 'default' : 'default',
-            duration: result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0 ? 15000 : 5000,
-          });
-          
-          if (result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0) {
-            setImportSummary({
-              detectedNewSchools: result.detectedNewSchools,
-              detectedNewCommittees: result.detectedNewCommittees,
+          if (result.message && result.message.includes("paused")) { // Check if it's the "paused" message
+            toast({
+              title: 'Import Notice',
+              description: result.message,
+              variant: 'default',
+              duration: 7000,
             });
-          } else {
-             setIsOpen(false); 
-             setFile(null);
+            setIsOpen(false); 
+            setFile(null);
+          } else { 
+            // This block would handle actual import results if the server action wasn't paused
+            let description = `${result.count} participants processed.`;
+            if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
+            if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
+            
+            const importHadIssues = result.errors > 0 || (parsedParticipants.length === 0 && skippedLineCount > 0 && result.count === 0);
+
+            toast({ 
+              title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Processed',
+              description: description,
+              variant: importHadIssues ? 'default' : 'default',
+              duration: result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0 ? 15000 : 5000,
+            });
+            
+            if (result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0) {
+              setImportSummary({
+                detectedNewSchools: result.detectedNewSchools,
+                detectedNewCommittees: result.detectedNewCommittees,
+              });
+            } else {
+               setIsOpen(false); 
+               setFile(null);
+            }
           }
 
           onImportSuccess?.();
@@ -158,8 +170,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
       reader.onerror = () => {
         toast({ title: 'Error reading file', description: 'Could not read the selected file. It might be corrupted or inaccessible.', variant: 'destructive' });
         console.error("FileReader error:", reader.error);
-        setFile(null); // Clear the file input
-        // isPending should be automatically reset by startTransition completing
+        setFile(null); 
       }
       reader.readAsText(file);
     });
@@ -189,7 +200,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
           <DialogDescription>
-             Upload a CSV. Required columns: Name, School, Committee. Ensure system lists are up-to-date.
+            Upload a CSV file. Required columns: Name, School, Committee.
           </DialogDescription>
         </DialogHeader>
         

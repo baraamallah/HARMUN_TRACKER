@@ -47,7 +47,7 @@ const staffMemberFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
   contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''), // Kept for legacy/other
-  imageUrl: z.string().optional().or(z.literal('')), // Updated to allow empty for placeholder or AI gen
+  imageUrl: z.string().optional().or(z.literal('')), 
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
 });
 
@@ -101,7 +101,7 @@ export function StaffMemberForm({
           email: staffMemberToEdit.email || '',
           phone: staffMemberToEdit.phone || '',
           contactInfo: staffMemberToEdit.contactInfo || '',
-          imageUrl: staffMemberToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : staffMemberToEdit.imageUrl || '',
+          imageUrl: staffMemberToEdit.imageUrl || '', // Keep as is, submission logic handles placeholders
           notes: staffMemberToEdit.notes || '',
         });
       } else {
@@ -174,21 +174,14 @@ export function StaffMemberForm({
         };
         
         const formImageUrl = data.imageUrl?.trim();
-
-        if (formImageUrl && !formImageUrl.startsWith('https://placehold.co')) {
-          submissionData.imageUrl = formImageUrl;
-        } else if (!formImageUrl) { 
+        // If imageUrl is empty or a placeholder, generate a new placeholder.
+        // Otherwise, use the provided (potentially AI-generated or user-input) URL.
+        if (!formImageUrl || formImageUrl.startsWith('https://placehold.co')) {
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-          if (staffMemberToEdit && staffMemberToEdit.imageUrl && !staffMemberToEdit.imageUrl.startsWith('https://placehold.co')) {
-            submissionData.imageUrl = staffMemberToEdit.imageUrl;
-          } else {
-            const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-          }
+          submissionData.imageUrl = formImageUrl;
         }
-
 
         if (staffMemberToEdit) {
           const staffMemberRef = doc(db, 'staff_members', staffMemberToEdit.id);

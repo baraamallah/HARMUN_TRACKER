@@ -123,7 +123,7 @@ export function ParticipantForm({
           classGrade: participantToEdit.classGrade || '',
           email: participantToEdit.email || '',
           phone: participantToEdit.phone || '',
-          imageUrl: participantToEdit.imageUrl?.startsWith('https://placehold.co') ? '' : participantToEdit.imageUrl || '',
+          imageUrl: participantToEdit.imageUrl || '', // Keep as is, submission logic handles placeholders
           notes: participantToEdit.notes || '',
           additionalDetails: participantToEdit.additionalDetails || '',
         });
@@ -201,24 +201,18 @@ export function ParticipantForm({
         };
 
         const formImageUrl = data.imageUrl?.trim();
-        if (formImageUrl && !formImageUrl.startsWith('https://placehold.co')) { 
-          submissionData.imageUrl = formImageUrl;
-        } else if (!formImageUrl) { 
+        // If imageUrl is empty or a placeholder, generate a new placeholder.
+        // Otherwise, use the provided (potentially AI-generated or user-input) URL.
+        if (!formImageUrl || formImageUrl.startsWith('https://placehold.co')) {
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-           if (participantToEdit && participantToEdit.imageUrl && !participantToEdit.imageUrl.startsWith('https://placehold.co')) {
-             submissionData.imageUrl = participantToEdit.imageUrl; 
-           } else {
-            const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-            submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
-           }
+          submissionData.imageUrl = formImageUrl;
         }
-
 
         if (participantToEdit) {
           const participantRef = doc(db, 'participants', participantToEdit.id);
-          submissionData.status = participantToEdit.status;
+          submissionData.status = participantToEdit.status; // Preserve existing status on edit
           submissionData.attended = participantToEdit.attended || false;
           submissionData.checkInTime = participantToEdit.checkInTime || null;
           await updateDoc(participantRef, submissionData);

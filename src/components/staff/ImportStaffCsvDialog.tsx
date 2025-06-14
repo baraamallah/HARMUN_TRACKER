@@ -90,7 +90,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
               notes: cleanedValues[7] || '',
             });
           } else if (line.trim()) {
-            console.warn(`Skipping malformed CSV line ${index + 2} for staff: "${line}" (Expected at least Name, Role)`);
+            console.warn(`Skipping malformed CSV line ${index + 2} for staff: "${line}" (Expected at least Name, Role). Header was: "${headerLine}"`);
             skippedLineCount++;
           }
         });
@@ -111,27 +111,39 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           return;
         }
 
-
         try {
           const result = await importStaffMembers(parsedStaff as Array<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>>);
-          let description = `${result.count} staff members processed.`;
-          if (result.errors > 0) description += ` ${result.errors} staff members failed to import (check server console for details).`;
-          if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
           
-          const importHadIssues = result.errors > 0 || (parsedStaff.length === 0 && skippedLineCount > 0 && result.count === 0);
-
-          toast({ 
-            title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
-            description: description,
-            variant: importHadIssues ? 'default' : 'default',
-            duration: result.detectedNewTeams.length > 0 ? 15000 : 5000,
-          });
-          
-          if (result.detectedNewTeams.length > 0) {
-            setImportSummary({ detectedNewTeams: result.detectedNewTeams });
+          if (result.message && result.message.includes("paused")) { // Check if it's the "paused" message
+            toast({
+              title: 'Import Notice',
+              description: result.message,
+              variant: 'default',
+              duration: 7000,
+            });
+            setIsOpen(false);
+            setFile(null);
           } else {
-             setIsOpen(false);
-             setFile(null);
+            // This block would handle actual import results if the server action wasn't paused
+            let description = `${result.count} staff members processed.`;
+            if (result.errors > 0) description += ` ${result.errors} staff members failed to import (check server console for details).`;
+            if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
+            
+            const importHadIssues = result.errors > 0 || (parsedStaff.length === 0 && skippedLineCount > 0 && result.count === 0);
+
+            toast({ 
+              title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
+              description: description,
+              variant: importHadIssues ? 'default' : 'default',
+              duration: result.detectedNewTeams.length > 0 ? 15000 : 5000,
+            });
+            
+            if (result.detectedNewTeams.length > 0) {
+              setImportSummary({ detectedNewTeams: result.detectedNewTeams });
+            } else {
+               setIsOpen(false);
+               setFile(null);
+            }
           }
           onImportSuccess?.();
         } catch (error: any) {
@@ -177,7 +189,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         <DialogHeader>
           <DialogTitle>Import Staff Members from CSV</DialogTitle>
            <DialogDescription>
-            Upload a CSV. Required columns: Name, Role. Ensure system lists (Staff Teams) are up-to-date.
+            Upload a CSV. Required columns: Name, Role.
           </DialogDescription>
         </DialogHeader>
 
