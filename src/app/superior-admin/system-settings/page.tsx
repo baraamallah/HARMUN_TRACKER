@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter, // Re-added CardFooter
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -20,22 +20,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, Image as ImageIcon, Workflow } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
-import { doc, setDoc, getDoc } from 'firebase/firestore'; 
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getDefaultAttendanceStatusSetting, 
+  getDefaultStaffStatusSetting,
+  getSystemLogoUrlSetting,
 } from '@/lib/actions';
-import type { AttendanceStatus } from '@/types';
+import type { AttendanceStatus, StaffAttendanceStatus } from '@/types';
 
 const ALL_ATTENDANCE_STATUSES: AttendanceStatus[] = [
   "Present", "Absent", "Present On Account", "In Break", 
   "Restroom Break", "Technical Issue", "Stepped Out"
 ];
+
+const ALL_STAFF_ATTENDANCE_STATUSES: StaffAttendanceStatus[] = [
+  "On Duty", "Off Duty", "On Break", "Away"
+];
+
 const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
@@ -44,9 +52,12 @@ export default function SystemSettingsPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const { toast } = useToast();
   
-  const [currentDefaultStatus, setCurrentDefaultStatus] = useState<AttendanceStatus | null>(null);
-  const [isLoadingStatusSetting, setIsLoadingStatusSetting] = useState(true);
-  const [isUpdatingStatusSetting, startUpdateStatusTransition] = useTransition();
+  const [currentDefaultParticipantStatus, setCurrentDefaultParticipantStatus] = useState<AttendanceStatus | null>(null);
+  const [currentDefaultStaffStatus, setCurrentDefaultStaffStatus] = useState<StaffAttendanceStatus | null>(null);
+  const [currentEventLogoUrl, setCurrentEventLogoUrl] = useState<string | null>(null);
+  
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isUpdatingSetting, startUpdateTransition] = useTransition();
 
 
   useEffect(() => {
@@ -54,21 +65,27 @@ export default function SystemSettingsPage() {
       setCurrentUser(user);
       setIsLoadingAuth(false);
       if (user && user.uid === OWNER_UID) {
-        fetchStatusSetting();
+        fetchAllSettings();
       }
     });
     return () => unsubscribe();
   }, []);
 
-  const fetchStatusSetting = async () => {
-    setIsLoadingStatusSetting(true);
+  const fetchAllSettings = async () => {
+    setIsLoadingSettings(true);
     try {
-      const status = await getDefaultAttendanceStatusSetting();
-      setCurrentDefaultStatus(status);
+      const [participantStatus, staffStatus, logoUrl] = await Promise.all([
+        getDefaultAttendanceStatusSetting(),
+        getDefaultStaffStatusSetting(),
+        getSystemLogoUrlSetting(),
+      ]);
+      setCurrentDefaultParticipantStatus(participantStatus);
+      setCurrentDefaultStaffStatus(staffStatus);
+      setCurrentEventLogoUrl(logoUrl);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to load default attendance status.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to load system settings.', variant: 'destructive' });
     } finally {
-      setIsLoadingStatusSetting(false);
+      setIsLoadingSettings(false);
     }
   };
 
@@ -81,31 +98,30 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const handleDefaultStatusChange = async (newStatus: AttendanceStatus) => {
-    startUpdateStatusTransition(async () => {
+  const handleSettingUpdate = async (settingKey: string, newValue: string | AttendanceStatus | StaffAttendanceStatus) => {
+    startUpdateTransition(async () => {
       try {
         const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-        const docSnap = await getDoc(configDocRef);
-        if (docSnap.exists()) {
-          await setDoc(configDocRef, { defaultAttendanceStatus: newStatus }, { merge: true });
-        } else {
-          await setDoc(configDocRef, { defaultAttendanceStatus: newStatus });
-        }
-        setCurrentDefaultStatus(newStatus);
-        toast({ title: 'Setting Updated', description: `Default attendance status set to "${newStatus}".` });
+        await setDoc(configDocRef, { [settingKey]: newValue, updatedAt: serverTimestamp() }, { merge: true });
+        
+        if (settingKey === 'defaultAttendanceStatus') setCurrentDefaultParticipantStatus(newValue as AttendanceStatus);
+        if (settingKey === 'defaultStaffStatus') setCurrentDefaultStaffStatus(newValue as StaffAttendanceStatus);
+        if (settingKey === 'eventLogoUrl') setCurrentEventLogoUrl(newValue as string);
+
+        toast({ title: 'Setting Updated', description: `Configuration for "${settingKey}" has been saved.` });
       } catch (error: any) {
-        console.error("Error updating default status client-side:", error);
+        console.error(`Error updating setting ${settingKey}:`, error);
         toast({ 
           title: 'Update Failed', 
-          description: error.message || 'Could not update setting.', 
+          description: error.message || `Could not update ${settingKey}.`, 
           variant: 'destructive' 
         });
-        fetchStatusSetting(); 
+        fetchAllSettings(); 
       }
     });
   };
 
-  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingStatusSetting)) { 
+  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingSettings)) { 
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-lg shadow-2xl">
@@ -117,6 +133,7 @@ export default function SystemSettingsPage() {
             <CardDescription>Loading settings and verifying credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </CardContent>
@@ -195,26 +212,24 @@ export default function SystemSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
+            {/* Default Participant Attendance Status Setting */}
             <div className="space-y-3 p-4 border rounded-lg shadow-sm">
-                <Label htmlFor="defaultStatusSelect" className="text-lg font-semibold flex items-center">
-                    <Settings className="mr-2 h-5 w-5 text-primary" /> Default Attendance Status
+                <Label htmlFor="defaultParticipantStatusSelect" className="text-lg font-semibold flex items-center">
+                    <Workflow className="mr-2 h-5 w-5 text-primary" /> Default Participant Attendance Status
                 </Label>
                 <p className="text-sm text-muted-foreground">
-                    Choose the status automatically assigned to participants when newly added (manually or via CSV).
+                    Status assigned to new participants (manual or CSV import).
                 </p>
-                {isLoadingStatusSetting ? (
-                    <div className="flex items-center space-x-2">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>Loading current status...</span>
-                    </div>
+                {isLoadingSettings ? (
+                    <Skeleton className="h-10 w-full md:w-[300px]" />
                 ) : (
                     <Select
-                        value={currentDefaultStatus || 'Absent'}
-                        onValueChange={(value) => handleDefaultStatusChange(value as AttendanceStatus)}
-                        disabled={isUpdatingStatusSetting}
+                        value={currentDefaultParticipantStatus || 'Absent'}
+                        onValueChange={(value) => handleSettingUpdate('defaultAttendanceStatus', value as AttendanceStatus)}
+                        disabled={isUpdatingSetting}
                     >
-                        <SelectTrigger id="defaultStatusSelect" className="w-full md:w-[300px]">
-                        <SelectValue placeholder="Select a default status" />
+                        <SelectTrigger id="defaultParticipantStatusSelect" className="w-full md:w-[300px]">
+                        <SelectValue placeholder="Select default participant status" />
                         </SelectTrigger>
                         <SelectContent>
                         {ALL_ATTENDANCE_STATUSES.map((status) => (
@@ -225,7 +240,71 @@ export default function SystemSettingsPage() {
                         </SelectContent>
                     </Select>
                 )}
-                {isUpdatingStatusSetting && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
+                {isUpdatingSetting && currentDefaultParticipantStatus !== null && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
+            </div>
+
+            {/* Default Staff Attendance Status Setting */}
+            <div className="space-y-3 p-4 border rounded-lg shadow-sm">
+                <Label htmlFor="defaultStaffStatusSelect" className="text-lg font-semibold flex items-center">
+                    <Workflow className="mr-2 h-5 w-5 text-blue-500" /> Default Staff Status
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                    Status assigned to new staff members (manual or CSV import).
+                </p>
+                {isLoadingSettings ? (
+                    <Skeleton className="h-10 w-full md:w-[300px]" />
+                ) : (
+                    <Select
+                        value={currentDefaultStaffStatus || 'Off Duty'}
+                        onValueChange={(value) => handleSettingUpdate('defaultStaffStatus', value as StaffAttendanceStatus)}
+                        disabled={isUpdatingSetting}
+                    >
+                        <SelectTrigger id="defaultStaffStatusSelect" className="w-full md:w-[300px]">
+                        <SelectValue placeholder="Select default staff status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {ALL_STAFF_ATTENDANCE_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                            {status}
+                            </SelectItem>
+                        ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                {isUpdatingSetting && currentDefaultStaffStatus !== null && <p className="text-sm text-blue-500 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
+            </div>
+
+            {/* Event Logo URL Setting */}
+            <div className="space-y-3 p-4 border rounded-lg shadow-sm">
+                <Label htmlFor="eventLogoUrlInput" className="text-lg font-semibold flex items-center">
+                    <ImageIcon className="mr-2 h-5 w-5 text-green-500" /> Event Logo URL
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                    URL for the event logo. Used for QR codes and public page branding. Leave blank for default.
+                </p>
+                {isLoadingSettings ? (
+                    <Skeleton className="h-10 w-full" />
+                ) : (
+                    <div className="flex items-center gap-2">
+                        <Input 
+                            id="eventLogoUrlInput"
+                            placeholder="https://example.com/your-logo.png"
+                            defaultValue={currentEventLogoUrl || ''}
+                            onBlur={(e) => handleSettingUpdate('eventLogoUrl', e.target.value)}
+                            disabled={isUpdatingSetting}
+                            className="flex-grow"
+                        />
+                        <Button onClick={() => handleSettingUpdate('eventLogoUrl', (document.getElementById('eventLogoUrlInput') as HTMLInputElement)?.value || '')} disabled={isUpdatingSetting}>
+                            {isUpdatingSetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Logo URL
+                        </Button>
+                    </div>
+                )}
+                {currentEventLogoUrl && (
+                    <div className="mt-2">
+                        <p className="text-xs text-muted-foreground">Current Logo Preview:</p>
+                        <img src={currentEventLogoUrl} alt="Event Logo Preview" className="max-h-20 border rounded bg-muted p-1" onError={(e) => (e.currentTarget.style.display='none')} />
+                    </div>
+                )}
             </div>
             
             <div className="mt-8 p-4 border border-dashed rounded-lg text-center">

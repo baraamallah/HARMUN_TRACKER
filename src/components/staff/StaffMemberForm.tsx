@@ -4,7 +4,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import type { StaffMember } from '@/types';
+import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,6 +37,7 @@ import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { generateAvatar, type GenerateAvatarInput } from '@/ai/flows/generate-avatar-flow';
+import { getDefaultStaffStatusSetting } from '@/lib/actions';
 import { Sparkles, Loader2 } from 'lucide-react';
 
 const staffMemberFormSchema = z.object({
@@ -46,7 +47,7 @@ const staffMemberFormSchema = z.object({
   team: z.string().optional().default(''), 
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
-  contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''), // Kept for legacy/other
+  contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''),
   imageUrl: z.string().optional().or(z.literal('')), 
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
 });
@@ -74,6 +75,18 @@ export function StaffMemberForm({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
+  const [defaultStatus, setDefaultStatus] = useState<StaffAttendanceStatus>('Off Duty');
+
+  useEffect(() => {
+    if (isOpen && !staffMemberToEdit) {
+      getDefaultStaffStatusSetting().then(fetchedStatus => {
+        setDefaultStatus(fetchedStatus);
+      }).catch(err => {
+        console.error("Error fetching default staff status for StaffMemberForm:", err);
+      });
+    }
+  }, [isOpen, staffMemberToEdit]);
+
 
   const form = useForm<StaffMemberFormData>({
     resolver: zodResolver(staffMemberFormSchema),
@@ -101,7 +114,7 @@ export function StaffMemberForm({
           email: staffMemberToEdit.email || '',
           phone: staffMemberToEdit.phone || '',
           contactInfo: staffMemberToEdit.contactInfo || '',
-          imageUrl: staffMemberToEdit.imageUrl || '', // Keep as is, submission logic handles placeholders
+          imageUrl: staffMemberToEdit.imageUrl || '',
           notes: staffMemberToEdit.notes || '',
         });
       } else {
@@ -174,8 +187,6 @@ export function StaffMemberForm({
         };
         
         const formImageUrl = data.imageUrl?.trim();
-        // If imageUrl is empty or a placeholder, generate a new placeholder.
-        // Otherwise, use the provided (potentially AI-generated or user-input) URL.
         if (!formImageUrl || formImageUrl.startsWith('https://placehold.co')) {
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
@@ -185,12 +196,13 @@ export function StaffMemberForm({
 
         if (staffMemberToEdit) {
           const staffMemberRef = doc(db, 'staff_members', staffMemberToEdit.id);
+          submissionData.status = staffMemberToEdit.status; // Preserve existing status on edit
           await updateDoc(staffMemberRef, submissionData);
           toast({ title: 'Staff Member Updated', description: `${data.name} has been updated.` });
         } else {
           const newStaffMemberData = {
             ...submissionData,
-            status: 'Off Duty' as const, // Default status for new staff
+            status: defaultStatus, 
             createdAt: serverTimestamp(),
           };
           await addDoc(collection(db, 'staff_members'), newStaffMemberData);

@@ -11,16 +11,16 @@ import {
   where,
   orderBy,
   Timestamp,
-  serverTimestamp as fsServerTimestamp, // Keep for potential future use in other actions
+  serverTimestamp as fsServerTimestamp,
   getDoc,
-  // writeBatch as fsWriteBatch, // No longer used for writes in these specific import actions
-  // collection as fsCollection, // No longer used for writes in these specific import actions
-  // doc as fsDoc, // No longer used for writes in these specific import actions
   FieldValue as FirestoreFieldValue,
   updateDoc,
-  // setDoc, // No longer used for writes in these specific import actions
+  writeBatch,
+  setDoc,
+  addDoc,
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -32,7 +32,7 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 
 
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
-  console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default status.`);
+  console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default participant status.`);
   try {
     const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
     const docSnap = await getDoc(configDocRef);
@@ -40,10 +40,42 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
       return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
     }
     console.log(`[Server Action - getDefaultAttendanceStatusSetting] No setting found or field missing, returning 'Absent'.`);
-    return 'Absent';
+    return 'Absent'; // Default fallback
   } catch (error) {
-    console.error("[Server Action] Error fetching default attendance status setting: ", error);
-    return 'Absent';
+    console.error("[Server Action] Error fetching default participant attendance status setting: ", error);
+    return 'Absent'; // Default fallback on error
+  }
+}
+
+export async function getDefaultStaffStatusSetting(): Promise<StaffAttendanceStatus> {
+  console.log(`[Server Action - getDefaultStaffStatusSetting] Attempting to read default staff status.`);
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    const docSnap = await getDoc(configDocRef);
+    if (docSnap.exists() && docSnap.data().defaultStaffStatus) {
+      return docSnap.data().defaultStaffStatus as StaffAttendanceStatus;
+    }
+    console.log(`[Server Action - getDefaultStaffStatusSetting] No setting found or field missing, returning 'Off Duty'.`);
+    return 'Off Duty'; // Default fallback
+  } catch (error) {
+    console.error("[Server Action] Error fetching default staff status setting: ", error);
+    return 'Off Duty'; // Default fallback on error
+  }
+}
+
+export async function getSystemLogoUrlSetting(): Promise<string | null> {
+  console.log(`[Server Action - getSystemLogoUrlSetting] Attempting to read event logo URL.`);
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    const docSnap = await getDoc(configDocRef);
+    if (docSnap.exists() && docSnap.data().eventLogoUrl) {
+      return docSnap.data().eventLogoUrl as string;
+    }
+    console.log(`[Server Action - getSystemLogoUrlSetting] No logo URL setting found or field missing.`);
+    return null;
+  } catch (error) {
+    console.error("[Server Action] Error fetching event logo URL setting: ", error);
+    return null;
   }
 }
 
@@ -187,15 +219,12 @@ export async function getSystemStaffTeams(): Promise<string[]> {
   }
 }
 
-// This type represents what the server action will return after processing the CSV for new system items.
-// No actual import (write) happens here anymore.
 export type ParticipantImportValidationResult = {
   detectedNewSchools: string[];
   detectedNewCommittees: string[];
-  message?: string; // Optional message, e.g., if validation itself has issues
+  message?: string;
 };
 
-// Import Participants Action (Validation Only)
 export async function validateParticipantImportData(
   parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
 ): Promise<ParticipantImportValidationResult> {
@@ -212,7 +241,6 @@ export async function validateParticipantImportData(
   } catch (e: any) {
     const detailedErrorMessage = `[Server Action: validateParticipantImportData] Critical error fetching system schools/committees during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
     console.error(detailedErrorMessage, e);
-    // Still return detected items if any, but include an error message
     return {
       detectedNewSchools: Array.from(detectedNewSchoolNames),
       detectedNewCommittees: Array.from(detectedNewCommitteeNames),
@@ -233,7 +261,6 @@ export async function validateParticipantImportData(
       }
     } catch (error) {
       console.error("[Server Action: validateParticipantImportData] Error processing a participant record for validation: ", data, error);
-      // Optionally, collect these errors if you want to report them
     }
   }
 
@@ -403,7 +430,6 @@ export type StaffImportValidationResult = {
   message?: string;
 };
 
-// Import Staff Members Action (Validation Only)
 export async function validateStaffImportData(
   parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
 ): Promise<StaffImportValidationResult> {
@@ -438,4 +464,3 @@ export async function validateStaffImportData(
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
 }
-    

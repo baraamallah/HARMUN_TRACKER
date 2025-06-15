@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter, // Added CardFooter
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -25,6 +25,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import type { Participant, StaffMember } from '@/types';
 import { QrCodeDisplay } from '@/components/shared/QrCodeDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getSystemLogoUrlSetting } from '@/lib/actions';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -45,14 +46,25 @@ export default function QrManagementPage() {
   const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
 
   const [appBaseUrl, setAppBaseUrl] = useState('');
-  const [harmunLogoUrl, setHarmunLogoUrl] = useState<string | undefined>(undefined);
+  const [eventLogoUrl, setEventLogoUrl] = useState<string | undefined>(undefined);
+  const [isLoadingLogo, setIsLoadingLogo] = useState(true);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setAppBaseUrl(window.location.origin);
-      // Optional: set a default logo URL if you have one
-      // setHarmunLogoUrl('https://example.com/path/to/harmun-logo.png');
     }
+    const fetchLogo = async () => {
+      setIsLoadingLogo(true);
+      try {
+        const url = await getSystemLogoUrlSetting();
+        if (url) setEventLogoUrl(url);
+      } catch (error) {
+        console.error("Failed to fetch system logo URL for QR management:", error);
+      } finally {
+        setIsLoadingLogo(false);
+      }
+    };
+    fetchLogo();
   }, []);
 
   const fetchParticipantsData = useCallback(async () => {
@@ -204,7 +216,7 @@ export default function QrManagementPage() {
       {[...Array(count)].map((_, i) => (
         <div key={`${keyPrefix}-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
           <Skeleton className="h-6 w-3/4" />
-          <Skeleton className="h-40 w-40 mx-auto rounded-md" /> {/* Adjusted for typical QR size */}
+          <Skeleton className="h-40 w-40 mx-auto rounded-md" />
           <Skeleton className="h-8 w-full mt-2" />
           <Skeleton className="h-4 w-full mt-1" />
         </div>
@@ -250,6 +262,7 @@ export default function QrManagementPage() {
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Participant Check-in QR Codes</CardTitle>
                 <CardDescription>
                   Generate and view QR codes for individual participant check-in. Each QR code links to <code>{appBaseUrl}/checkin?id=PARTICIPANT_ID</code>.
+                  {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
@@ -263,7 +276,7 @@ export default function QrManagementPage() {
                     className="pl-10 w-full"
                   />
                 </div>
-                {isLoadingParticipants ? (
+                {isLoadingParticipants || isLoadingLogo ? (
                   renderQrGridSkeleton(8, 'p')
                 ) : filteredParticipantsForQr.length > 0 && appBaseUrl ? (
                   <ScrollArea className="h-[600px] pr-3">
@@ -275,7 +288,7 @@ export default function QrManagementPage() {
                             value={`${appBaseUrl}/checkin?id=${participant.id}`}
                             initialSize={160}
                             downloadFileName={`harmun-participant-qr-${participant.name.replace(/\s+/g, '_')}-${participant.id}.png`}
-                            eventLogoUrl={harmunLogoUrl}
+                            eventLogoUrl={eventLogoUrl}
                           />
                         </div>
                       ))}
@@ -296,6 +309,7 @@ export default function QrManagementPage() {
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Staff Member Status QR Codes</CardTitle>
                 <CardDescription>
                   Generate and view QR codes for individual staff member status updates. Each QR code links to <code>{appBaseUrl}/staff-checkin?id=STAFF_ID</code>.
+                  {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
@@ -309,7 +323,7 @@ export default function QrManagementPage() {
                     className="pl-10 w-full"
                   />
                 </div>
-                {isLoadingStaffForQr ? (
+                {isLoadingStaffForQr || isLoadingLogo ? (
                   renderQrGridSkeleton(4, 's')
                 ) : filteredStaffForQr.length > 0 && appBaseUrl ? (
                   <ScrollArea className="h-[600px] pr-3">
@@ -321,7 +335,7 @@ export default function QrManagementPage() {
                             value={`${appBaseUrl}/staff-checkin?id=${staff.id}`}
                             initialSize={160}
                             downloadFileName={`harmun-staff-qr-${staff.name.replace(/\s+/g, '_')}-${staff.id}.png`}
-                            eventLogoUrl={harmunLogoUrl}
+                            eventLogoUrl={eventLogoUrl}
                           />
                         </div>
                       ))}
@@ -353,5 +367,3 @@ export default function QrManagementPage() {
     </div>
   );
 }
-
-    

@@ -4,7 +4,7 @@
 import React from 'react';
 import QRCodeStyling, { type Options as QRCodeStylingOptions, type DotType, type CornerSquareType, type CornerDotType } from 'qr-code-styling';
 import { Button } from '@/components/ui/button';
-import { Copy, Download, Check, Settings2, Loader2 } from 'lucide-react'; // Added Loader2
+import { Copy, Download, Check, Settings2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -27,7 +27,7 @@ interface QrCodeDisplayProps {
   value: string;
   initialSize?: number;
   downloadFileName?: string;
-  eventLogoUrl?: string;
+  eventLogoUrl?: string; // This prop can override the system default if provided
 }
 
 interface QrStylingState {
@@ -46,7 +46,7 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
   value,
   initialSize = 180,
   downloadFileName = 'harmun-checkin-qr.png',
-  eventLogoUrl,
+  eventLogoUrl, // This specific prop takes precedence
 }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -57,34 +57,32 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
 
   const [styling, setStyling] = React.useState<QrStylingState>({
     size: initialSize,
-    dotsColor: '#000000',
-    backgroundColor: '#FFFFFF',
-    cornersSquareColor: '#000000',
-    cornersDotColor: '#000000',
+    dotsColor: '#000000', // Initial default, will be themed
+    backgroundColor: '#FFFFFF', // Initial default, will be themed
+    cornersSquareColor: '#000000', // Initial default, will be themed
+    cornersDotColor: '#000000', // Initial default, will be themed
     dotsType: 'rounded',
     cornersSquareType: 'extra-rounded',
     cornersDotType: 'dot',
-    image: eventLogoUrl || undefined,
+    image: eventLogoUrl || undefined, // Use direct prop first
   });
 
   const [qrOptions, setQrOptions] = React.useState<QRCodeStylingOptions | null>(null);
 
-  // Effect to update styling based on props (size, eventLogoUrl)
   React.useEffect(() => {
     setStyling(prev => ({
       ...prev,
       size: initialSize,
-      image: eventLogoUrl || undefined,
+      image: eventLogoUrl || prev.image, // Prioritize direct prop, then existing state (which might hold system default)
     }));
   }, [initialSize, eventLogoUrl]);
 
-  // Effect to build QR options once theme and styling are stable
   React.useEffect(() => {
-    if (resolvedTheme) { // Only build options when theme is known
-      const currentDotsColor = resolvedTheme === 'dark' ? '#A5D6A7' : '#2E7D32';
-      const currentBackgroundColor = resolvedTheme === 'dark' ? '#263238' : '#FFFFFF';
-      const currentCornersSquareColor = resolvedTheme === 'dark' ? '#64B5F6' : '#1976D2';
-      const currentCornersDotColor = resolvedTheme === 'dark' ? '#81C784' : '#388E3C';
+    if (resolvedTheme) {
+      const currentDotsColor = resolvedTheme === 'dark' ? '#A5D6A7' : '#2E7D32'; // Greenish
+      const currentBackgroundColor = resolvedTheme === 'dark' ? '#263238' : '#FFFFFF'; // Dark Grey / White
+      const currentCornersSquareColor = resolvedTheme === 'dark' ? '#64B5F6' : '#1976D2'; // Blueish
+      const currentCornersDotColor = resolvedTheme === 'dark' ? '#81C784' : '#388E3C'; // Greenish
 
       const options: QRCodeStylingOptions = {
         width: styling.size,
@@ -92,31 +90,29 @@ export const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
         margin: 10,
         qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
         imageOptions: { hideBackgroundDots: true, imageSize: 0.35, margin: 8, crossOrigin: 'anonymous' },
-        dotsOptions: { type: styling.dotsType, color: styling.dotsColor !== '#000000' ? styling.dotsColor : currentDotsColor },
-        backgroundOptions: { color: styling.backgroundColor !== '#FFFFFF' ? styling.backgroundColor : currentBackgroundColor },
-        cornersSquareOptions: { type: styling.cornersSquareType, color: styling.cornersSquareColor !== '#000000' ? styling.cornersSquareColor : currentCornersSquareColor },
-        cornersDotOptions: { type: styling.cornersDotType, color: styling.cornersDotColor !== '#000000' ? styling.cornersDotColor : currentCornersDotColor },
+        dotsOptions: { type: styling.dotsType, color: styling.dotsColor === '#000000' ? currentDotsColor : styling.dotsColor },
+        backgroundOptions: { color: styling.backgroundColor === '#FFFFFF' ? currentBackgroundColor : styling.backgroundColor },
+        cornersSquareOptions: { type: styling.cornersSquareType, color: styling.cornersSquareColor === '#000000' ? currentCornersSquareColor : styling.cornersSquareColor },
+        cornersDotOptions: { type: styling.cornersDotType, color: styling.cornersDotColor === '#000000' ? currentCornersDotColor : styling.cornersDotColor },
         data: value,
         image: styling.image || undefined,
       };
       setQrOptions(options);
     } else {
-      setQrOptions(null); // Reset if theme is not resolved
+      setQrOptions(null);
     }
   }, [resolvedTheme, styling, value]);
 
 
-  // Effect to render QR code when options are ready
   React.useEffect(() => {
     if (qrOptions && ref.current && typeof window !== 'undefined') {
       const newQrCodeInstance = new QRCodeStyling(qrOptions);
-      setQrInstance(newQrCodeInstance); // Store instance for download
+      setQrInstance(newQrCodeInstance);
       
-      // Clear previous QR code and append new one
       ref.current.innerHTML = ''; 
       newQrCodeInstance.append(ref.current);
     } else if (ref.current) {
-      ref.current.innerHTML = ''; // Clear if no options (e.g., theme not resolved yet)
+      ref.current.innerHTML = ''; 
     }
   }, [qrOptions]);
 

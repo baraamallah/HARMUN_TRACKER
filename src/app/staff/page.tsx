@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react'; // Added UploadCloud, DownloadCloud
+import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -44,8 +44,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog'; // Added
-import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton'; // Added
+import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
+import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
 
 const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
     { status: 'All', label: 'All Statuses' },
@@ -251,7 +251,8 @@ export default function StaffDashboardPage() {
         title: "Bulk Update Successful",
         description: `${selectedStaffMemberIds.length} staff member(s) updated to ${status}.`,
       });
-      fetchData(); // Refresh data
+      fetchData(); 
+      setSelectedStaffMemberIds([]);
     } catch (error: any) {
       console.error("Client-side Error bulk updating staff status: ", error);
       toast({
@@ -286,7 +287,8 @@ export default function StaffDashboardPage() {
         title: "Bulk Delete Successful",
         description: `${selectedStaffMemberIds.length} staff member(s) deleted.`,
       });
-      fetchData(); // Refresh data
+      fetchData(); 
+      setSelectedStaffMemberIds([]);
     } catch (error: any) {
       console.error("Client-side error during staff bulk deletion: ", error);
       toast({ title: "Bulk Delete Failed", description: error.message || "An error occurred.", variant: "destructive" });
