@@ -34,7 +34,7 @@ export default function ParticipantProfilePage() {
 
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false); // For status updates
 
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [schools, setSchools] = React.useState<string[]>([]);
@@ -112,7 +112,11 @@ export default function ParticipantProfilePage() {
       const participantRef = doc(db, 'participants', participant.id);
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
 
+      // Optimistically update local state, or rely on fetchParticipantData to refresh
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+      // To ensure data consistency, especially for `updatedAt`, we could call fetchParticipantData()
+      // but this might cause a brief flash. For now, optimistic update is fine for status.
+      // fetchParticipantData(); // Uncomment if strict consistency is needed immediately
 
       toast({
         title: 'Attendance Updated',
@@ -125,7 +129,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData();
+       fetchParticipantData(); // Refresh data on error to ensure consistency
     } finally {
       setIsSubmitting(false);
     }
@@ -144,15 +148,13 @@ export default function ParticipantProfilePage() {
 
   if (isLoading && !participant) { // Show full page skeleton only on initial load without data
     return (
-      <div className="container mx-auto p-4 md:p-8">
+      <div className="container mx-auto p-4 md:p-8 animate-pulse">
         <Skeleton className="h-8 w-32 mb-2" />
         <Skeleton className="h-6 w-48 mb-6" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-32 w-full rounded-lg" />
-            <Skeleton className="h-10 w-full rounded-lg" />
-            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-64 w-full rounded-lg" /> {/* Increased size for more fields */}
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -163,7 +165,7 @@ export default function ParticipantProfilePage() {
     );
   }
 
-  if (!participant) {
+  if (!participant) { // This renders after isLoading is false and participant is still null
     return (
       <div className="container mx-auto p-4 md:p-8 text-center">
         <UserCircle className="h-32 w-32 mx-auto text-muted-foreground mb-4" data-ai-hint="error user" />
@@ -178,13 +180,13 @@ export default function ParticipantProfilePage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
-       <Button asChild variant="outline" className="mb-6">
+       <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
         <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</Link>
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <section aria-labelledby="participant-info-heading" className="lg:col-span-1 space-y-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <CardHeader className="items-center text-center p-6">
               <Avatar className="h-32 w-32 border-4 border-primary mb-4 ring-2 ring-primary/30 ring-offset-2 ring-offset-background">
                 <AvatarImage src={participant.imageUrl} alt={`${participant.name}'s avatar`} data-ai-hint="person avatar large" />
@@ -223,13 +225,13 @@ export default function ParticipantProfilePage() {
                <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>
                 <span className="text-right">
-                  {participant.createdAt && typeof participant.createdAt === 'string' && isValid(parseISO(participant.createdAt)) ? format(parseISO(participant.createdAt), 'PPpp') : 'N/A'}
+                  {participant.createdAt && typeof participant.createdAt === 'string' && isValid(parseISO(participant.createdAt)) ? format(parseISO(participant.createdAt), 'PP p') : 'N/A'}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Last Updated:</span>
                 <span className="text-right">
-                  {participant.updatedAt && typeof participant.updatedAt === 'string' && isValid(parseISO(participant.updatedAt)) ? format(parseISO(participant.updatedAt), 'PPpp') : 'N/A'}
+                  {participant.updatedAt && typeof participant.updatedAt === 'string' && isValid(parseISO(participant.updatedAt)) ? format(parseISO(participant.updatedAt), 'PP p') : 'N/A'}
                 </span>
               </div>
               {participant.attended && participant.checkInTime && typeof participant.checkInTime === 'string' && isValid(parseISO(participant.checkInTime)) && (
@@ -239,7 +241,7 @@ export default function ParticipantProfilePage() {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="p-4 flex flex-col gap-2">
+            <CardFooter className="p-4 flex flex-col gap-2 border-t">
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full" disabled={isSubmitting || isLoading} aria-haspopup="true" aria-expanded="false" aria-label="Change attendance status">
@@ -275,7 +277,7 @@ export default function ParticipantProfilePage() {
                 disabled={isLoading || isSubmitting}
                 aria-label="Refresh participant data"
               >
-                {isLoading ? (
+                {isLoading && !isSubmitting ? ( // Only show loader on refresh button if it's the main page load
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
@@ -292,7 +294,7 @@ export default function ParticipantProfilePage() {
         </section>
 
         <section aria-labelledby="participant-details-heading" className="lg:col-span-2 space-y-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <CardHeader>
               <CardTitle id="participant-notes-heading" className="flex items-center text-xl"><StickyNote className="mr-3 h-6 w-6 text-primary" />Participant Notes</CardTitle>
               <CardDescription>Private notes and observations about the participant.</CardDescription>
@@ -306,7 +308,7 @@ export default function ParticipantProfilePage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg">
+          <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <CardHeader>
               <CardTitle id="participant-additional-details-heading" className="flex items-center text-xl"><Info className="mr-3 h-6 w-6 text-primary" />Additional Details</CardTitle>
               <CardDescription>Other relevant information.</CardDescription>

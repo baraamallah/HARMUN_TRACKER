@@ -134,9 +134,9 @@ export default function StaffMemberProfilePage() {
   ];
 
 
-  if (isLoading && !staffMember) { // Show full page skeleton only on initial load without data
+  if (isLoading && !staffMember) { 
     return (
-      <div className="container mx-auto p-4 md:p-8">
+      <div className="container mx-auto p-4 md:p-8 animate-pulse">
         <Skeleton className="h-8 w-32 mb-2" />
         <Skeleton className="h-6 w-48 mb-6" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -167,13 +167,13 @@ export default function StaffMemberProfilePage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
-       <Button asChild variant="outline" className="mb-6">
+       <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
         <Link href="/staff"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff List</Link>
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <section aria-labelledby="staff-member-info-heading" className="lg:col-span-1 space-y-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <CardHeader className="items-center text-center p-6">
               <Avatar className="h-32 w-32 border-4 border-primary mb-4 ring-2 ring-primary/30 ring-offset-2 ring-offset-background">
                 <AvatarImage src={staffMember.imageUrl} alt={`${staffMember.name}'s avatar`} data-ai-hint="person avatar large" />
@@ -214,17 +214,17 @@ export default function StaffMemberProfilePage() {
                <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Profile Created:</span>
                 <span className="text-right">
-                  {staffMember.createdAt && isValid(parseISO(staffMember.createdAt as string)) ? format(parseISO(staffMember.createdAt as string), 'PPpp') : 'N/A'}
+                  {staffMember.createdAt && isValid(parseISO(staffMember.createdAt as string)) ? format(parseISO(staffMember.createdAt as string), 'PP p') : 'N/A'}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Last Updated:</span>
                 <span className="text-right">
-                  {staffMember.updatedAt && isValid(parseISO(staffMember.updatedAt as string)) ? format(parseISO(staffMember.updatedAt as string), 'PPpp') : 'N/A'}
+                  {staffMember.updatedAt && isValid(parseISO(staffMember.updatedAt as string)) ? format(parseISO(staffMember.updatedAt as string), 'PP p') : 'N/A'}
                 </span>
               </div>
             </CardContent>
-            <CardFooter className="p-4 flex flex-col gap-2">
+            <CardFooter className="p-4 flex flex-col gap-2 border-t">
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full" disabled={isSubmittingStatus || isLoading} aria-haspopup="true" aria-expanded="false" aria-label="Change staff member status">
@@ -260,7 +260,7 @@ export default function StaffMemberProfilePage() {
                 disabled={isLoading || isSubmittingStatus}
                 aria-label="Refresh staff data"
               >
-                {isLoading ? (
+                {isLoading && !isSubmittingStatus ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
@@ -277,7 +277,7 @@ export default function StaffMemberProfilePage() {
         </section>
 
         <section aria-labelledby="staff-member-notes-heading" className="lg:col-span-2 space-y-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <CardHeader>
               <CardTitle id="staff-member-notes-heading" className="flex items-center text-xl"><StickyNote className="mr-3 h-6 w-6 text-primary" />Notes</CardTitle>
               <CardDescription>Private notes and observations about the staff member.</CardDescription>

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, Loader2, Users2, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react';
+import { PlusCircle, ListFilter, Loader2, Users2 as UsersIcon, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react'; // Renamed Users2 to UsersIcon for clarity
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -56,10 +56,10 @@ const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; 
 ];
 
 const STAFF_BULK_STATUS_OPTIONS: { status: StaffAttendanceStatus; label: string; icon: React.ElementType }[] = [
-    { status: 'On Duty', label: 'On Duty', icon: Users2 },
-    { status: 'Off Duty', label: 'Off Duty', icon: Users2 },
-    { status: 'On Break', label: 'On Break', icon: Users2 },
-    { status: 'Away', label: 'Away', icon: Users2 },
+    { status: 'On Duty', label: 'On Duty', icon: UsersIcon },
+    { status: 'Off Duty', label: 'Off Duty', icon: UsersIcon },
+    { status: 'On Break', label: 'On Break', icon: UsersIcon },
+    { status: 'Away', label: 'Away', icon: UsersIcon },
 ];
 
 
@@ -127,7 +127,10 @@ export default function StaffDashboardPage() {
   }, [router]);
 
   const fetchData = React.useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      if (!isAuthLoading) setIsLoadingData(false);
+      return;
+    }
     setIsLoadingData(true);
     try {
       const staffColRef = collection(db, 'staff_members');
@@ -188,7 +191,7 @@ export default function StaffDashboardPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, debouncedSearchTerm, quickStatusFilter, selectedTeamFilter, toast]);
+  }, [currentUser, isAuthLoading, debouncedSearchTerm, quickStatusFilter, selectedTeamFilter, toast]);
 
   React.useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -302,22 +305,20 @@ export default function StaffDashboardPage() {
   if (isAuthLoading) {
     return (
       <AppLayoutClientShell>
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg text-muted-foreground">Verifying authentication...</p>
-          </div>
-           <Skeleton className="h-96 w-full rounded-lg" />
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+            <p className="text-xl text-muted-foreground">Verifying authentication...</p>
         </div>
       </AppLayoutClientShell>
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser) { // Should be caught by onAuthStateChanged redirect, but as a fallback
     return (
        <AppLayoutClientShell>
-        <div className="flex items-center justify-center h-64">
-            <p className="text-lg text-muted-foreground">Redirecting to login...</p>
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+            <p className="text-xl text-muted-foreground">Redirecting to login...</p>
         </div>
        </AppLayoutClientShell>
     );
@@ -336,7 +337,7 @@ export default function StaffDashboardPage() {
             <ExportStaffCsvButton staffMembers={staffMembers} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="transition-colors hover:border-primary">
                   <ListFilter className="mr-2 h-4 w-4" /> Columns
                 </Button>
               </DropdownMenuTrigger>
@@ -363,7 +364,7 @@ export default function StaffDashboardPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={handleAddStaffMember}>
+            <Button onClick={handleAddStaffMember} className="transition-transform hover:scale-105">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Staff Member
             </Button>
           </div>
@@ -374,10 +375,10 @@ export default function StaffDashboardPage() {
             placeholder="Search by name, role, department, team..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow"
+            className="flex-grow focus-visible:ring-primary"
           />
           <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')}>
-            <SelectTrigger className="w-full md:w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px] focus:ring-primary">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -389,7 +390,7 @@ export default function StaffDashboardPage() {
             </SelectContent>
           </Select>
           <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
-            <SelectTrigger className="w-full md:w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px] focus:ring-primary">
               <SelectValue placeholder="Filter by team" />
             </SelectTrigger>
             <SelectContent>
@@ -406,7 +407,7 @@ export default function StaffDashboardPage() {
             {selectedStaffMemberIds.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting}>
+                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting} className="transition-colors hover:border-primary">
                     <Layers className="mr-2 h-4 w-4" />
                     Actions for {selectedStaffMemberIds.length} Selected
                     {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}

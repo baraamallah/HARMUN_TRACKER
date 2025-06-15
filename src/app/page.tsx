@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, Trash2 } from 'lucide-react';
+import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, Trash2, Users as UsersIcon } from 'lucide-react'; // Changed Users to UsersIcon
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -129,6 +129,7 @@ export default function AdminDashboardPage() {
 
   const fetchData = React.useCallback(async () => {
     if (authStatus !== 'authenticated' || !currentUser) {
+      if (authStatus !== 'loading') setIsLoadingData(false); // Ensure loading stops if not authenticated and not already loading auth
       return;
     }
 
@@ -164,6 +165,8 @@ export default function AdminDashboardPage() {
           classGrade: data.classGrade,
           email: data.email,
           phone: data.phone,
+          attended: data.attended || false, // Ensure this is part of your Participant type and Firestore data
+          checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : data.checkInTime,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Participant;
@@ -323,37 +326,20 @@ export default function AdminDashboardPage() {
   if (authStatus === 'loading') {
     return (
       <AppLayoutClientShell>
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg text-muted-foreground">Verifying authentication...</p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <Skeleton className="h-9 w-72 mb-2" />
-              <Skeleton className="h-5 w-96" />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-40" />
-            </div>
-          </div>
-          <Skeleton className="h-20 w-full rounded-lg" />
-          <Skeleton className="h-10 w-64 mb-4" />
-          <Skeleton className="h-96 w-full rounded-lg" />
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)]"> {/* Adjust height as needed */}
+          <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+          <p className="text-xl text-muted-foreground">Verifying authentication...</p>
         </div>
       </AppLayoutClientShell>
     );
   }
 
-  if (authStatus === 'unauthenticated' || !currentUser) { // After loading, if still no user, show redirect message
+  if (authStatus === 'unauthenticated' || !currentUser) { 
     return (
        <AppLayoutClientShell>
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg text-muted-foreground">Redirecting to login...</p>
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+            <p className="text-xl text-muted-foreground">Redirecting to login...</p>
         </div>
        </AppLayoutClientShell>
     );
@@ -372,7 +358,7 @@ export default function AdminDashboardPage() {
             <ExportCsvButton participants={participants} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="transition-colors hover:border-primary">
                   <ListFilter className="mr-2 h-4 w-4" /> Columns
                 </Button>
               </DropdownMenuTrigger>
@@ -399,7 +385,7 @@ export default function AdminDashboardPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={handleAddParticipant}>
+            <Button onClick={handleAddParticipant} className="transition-transform hover:scale-105">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
             </Button>
           </div>
@@ -410,10 +396,10 @@ export default function AdminDashboardPage() {
             placeholder="Search by name, school, committee, country..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow"
+            className="flex-grow focus-visible:ring-primary"
           />
           <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-            <SelectTrigger className="w-full md:w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px] focus:ring-primary">
               <SelectValue placeholder="Filter by school" />
             </SelectTrigger>
             <SelectContent>
@@ -425,7 +411,7 @@ export default function AdminDashboardPage() {
             </SelectContent>
           </Select>
           <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
-            <SelectTrigger className="w-full md:w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px] focus:ring-primary">
               <SelectValue placeholder="Filter by committee" />
             </SelectTrigger>
             <SelectContent>
@@ -444,7 +430,7 @@ export default function AdminDashboardPage() {
                 key={opt.value}
                 variant={quickStatusFilter === opt.value ? "default" : "outline"}
                 onClick={() => setQuickStatusFilter(opt.value)}
-                className={cn(quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2 dark:ring-offset-background")}
+                className={cn("transition-all hover:shadow-md", quickStatusFilter === opt.value && "ring-2 ring-ring ring-offset-2 dark:ring-offset-background")}
               >
                 {opt.label}
               </Button>
@@ -452,7 +438,7 @@ export default function AdminDashboardPage() {
             {selectedParticipantIds.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting}>
+                  <Button variant="secondary" disabled={isBulkUpdating || isBulkDeleting} className="transition-colors hover:border-primary">
                     <Layers className="mr-2 h-4 w-4" />
                     Actions for {selectedParticipantIds.length} Selected
                     {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
@@ -482,7 +468,7 @@ export default function AdminDashboardPage() {
 
         <ParticipantTable
           participants={participants}
-          isLoading={isLoadingData && authStatus === 'authenticated'} // Data is only loading if authenticated
+          isLoading={isLoadingData && authStatus === 'authenticated'}
           onEditParticipant={handleEditParticipant}
           visibleColumns={visibleColumns}
           selectedParticipants={selectedParticipantIds}

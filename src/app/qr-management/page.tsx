@@ -15,24 +15,26 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
-import type { Participant, StaffMember } from '@/types';
+import type { Participant, StaffMember, AdminManagedUser } from '@/types';
 import { QrCodeDisplay } from '@/components/shared/QrCodeDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSystemLogoUrlSetting } from '@/lib/actions';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
+const USERS_COLLECTION = 'users';
 
 export default function QrManagementPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
   const { toast } = useToast();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -67,8 +69,30 @@ export default function QrManagementPage() {
     fetchLogo();
   }, []);
 
+  const fetchUserDataAndRoles = useCallback(async (user: User) => {
+    if (user.uid === OWNER_UID) {
+      setUserRole('owner');
+      return 'owner';
+    }
+    try {
+      const userDocRef = doc(db, USERS_COLLECTION, user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data() as AdminManagedUser;
+        if (userData.role === 'admin') {
+          setUserRole('admin');
+          return 'admin';
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+      toast({ title: "Error", description: "Could not verify user role.", variant: "destructive" });
+    }
+    setUserRole('user'); // Default to 'user' if not owner or admin
+    return 'user';
+  }, [toast]);
+
   const fetchParticipantsData = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
     setIsLoadingParticipants(true);
     try {
       const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
@@ -92,10 +116,9 @@ export default function QrManagementPage() {
     } finally {
       setIsLoadingParticipants(false);
     }
-  }, [currentUser, toast]);
+  }, [toast]);
 
   const fetchStaffForQrData = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
     setIsLoadingStaffForQr(true);
     try {
       const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
@@ -119,24 +142,29 @@ export default function QrManagementPage() {
     } finally {
       setIsLoadingStaffForQr(false);
     }
-  }, [currentUser, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      setIsLoadingAuth(false);
-      if (user && user.uid === OWNER_UID) {
-        fetchParticipantsData();
-        fetchStaffForQrData();
+      if (user) {
+        const role = await fetchUserDataAndRoles(user);
+        if (role === 'owner' || role === 'admin') {
+          fetchParticipantsData();
+          fetchStaffForQrData();
+        }
+      } else {
+        setUserRole(null);
       }
+      setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [fetchParticipantsData, fetchStaffForQrData]);
+  }, [fetchUserDataAndRoles, fetchParticipantsData, fetchStaffForQrData]);
 
   const handleSuperAdminLogout = async () => {
     try {
       await signOut(auth);
-      toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+      // No toast needed here as onAuthStateChanged will trigger redirect/UI update
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -155,16 +183,16 @@ export default function QrManagementPage() {
     (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))
   );
 
-  if (isLoadingAuth) {
+  if (isLoadingAuth || userRole === null && currentUser) { // Show loader if auth is loading OR if user exists but role is not yet determined
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
-        <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary">
+        <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary animate-pulse">
           <CardHeader className="text-center py-8">
             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Loader2 className="h-10 w-10 animate-spin" />
             </div>
             <CardTitle className="text-3xl font-bold tracking-tight">QR Code Management</CardTitle>
-            <CardDescription className="text-lg mt-2 text-muted-foreground">Verifying credentials...</CardDescription>
+            <CardDescription className="text-lg mt-2 text-muted-foreground">Verifying access...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
             <Skeleton className="h-12 w-full" />
@@ -174,7 +202,7 @@ export default function QrManagementPage() {
     );
   }
 
-  if (!currentUser || currentUser.uid !== OWNER_UID) {
+  if (!currentUser || (userRole !== 'owner' && userRole !== 'admin')) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-t-4 border-destructive">
@@ -184,18 +212,18 @@ export default function QrManagementPage() {
             </div>
             <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-xl mt-3 text-muted-foreground">
-              This area is restricted to the System Owner.
+              You do not have permission to access this page. Administrator access is required.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
             {currentUser && (
-              <Button onClick={handleSuperAdminLogout} variant="destructive" size="lg" className="w-full text-lg py-3">
-                <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Restricted User'})
+              <Button onClick={handleSuperAdminLogout} variant="outline" size="lg" className="w-full text-lg py-3">
+                <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'User'})
               </Button>
             )}
             {!currentUser && (
                  <p className="text-md text-muted-foreground mt-4">
-                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with the designated Owner account.
+                    Please <Link href="/auth/login" className="font-semibold text-primary hover:underline">log in</Link> with an authorized account.
                  </p>
             )}
           </CardContent>
@@ -212,7 +240,7 @@ export default function QrManagementPage() {
   }
 
   const renderQrGridSkeleton = (count: number, keyPrefix: string) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-pulse">
       {[...Array(count)].map((_, i) => (
         <div key={`${keyPrefix}-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
           <Skeleton className="h-6 w-3/4" />
@@ -236,7 +264,7 @@ export default function QrManagementPage() {
               </h1>
               {currentUser && (
                 <p className="text-xs text-green-600 dark:text-green-400">
-                  Owner Access: {currentUser.email}
+                  {userRole === 'owner' ? 'Owner Access' : 'Admin Access'}: {currentUser.email}
                 </p>
               )}
             </div>
@@ -252,12 +280,12 @@ export default function QrManagementPage() {
       <main className="flex-1 container mx-auto py-10 px-4 sm:px-6 lg:px-8">
         <Tabs defaultValue="participants" className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:w-1/2 lg:w-1/3 mx-auto mb-8">
-            <TabsTrigger value="participants">Participant QRs</TabsTrigger>
-            <TabsTrigger value="staff">Staff QRs</TabsTrigger>
+            <TabsTrigger value="participants" className="data-[state=active]:shadow-md transition-all">Participant QRs</TabsTrigger>
+            <TabsTrigger value="staff" className="data-[state=active]:shadow-md transition-all">Staff QRs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="participants">
-            <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300">
+            <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
               <CardHeader>
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Participant Check-in QR Codes</CardTitle>
                 <CardDescription>
@@ -273,7 +301,7 @@ export default function QrManagementPage() {
                     placeholder="Search participants by name, school, or committee..."
                     value={participantSearchTerm}
                     onChange={(e) => setParticipantSearchTerm(e.target.value)}
-                    className="pl-10 w-full"
+                    className="pl-10 w-full focus-visible:ring-primary"
                   />
                 </div>
                 {isLoadingParticipants || isLoadingLogo ? (
@@ -295,7 +323,10 @@ export default function QrManagementPage() {
                     </div>
                   </ScrollArea>
                 ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
-                  <p className="text-center text-muted-foreground py-10">No participants match your search, or no participants available.</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />
+                    No participants match your search, or no participants available.
+                  </div>
                 ) : !appBaseUrl && !isLoadingParticipants ? (
                   <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
                 ) : null}
@@ -304,7 +335,7 @@ export default function QrManagementPage() {
           </TabsContent>
 
           <TabsContent value="staff">
-            <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300">
+            <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
               <CardHeader>
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Staff Member Status QR Codes</CardTitle>
                 <CardDescription>
@@ -320,7 +351,7 @@ export default function QrManagementPage() {
                     placeholder="Search staff by name, role, or team..."
                     value={staffSearchTerm}
                     onChange={(e) => setStaffSearchTerm(e.target.value)}
-                    className="pl-10 w-full"
+                    className="pl-10 w-full focus-visible:ring-primary"
                   />
                 </div>
                 {isLoadingStaffForQr || isLoadingLogo ? (
@@ -342,7 +373,10 @@ export default function QrManagementPage() {
                     </div>
                   </ScrollArea>
                 ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
-                  <p className="text-center text-muted-foreground py-10">No staff members match your search, or no staff available.</p>
+                    <div className="text-center py-10 text-muted-foreground">
+                        <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />
+                        No staff members match your search, or no staff available.
+                    </div>
                 ) : !appBaseUrl && !isLoadingStaffForQr ? (
                   <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
                 ) : null}
@@ -358,7 +392,7 @@ export default function QrManagementPage() {
             </p>
             {currentUser && (
               <p className="text-xs text-muted-foreground mt-1">
-                Owner UID: {OWNER_UID}
+                {userRole === 'owner' ? `Owner UID: ${OWNER_UID}` : `Admin: ${currentUser.email}`}
               </p>
             )}
           </div>

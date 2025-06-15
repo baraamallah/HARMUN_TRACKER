@@ -12,9 +12,9 @@ import {
   SettingsIcon, 
   ShieldCheck, 
   LogIn,
-  Users2, // Icon for Staff
-  QrCode, // Icon for Participant Check-in & QR Management
-  Clipboard // Icon for Staff Check-in
+  Users2, 
+  QrCode, 
+  Clipboard
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -27,6 +27,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
+  SidebarMenuSkeleton // Added import
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,16 +43,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
-import { auth } from '@/lib/firebase'; 
+import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
+import { doc, getDoc } from 'firebase/firestore';
 import { OWNER_UID } from '@/lib/constants'; 
 import { useToast } from '@/hooks/use-toast';
+import type { AdminManagedUser } from '@/types';
 
 interface NavItem {
   href: string;
   icon: React.ElementType;
   label: string;
   tooltip: string;
+  adminOrOwnerOnly?: boolean;
   ownerOnly?: boolean; 
 }
 
@@ -60,12 +64,18 @@ const baseNavItems: NavItem[] = [
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
-  { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
-const ownerNavItems: NavItem[] = [
-  { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes', ownerOnly: true },
+const adminAndOwnerNavItems: NavItem[] = [
+   { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes', adminOrOwnerOnly: true },
+];
+
+const ownerOnlyNavItems: NavItem[] = [
   { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel', ownerOnly: true },
+];
+
+const publicNavItems: NavItem[] = [
+ { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
 ];
 
 
@@ -73,11 +83,37 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const { toast } = useToast();
   const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
+  const [userAppRole, setUserAppRole] = React.useState<'owner' | 'admin' | 'user' | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoggedInUser(user);
+      if (user) {
+        if (user.uid === OWNER_UID) {
+          setUserAppRole('owner');
+        } else {
+          try {
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data() as AdminManagedUser;
+              if (userData.role === 'admin') {
+                setUserAppRole('admin');
+              } else {
+                setUserAppRole('user');
+              }
+            } else {
+              setUserAppRole('user'); // Not in users collection, treat as regular user
+            }
+          } catch (error) {
+            console.error("Error fetching user role for sidebar:", error);
+            setUserAppRole('user'); // Default on error
+          }
+        }
+      } else {
+        setUserAppRole(null);
+      }
       setAuthSessionLoading(false);
     });
     
@@ -87,6 +123,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      // User state will update via onAuthStateChanged, triggering re-render
       toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     } catch (error) {
       console.error("Error signing out: ", error);
@@ -106,17 +143,20 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
 
   const navItemsToRender = React.useMemo(() => {
     let items = [...baseNavItems];
-    if (loggedInUser && loggedInUser.uid === OWNER_UID) {
-      // Insert owner items before the 'Public View' or at the end if 'Public View' isn't there
-      const publicViewIndex = items.findIndex(item => item.href === '/public');
-      if (publicViewIndex !== -1) {
-        items.splice(publicViewIndex, 0, ...ownerNavItems);
-      } else {
-        items.push(...ownerNavItems);
-      }
+    if (userAppRole === 'owner' || userAppRole === 'admin') {
+      items.push(...adminAndOwnerNavItems);
     }
-    return items;
-  }, [loggedInUser]);
+    if (userAppRole === 'owner') {
+      items.push(...ownerOnlyNavItems);
+    }
+    items.push(...publicNavItems); // Public items always last among main nav
+    
+    // Ensure unique items by href in case of overlaps, though current structure avoids this.
+    const uniqueItems = items.filter((item, index, self) =>
+      index === self.findIndex((t) => t.href === item.href)
+    );
+    return uniqueItems;
+  }, [userAppRole]);
 
   return (
     <SidebarProvider defaultOpen>
@@ -126,7 +166,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {navItemsToRender.map((item) => (
+            {authSessionLoading ? (
+              <>
+                {[...Array(5)].map((_, i) => <SidebarMenuSkeleton key={`skel-nav-${i}`} showIcon />)}
+              </>
+            ) : navItemsToRender.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} legacyBehavior passHref>
                   <SidebarMenuButton
@@ -134,7 +178,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                     tooltip={item.tooltip}
                     className={cn(
                       "justify-start",
-                      (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && "bg-sidebar-accent text-sidebar-accent-foreground"
+                      (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
                     )}
                   >
                     <item.icon className="h-5 w-5" />
@@ -149,13 +193,13 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
           {authSessionLoading ? (
             <Skeleton className="h-10 w-full" />
           ) : loggedInUser ? (
-            <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleLogout}>
+            <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent/50" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
               <span>Logout</span>
             </Button>
           ) : (
             <Link href="/auth/login" legacyBehavior passHref>
-              <Button variant="ghost" className="w-full justify-start gap-2">
+              <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent/50">
                 <LogIn className="h-5 w-5" />
                 <span>Login</span>
               </Button>
@@ -169,7 +213,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
             <SidebarTrigger />
           </div>
           <div className="flex-1">
-            {/* Can add a minimal version of Logo here if needed, or breadcrumbs */}
+            {/* Breadcrumbs or page title could go here */}
           </div>
           <ThemeToggleButton />
           {authSessionLoading ? (
@@ -178,7 +222,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
-                  <Avatar>
+                  <Avatar className="h-9 w-9">
                     <AvatarImage src={loggedInUser.photoURL || `https://placehold.co/40x40.png?text=${getAvatarFallback()}`} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} data-ai-hint="user avatar"/>
                     <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
                   </Avatar>
@@ -188,6 +232,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                 <DropdownMenuLabel>
                   {loggedInUser.displayName || loggedInUser.email || "My Account"}
                 </DropdownMenuLabel>
+                {userAppRole && <DropdownMenuLabel className="text-xs text-muted-foreground -mt-2 capitalize">Role: {userAppRole}</DropdownMenuLabel> }
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
