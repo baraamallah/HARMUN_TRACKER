@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
-import { ArrowLeft, Edit, Loader2, Info, StickyNote, ChevronDown, Briefcase, Phone as PhoneIcon, Mail, Users2 as StaffIcon, UserCheck, UserX, Coffee, Plane, Network } from 'lucide-react'; 
+import { ArrowLeft, Edit, Loader2, Info, StickyNote, ChevronDown, Briefcase, Phone as PhoneIcon, Mail, Users2 as StaffIcon, UserCheck, UserX, Coffee, Plane, Network, RefreshCw } from 'lucide-react'; 
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -134,7 +134,7 @@ export default function StaffMemberProfilePage() {
   ];
 
 
-  if (isLoading) {
+  if (isLoading && !staffMember) { // Show full page skeleton only on initial load without data
     return (
       <div className="container mx-auto p-4 md:p-8">
         <Skeleton className="h-8 w-32 mb-2" />
@@ -142,7 +142,7 @@ export default function StaffMemberProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-64 w-full rounded-lg" /> {/* Increased height for new fields */}
+            <Skeleton className="h-64 w-full rounded-lg" />
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -227,7 +227,7 @@ export default function StaffMemberProfilePage() {
             <CardFooter className="p-4 flex flex-col gap-2">
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full" disabled={isSubmittingStatus} aria-haspopup="true" aria-expanded="false" aria-label="Change staff member status">
+                  <Button variant="outline" className="w-full" disabled={isSubmittingStatus || isLoading} aria-haspopup="true" aria-expanded="false" aria-label="Change staff member status">
                     <ChevronDown className="mr-2 h-4 w-4" />
                     Change Status
                     {isSubmittingStatus && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
@@ -240,7 +240,7 @@ export default function StaffMemberProfilePage() {
                     <DropdownMenuItem
                       key={opt.status}
                       onClick={() => handleMarkStatusClientSide(opt.status)}
-                      disabled={isSubmittingStatus || staffMember.status === opt.status}
+                      disabled={isSubmittingStatus || isLoading || staffMember.status === opt.status}
                       className={staffMember.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                       aria-label={`Mark as ${opt.label}`}
                     >
@@ -250,9 +250,28 @@ export default function StaffMemberProfilePage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={() => setIsStaffFormOpen(true)} className="w-full" aria-label="Edit staff member details">
+              <Button onClick={() => setIsStaffFormOpen(true)} className="w-full" aria-label="Edit staff member details" disabled={isLoading || isSubmittingStatus}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Details
               </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={fetchStaffDataAndTeams}
+                disabled={isLoading || isSubmittingStatus}
+                aria-label="Refresh staff data"
+              >
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Refresh Data
+              </Button>
+              {staffMember.updatedAt && typeof staffMember.updatedAt === 'string' && isValid(parseISO(staffMember.updatedAt as string)) && (
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Last updated: {format(parseISO(staffMember.updatedAt as string), 'PP p')}
+                </p>
+              )}
             </CardFooter>
           </Card>
         </section>
@@ -264,7 +283,7 @@ export default function StaffMemberProfilePage() {
               <CardDescription>Private notes and observations about the staff member.</CardDescription>
             </CardHeader>
             <CardContent>
-              {staffMember.notes ? (
+              {isLoading && !staffMember.notes ? <Skeleton className="h-20 w-full" /> : staffMember.notes ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{staffMember.notes}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No notes recorded for this staff member.</p>

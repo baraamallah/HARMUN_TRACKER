@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceStatusBadge } from '@/components/participants/AttendanceStatusBadge';
 import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
-import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone, Landmark, GraduationCap, Globe } from 'lucide-react';
+import { ArrowLeft, Edit, Loader2, UserCircle, Info, StickyNote, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, ChevronDown, BookUser, Mail, Phone, Landmark, GraduationCap, Globe, RefreshCw } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import {
   DropdownMenu,
@@ -142,7 +142,7 @@ export default function ParticipantProfilePage() {
   ];
 
 
-  if (isLoading) {
+  if (isLoading && !participant) { // Show full page skeleton only on initial load without data
     return (
       <div className="container mx-auto p-4 md:p-8">
         <Skeleton className="h-8 w-32 mb-2" />
@@ -242,7 +242,7 @@ export default function ParticipantProfilePage() {
             <CardFooter className="p-4 flex flex-col gap-2">
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full" disabled={isSubmitting} aria-haspopup="true" aria-expanded="false" aria-label="Change attendance status">
+                  <Button variant="outline" className="w-full" disabled={isSubmitting || isLoading} aria-haspopup="true" aria-expanded="false" aria-label="Change attendance status">
                     <ChevronDown className="mr-2 h-4 w-4" />
                     Change Attendance Status
                     {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
@@ -255,7 +255,7 @@ export default function ParticipantProfilePage() {
                     <DropdownMenuItem
                       key={opt.status}
                       onClick={() => handleMarkAttendanceClientSide(opt.status)}
-                      disabled={isSubmitting || participant.status === opt.status}
+                      disabled={isSubmitting || isLoading || participant.status === opt.status}
                       className={participant.status === opt.status ? "bg-accent/50 text-accent-foreground" : ""}
                       aria-label={`Mark as ${opt.label}`}
                     >
@@ -265,9 +265,28 @@ export default function ParticipantProfilePage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={() => setIsParticipantFormOpen(true)} className="w-full" aria-label="Edit participant details">
+              <Button onClick={() => setIsParticipantFormOpen(true)} className="w-full" aria-label="Edit participant details" disabled={isLoading || isSubmitting}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Participant Details
               </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={fetchParticipantData}
+                disabled={isLoading || isSubmitting}
+                aria-label="Refresh participant data"
+              >
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Refresh Data
+              </Button>
+              {participant.updatedAt && typeof participant.updatedAt === 'string' && isValid(parseISO(participant.updatedAt)) && (
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Last updated: {format(parseISO(participant.updatedAt), 'PP p')}
+                </p>
+              )}
             </CardFooter>
           </Card>
         </section>
@@ -279,7 +298,7 @@ export default function ParticipantProfilePage() {
               <CardDescription>Private notes and observations about the participant.</CardDescription>
             </CardHeader>
             <CardContent>
-              {participant.notes ? (
+              {isLoading && !participant.notes ? <Skeleton className="h-20 w-full" /> : participant.notes ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{participant.notes}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No notes recorded for this participant.</p>
@@ -293,7 +312,7 @@ export default function ParticipantProfilePage() {
               <CardDescription>Other relevant information.</CardDescription>
             </CardHeader>
             <CardContent>
-               {participant.additionalDetails ? (
+              {isLoading && !participant.additionalDetails ? <Skeleton className="h-20 w-full" /> : participant.additionalDetails ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{participant.additionalDetails}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No additional details provided.</p>
