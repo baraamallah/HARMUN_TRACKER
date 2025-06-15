@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link'; // Added missing import
 import { Logo } from '@/components/shared/Logo';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { getSystemLogoUrlSetting } from '@/lib/actions';
