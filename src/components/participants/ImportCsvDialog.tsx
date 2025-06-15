@@ -17,29 +17,33 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { UploadCloud, AlertTriangle, Info, Loader2 } from 'lucide-react';
-import { validateParticipantImportData, getDefaultAttendanceStatusSetting, getSystemSchools, getSystemCommittees, type ParticipantImportValidationResult } from '@/lib/actions';
-import type { Participant, AttendanceStatus } from '@/types';
+import { validateParticipantImportData, getDefaultAttendanceStatusSetting, type ParticipantImportValidationResult } from '@/lib/actions';
+import type { Participant } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { db } from '@/lib/firebase';
-import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp } from 'firebase/firestore'; // Renamed to avoid conflict
+import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ImportCsvDialogProps {
-  onImportSuccess?: () => void; // Callback to refresh data on parent page
+  onImportSuccess?: () => void;
 }
 
-// Define the expected structure for CSV parsing
-const participantCsvSchema: {
-  name: string;
-  school: string;
-  committee: string;
+// Define the expected structure for CSV parsing (headers will be keys)
+interface ParsedParticipantCsvRow {
+  id?: string;
+  name?: string;
+  school?: string;
+  committee?: string;
   country?: string;
-  classGrade?: string;
+  classgrade?: string; // common alternative for class/grade
+  class?: string; // common alternative
+  grade?: string; // common alternative
   email?: string;
   phone?: string;
   notes?: string;
-  additionalDetails?: string;
-}[] = [];
+  additionaldetails?: string; // common alternative for additional details
+  [key: string]: string | undefined; // Allow other columns
+}
 
 
 export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
@@ -50,12 +54,16 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
   const [importSummary, setImportSummary] = useState<{
     detectedNewSchools: string[];
     detectedNewCommittees: string[];
+    importedCount: number;
+    skippedMissingFields: number;
+    skippedExistingId: number;
+    skippedMalformedLines: number;
   } | null>(null);
 
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setFile(event.target.files ? event.target.files[0] : null);
-    setImportSummary(null); // Reset summary when file changes
+    setImportSummary(null);
   };
 
   const handleImport = async () => {
@@ -76,11 +84,30 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         }
         
         const allLines = text.split(/\r\n|\n/);
+        if (allLines.length < 2) {
+          toast({ title: 'Invalid CSV', description: 'CSV file must contain a header row and at least one data row.', variant: 'destructive' });
+          return;
+        }
+
         const headerLine = allLines[0];
-        const dataLines = allLines.slice(1); 
+        const dataLines = allLines.slice(1);
         
-        const parsedCsvParticipants: typeof participantCsvSchema = [];
-        let skippedLineCount = 0;
+        const headerKeys = headerLine.split(',').map(key => key.trim().toLowerCase().replace(/\s+/g, '')); // normalize headers
+
+        const requiredHeaders = ['name', 'school', 'committee'];
+        const missingRequiredHeaders = requiredHeaders.filter(rh => !headerKeys.includes(rh));
+        if (missingRequiredHeaders.length > 0) {
+          toast({
+            title: 'Missing Required CSV Headers',
+            description: `The CSV file is missing the following required headers: ${missingRequiredHeaders.join(', ')}. Please ensure your CSV has headers: Name, School, Committee. "ID" is optional.`,
+            variant: 'destructive',
+            duration: 10000,
+          });
+          return;
+        }
+        
+        const parsedCsvRows: ParsedParticipantCsvRow[] = [];
+        let localSkippedMalformedLines = 0;
         
         dataLines.forEach((line, index) => {
           if (line.trim() === '') return;
@@ -88,71 +115,97 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
           const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').trim());
 
-          if (cleanedValues.length >= 3 && cleanedValues[0] && cleanedValues[1] && cleanedValues[2]) {
-            parsedCsvParticipants.push({
-              name: cleanedValues[0],
-              school: cleanedValues[1],
-              committee: cleanedValues[2],
-              country: cleanedValues[3] || '',
-              classGrade: cleanedValues[4] || '',
-              email: cleanedValues[5] || '',
-              phone: cleanedValues[6] || '',
-              notes: cleanedValues[7] || '',
-              additionalDetails: cleanedValues[8] || '',
+          if (cleanedValues.length === headerKeys.length) {
+            const record: ParsedParticipantCsvRow = {};
+            headerKeys.forEach((header, i) => {
+              record[header] = cleanedValues[i];
             });
-          } else if (line.trim()) { 
-            console.warn(`Skipping malformed CSV line ${index + 2} for participant: "${line}" (Expected at least Name,School,Committee). Header was: "${headerLine}"`);
-            skippedLineCount++;
+            parsedCsvRows.push(record);
+          } else if (line.trim()) {
+            console.warn(`Skipping malformed CSV line ${index + 2}: "${line}" (Expected ${headerKeys.length} columns based on header, found ${cleanedValues.length}). Header was: "${headerLine}"`);
+            localSkippedMalformedLines++;
           }
         });
         
-        console.log('Parsed participant CSV data (client-side):', parsedCsvParticipants);
+        console.log('Parsed participant CSV rows (client-side):', parsedCsvRows);
 
-        if (parsedCsvParticipants.length === 0) {
-          let description = "The CSV file might be empty or all lines were incorrectly formatted.";
-          if (skippedLineCount > 0) {
-            description += ` ${skippedLineCount} line(s) were skipped. Header: "${headerLine}". Required: Name, School, Committee.`;
-          }
+        if (parsedCsvRows.length === 0 && localSkippedMalformedLines > 0) {
           toast({ 
-            title: 'No Valid Data Found', 
-            description: description,
+            title: 'No Valid Data Rows Found', 
+            description: `All ${localSkippedMalformedLines} data line(s) were malformed or did not match header column count. Please check CSV format. Header: ${headerLine}`,
             variant: 'default',
             duration: 10000,
           });
           return;
         }
+        if (parsedCsvRows.length === 0) {
+           toast({ 
+            title: 'No Data Rows Found', 
+            description: `The CSV file does not contain any data rows after the header.`,
+            variant: 'default',
+          });
+          return;
+        }
+
 
         try {
-          // Step 1: Validate data and get lists of new schools/committees from server action
-          const validationResult: ParticipantImportValidationResult = await validateParticipantImportData(parsedCsvParticipants);
+          const participantsToValidate = parsedCsvRows.map(row => ({
+            name: row.name || '',
+            school: row.school || '',
+            committee: row.committee || '',
+          }));
 
-          if (validationResult.message) { // If validation itself had an error (e.g., fetching system lists)
+          const validationResult: ParticipantImportValidationResult = await validateParticipantImportData(participantsToValidate);
+
+          if (validationResult.message) {
             toast({ title: 'Import Pre-check Failed', description: validationResult.message, variant: 'destructive', duration: 7000 });
             return;
           }
-
-          setImportSummary({
-            detectedNewSchools: validationResult.detectedNewSchools,
-            detectedNewCommittees: validationResult.detectedNewCommittees,
-          });
           
-          // Step 2: Prepare batch write on the client
           const defaultStatus = await getDefaultAttendanceStatusSetting();
           const batch = writeBatch(db);
           let participantsToImportCount = 0;
+          let localSkippedMissingFields = 0;
+          let localSkippedExistingId = 0;
 
-          parsedCsvParticipants.forEach(data => {
-            const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
+          for (const row of parsedCsvRows) {
+            const name = row.name?.trim();
+            const school = row.school?.trim();
+            const committee = row.committee?.trim();
+
+            if (!name || !school || !committee) {
+              localSkippedMissingFields++;
+              console.warn('Skipping row due to missing required fields (Name, School, Committee):', row);
+              continue;
+            }
+
+            let participantIdToUse = row.id?.trim();
+            if (participantIdToUse) {
+              const existingDocRef = fsDoc(db, 'participants', participantIdToUse);
+              const existingDocSnap = await getDoc(existingDocRef);
+              if (existingDocSnap.exists()) {
+                localSkippedExistingId++;
+                console.warn(`Skipping row: Participant with provided ID "${participantIdToUse}" already exists. Name in CSV: ${name}`);
+                continue;
+              }
+            } else {
+              participantIdToUse = uuidv4();
+            }
+            
+            const nameInitial = (name || 'P').substring(0,2).toUpperCase();
+            const classGradeValue = row.classgrade || row.class || row.grade || '';
+            const additionalDetailsValue = row.additionaldetails || '';
+
             const newParticipantData: Omit<Participant, 'id'> = {
-              name: data.name.trim(),
-              school: data.school.trim(),
-              committee: data.committee.trim(),
-              country: data.country?.trim() || '',
-              classGrade: data.classGrade?.trim() || '',
-              email: data.email?.trim() || '',
-              phone: data.phone?.trim() || '',
-              notes: data.notes?.trim() || '',
-              additionalDetails: data.additionalDetails?.trim() || '',
+              name: name,
+              school: school,
+              committee: committee,
+              country: row.country?.trim() || '',
+              classGrade: classGradeValue.trim(),
+              email: row.email?.trim() || '',
+              phone: row.phone?.trim() || '',
+              notes: row.notes?.trim() || '',
+              additionalDetails: additionalDetailsValue.trim(),
               status: defaultStatus,
               imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
               attended: false,
@@ -160,39 +213,43 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             };
-            const participantRef = fsDoc(fsCollection(db, 'participants'), uuidv4()); // Generate client-side UUID
+            const participantRef = fsDoc(fsCollection(db, 'participants'), participantIdToUse);
             batch.set(participantRef, newParticipantData);
             participantsToImportCount++;
-          });
+          }
 
-          // Step 3: Commit batch write
           if (participantsToImportCount > 0) {
             await batch.commit();
-            toast({ 
-              title: 'Import Successful',
-              description: `${participantsToImportCount} participants imported. ${skippedLineCount > 0 ? `${skippedLineCount} CSV lines skipped.` : ''}`,
-              variant: 'default',
-              duration: (validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0) ? 10000 : 5000,
-            });
+          }
+          
+          setImportSummary({
+            detectedNewSchools: validationResult.detectedNewSchools,
+            detectedNewCommittees: validationResult.detectedNewCommittees,
+            importedCount: participantsToImportCount,
+            skippedMissingFields: localSkippedMissingFields,
+            skippedExistingId: localSkippedExistingId,
+            skippedMalformedLines: localSkippedMalformedLines
+          });
+
+          let summaryMessage = `${participantsToImportCount} participant(s) imported.`;
+          if (localSkippedMissingFields > 0) summaryMessage += ` ${localSkippedMissingFields} skipped (missing required fields).`;
+          if (localSkippedExistingId > 0) summaryMessage += ` ${localSkippedExistingId} skipped (ID already exists).`;
+          if (localSkippedMalformedLines > 0) summaryMessage += ` ${localSkippedMalformedLines} malformed CSV lines skipped.`;
+
+          toast({ 
+            title: 'Import Process Completed',
+            description: summaryMessage,
+            variant: (localSkippedMissingFields > 0 || localSkippedExistingId > 0 || localSkippedMalformedLines > 0 || validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0) ? 'default' : 'default', // 'default' for success, consider 'warning' variant if it exists
+            duration: 10000,
+          });
+
+          if (participantsToImportCount > 0) {
             onImportSuccess?.();
-             // Close dialog only if there are no new schools/committees to show in summary
-            if (!(validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0)) {
-              setIsOpen(false); 
-              setFile(null);
-            }
-          } else if (skippedLineCount > 0) {
-             toast({ 
-              title: 'Import Note',
-              description: `No new participants were imported. ${skippedLineCount} CSV lines were skipped.`,
-              variant: 'default',
-              duration: 7000,
-            });
-          } else {
-            toast({ 
-              title: 'Import Note',
-              description: `No participants to import.`,
-              variant: 'default',
-            });
+          }
+          // Keep dialog open if there's a summary to show, otherwise close
+          if (!(validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0 || localSkippedMissingFields > 0 || localSkippedExistingId > 0 || localSkippedMalformedLines > 0 )) {
+            setIsOpen(false); 
+            setFile(null);
           }
 
         } catch (error: any) {
@@ -208,6 +265,14 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
             description: errorMessage,
             variant: 'destructive',
             duration: 10000 
+          });
+           setImportSummary({ // Show error in summary structure if possible
+            detectedNewSchools: [],
+            detectedNewCommittees: [],
+            importedCount: 0,
+            skippedMissingFields: 0,
+            skippedExistingId: 0,
+            skippedMalformedLines: parsedCsvRows.length + localSkippedMalformedLines, // Assume all failed if error here
           });
         }
       };
@@ -244,25 +309,20 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         <DialogHeader>
           <DialogTitle>Import Participants from CSV</DialogTitle>
           <DialogDescription>
-            Upload a CSV file. Required columns: Name, School, Committee.
+            Upload a CSV file. The first row MUST be headers.
           </DialogDescription>
         </DialogHeader>
         
         <div className="text-sm text-muted-foreground space-y-2 py-3 border-y my-4">
-            <div>Upload a CSV file with participant data. The first row should be headers (they will be skipped).</div>
-            <div><strong className="text-foreground">Required Columns:</strong> Name, School, Committee.</div>
-            <div><strong className="text-foreground">Column Order (Recommended):</strong></div>
-            <ol className="list-decimal list-inside text-xs space-y-0.5 pl-4">
-              <li>Name (e.g., "Jane Doe")</li>
-              <li>School (e.g., "International School of Example")</li>
-              <li>Committee (e.g., "Security Council")</li>
-              <li>Country (e.g., "United States")</li>
-              <li>Class/Grade (e.g., "10th Grade")</li>
-              <li>Email (e.g., "jane.doe@example.com")</li>
-              <li>Phone (e.g., "+1-555-1234")</li>
-              <li>Notes (any relevant notes)</li>
-              <li>Additional Details (other info)</li>
-            </ol>
+            <div><strong className="text-foreground">CSV Requirements:</strong></div>
+            <ul className="list-disc list-inside pl-4 space-y-1">
+              <li>The first row of your CSV file MUST be a header row.</li>
+              <li><strong className="text-foreground">Required Headers:</strong> `Name`, `School`, `Committee` (case-insensitive).</li>
+              <li><strong className="text-foreground">Optional ID Header:</strong> You can include an `ID` header (case-insensitive). If provided and unique, this ID will be used. Otherwise, a new ID is auto-generated.</li>
+              <li><strong className="text-foreground">Other Optional Headers (case-insensitive, spaces removed for matching):</strong> `Country`, `ClassGrade` (or `Class` or `Grade`), `Email`, `Phone`, `Notes`, `AdditionalDetails`.</li>
+              <li>Example minimal header: `Name,School,Committee`</li>
+              <li>Example with ID and more: `ID,Name,School,Committee,Country,Email`</li>
+            </ul>
             <div className="mt-2">
               <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees listed in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first. The import will notify you of any new schools/committees found.
             </div>
@@ -284,24 +344,28 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           {file && <p className="text-sm text-muted-foreground">Selected file: {file.name}</p>}
         </div>
 
-        {importSummary && (importSummary.detectedNewSchools.length > 0 || importSummary.detectedNewCommittees.length > 0) && (
-          <Alert variant="default" className="bg-amber-50 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700">
-            <AlertTriangle className="h-5 w-5 text-amber-500 dark:text-amber-400" />
-            <AlertTitle className="text-amber-700 dark:text-amber-300 font-semibold">System List Notice</AlertTitle>
-            <AlertDescription className="text-amber-600 dark:text-amber-400">
-              The following schools/committees were found in your CSV but do not exist in the system. They were <strong className="underline">not</strong> added. Please add them manually via the Superior Admin panel if needed:
+        {importSummary && (
+          <Alert variant={importSummary.importedCount > 0 && importSummary.skippedMissingFields === 0 && importSummary.skippedExistingId === 0 && importSummary.skippedMalformedLines === 0 && importSummary.detectedNewSchools.length === 0 && importSummary.detectedNewCommittees.length === 0 ? "default" : "default"} 
+                 className={importSummary.importedCount > 0 && importSummary.skippedMissingFields === 0 && importSummary.skippedExistingId === 0 && importSummary.skippedMalformedLines === 0 && importSummary.detectedNewSchools.length === 0 && importSummary.detectedNewCommittees.length === 0 ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : "bg-amber-50 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700"}>
+            <AlertTriangle className="h-5 w-5" />
+            <AlertTitle className="font-semibold">Import Summary</AlertTitle>
+            <AlertDescription className="space-y-1 text-xs">
+              <p>Successfully imported: {importSummary.importedCount} participant(s).</p>
+              {importSummary.skippedMissingFields > 0 && <p>Skipped (missing Name/School/Committee): {importSummary.skippedMissingFields}.</p>}
+              {importSummary.skippedExistingId > 0 && <p>Skipped (ID already exists): {importSummary.skippedExistingId}.</p>}
+              {importSummary.skippedMalformedLines > 0 && <p>Skipped (malformed CSV lines): {importSummary.skippedMalformedLines}.</p>}
               {importSummary.detectedNewSchools.length > 0 && (
-                <div className="mt-2">
-                  <strong>New Schools Detected:</strong>
-                  <ul className="list-disc list-inside text-xs">
+                <div>
+                  <strong>New Schools Detected (not added):</strong>
+                  <ul className="list-disc list-inside pl-4">
                     {importSummary.detectedNewSchools.map(s => <li key={s}>{s}</li>)}
                   </ul>
                 </div>
               )}
               {importSummary.detectedNewCommittees.length > 0 && (
-                <div className="mt-2">
-                  <strong>New Committees Detected:</strong>
-                  <ul className="list-disc list-inside text-xs">
+                <div>
+                  <strong>New Committees Detected (not added):</strong>
+                  <ul className="list-disc list-inside pl-4">
                     {importSummary.detectedNewCommittees.map(c => <li key={c}>{c}</li>)}
                   </ul>
                 </div>
@@ -310,13 +374,14 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           </Alert>
         )}
 
+
         <DialogFooter className="mt-2">
           <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isPending}>
             {importSummary ? 'Close' : 'Cancel'}
           </Button>
-          {!importSummary && ( // Only show import button if no summary is active
+          {!importSummary && (
             <Button onClick={handleImport} disabled={isPending || !file}>
-              {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importing...</> : 'Import Participants'}
+              {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing CSV...</> : 'Import Participants'}
             </Button>
           )}
         </DialogFooter>
@@ -324,3 +389,4 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
     </Dialog>
   );
 }
+

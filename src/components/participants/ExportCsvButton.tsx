@@ -11,7 +11,7 @@ interface ExportCsvButtonProps {
   fileName?: string;
 }
 
-export function ExportCsvButton({ participants, fileName = 'attendance_export.csv' }: ExportCsvButtonProps) {
+export function ExportCsvButton({ participants, fileName = 'participants_export.csv' }: ExportCsvButtonProps) {
   const { toast } = useToast();
 
   const exportToCsv = () => {
@@ -26,18 +26,18 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
       'School', 
       'Committee', 
       'Country', 
-      'Class/Grade',
+      'Class/Grade', // Consistent with import field 'classgrade'
       'Email',
       'Phone',
       'Status',
       'Notes',
-      'Additional Details',
+      'Additional Details', // Consistent with import field 'additionaldetails'
       'Attended',
       'CheckInTime'
     ];
     
     const csvRows = participants.map(p => [
-      p.id || '',
+      p.id || '', // Ensure ID is exported
       `"${(p.name || '').replace(/"/g, '""')}"`,
       `"${(p.school || '').replace(/"/g, '""')}"`,
       `"${(p.committee || '').replace(/"/g, '""')}"`,
@@ -49,7 +49,7 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
       `"${(p.notes || '').replace(/"/g, '""')}"`,
       `"${(p.additionalDetails || '').replace(/"/g, '""')}"`,
       p.attended ? 'Yes' : 'No',
-      p.checkInTime ? `"${new Date(p.checkInTime as string).toLocaleString()}"` : ''
+      p.checkInTime && typeof p.checkInTime === 'string' ? `"${new Date(p.checkInTime).toLocaleString()}"` : (p.checkInTime ? "Invalid Date" : '')
     ].join(','));
 
     const csvContent = [
@@ -57,7 +57,7 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
       ...csvRows,
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
     const link = document.createElement('a');
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
@@ -77,7 +77,8 @@ export function ExportCsvButton({ participants, fileName = 'attendance_export.cs
   return (
     <Button variant="outline" onClick={exportToCsv}>
       <DownloadCloud className="mr-2 h-4 w-4" />
-      Export CSV
+      Export Participants CSV
     </Button>
   );
 }
+
