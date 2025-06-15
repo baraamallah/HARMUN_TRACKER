@@ -68,6 +68,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
             setFile(null); // Clear the file input
+            setIsPending(false); // Reset pending state
             return;
         }
         
@@ -107,7 +108,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         if (parsedParticipants.length === 0 && dataLines.filter(l => l.trim()).length > 0) {
           toast({ 
             title: 'No Valid Data Found', 
-            description: `The CSV file might be empty or all lines were incorrectly formatted. ${skippedLineCount} line(s) were skipped. Required columns: Name, School, Committee. Please check your CSV file and try again. Header row: "${headerLine}"`, 
+            description: `The CSV file might be empty or all lines were incorrectly formatted. ${skippedLineCount} line(s) were skipped. Required columns: Name, School, Committee. Header row: "${headerLine}"`, 
             variant: 'default',
             duration: 10000,
           });
@@ -121,7 +122,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         try {
           const result = await importParticipants(parsedParticipants as Array<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>>);
           
-          if (result.message && result.message.includes("paused")) { // Check if it's the "paused" message
+          if ('message' in result && typeof result.message === 'string' && result.message.includes("paused")) { 
             toast({
               title: 'Import Notice',
               description: result.message,
@@ -131,7 +132,6 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
             setIsOpen(false); 
             setFile(null);
           } else { 
-            // This block would handle actual import results if the server action wasn't paused
             let description = `${result.count} participants processed.`;
             if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
             if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
@@ -141,7 +141,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
             toast({ 
               title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Processed',
               description: description,
-              variant: importHadIssues ? 'default' : 'default',
+              variant: importHadIssues ? 'default' : 'default', // Changed from destructive to default
               duration: result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0 ? 15000 : 5000,
             });
             
@@ -161,7 +161,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           console.error("Import error (client-side catch):", error);
           toast({ 
             title: 'Import Failed', 
-            description: `Server Action Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
+            description: `Client-Side Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
             variant: 'destructive',
             duration: 10000 
           });
@@ -171,6 +171,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         toast({ title: 'Error reading file', description: 'Could not read the selected file. It might be corrupted or inaccessible.', variant: 'destructive' });
         console.error("FileReader error:", reader.error);
         setFile(null); 
+        setIsPending(false); // Reset pending state
       }
       reader.readAsText(file);
     });

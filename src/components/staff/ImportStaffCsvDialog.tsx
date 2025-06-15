@@ -53,6 +53,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
             setFile(null);
+            setIsPending(false); // Reset pending state
             return;
         }
         
@@ -114,7 +115,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         try {
           const result = await importStaffMembers(parsedStaff as Array<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>>);
           
-          if (result.message && result.message.includes("paused")) { // Check if it's the "paused" message
+          if ('message' in result && typeof result.message === 'string' && result.message.includes("paused")) {
             toast({
               title: 'Import Notice',
               description: result.message,
@@ -124,7 +125,6 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
             setIsOpen(false);
             setFile(null);
           } else {
-            // This block would handle actual import results if the server action wasn't paused
             let description = `${result.count} staff members processed.`;
             if (result.errors > 0) description += ` ${result.errors} staff members failed to import (check server console for details).`;
             if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
@@ -134,7 +134,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
             toast({ 
               title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
               description: description,
-              variant: importHadIssues ? 'default' : 'default',
+              variant: importHadIssues ? 'default' : 'default', // Changed from destructive to default
               duration: result.detectedNewTeams.length > 0 ? 15000 : 5000,
             });
             
@@ -150,7 +150,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           console.error("Staff import error (client-side catch):", error);
           toast({ 
             title: 'Staff Import Failed', 
-            description: `Server Action Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
+            description: `Client-Side Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
             variant: 'destructive',
             duration: 10000
           });
@@ -160,6 +160,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         toast({ title: 'Error reading file', description: 'Could not read the selected file.', variant: 'destructive' });
         console.error("FileReader error (staff import):", reader.error);
         setFile(null);
+        setIsPending(false); // Reset pending state
       }
       reader.readAsText(file);
     });

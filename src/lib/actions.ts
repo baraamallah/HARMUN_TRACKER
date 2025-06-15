@@ -221,9 +221,9 @@ export async function importParticipants(
     existingSystemSchools = await getSystemSchools();
     existingSystemCommittees = await getSystemCommittees();
   } catch(e: any) {
-    const errorMessage = `[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check: ${e.message}`;
-    console.error(errorMessage, e);
-    throw new Error(`Failed to load essential system data (schools/committees) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
+    const detailedErrorMessage = `[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check. Firebase: ${e.code} - ${e.message || String(e)}. This is often a Firestore rules issue blocking server action access.`;
+    console.error(detailedErrorMessage, e);
+    throw new Error(detailedErrorMessage);
   }
   
   const defaultMunStatus = await getDefaultAttendanceStatusSetting();
@@ -272,10 +272,7 @@ export async function importParticipants(
     await batch.commit();
   } catch (error: any) {
     const firebaseError = error as { code?: string; message?: string };
-    let detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
-    if (firebaseError.code === 'permission-denied') {
-      detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    }
+    const detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
     console.error("[Server Action: importParticipants] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
   }
@@ -476,9 +473,9 @@ export async function importStaffMembers(
   try {
     existingSystemStaffTeams = await getSystemStaffTeams();
   } catch(e: any) {
-    const errorMessage = `[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check: ${e.message}`;
-    console.error(errorMessage, e);
-    throw new Error(`Failed to load essential system data (staff teams) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
+    const detailedErrorMessage = `[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check. Firebase: ${e.code} - ${e.message || String(e)}. This is often a Firestore rules issue blocking server action access.`;
+    console.error(detailedErrorMessage, e);
+    throw new Error(detailedErrorMessage);
   }
 
   const batch = fsWriteBatch(db);
@@ -517,10 +514,7 @@ export async function importStaffMembers(
     await batch.commit();
   } catch (error: any) {
     const firebaseError = error as { code?: string; message?: string };
-    let detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
-    if (firebaseError.code === 'permission-denied') {
-      detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    }
+    const detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
     console.error("[Server Action: importStaffMembers] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
   }
@@ -539,4 +533,5 @@ export async function importStaffMembers(
     
 
     
+
 
