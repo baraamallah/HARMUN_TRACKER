@@ -34,14 +34,15 @@ const generateAvatarFlow = ai.defineFlow(
     outputSchema: GenerateAvatarOutputSchema,
   },
   async (input) => {
-    const fullPrompt = `Generate a professional, diverse, and inclusive avatar suitable for a Model UN participant.
-    Focus on a clear, friendly facial portrait. Avoid overly complex backgrounds.
-    Description for generation: ${input.prompt}.
-    Person's Name (for contextual understanding, do not explicitly write the name on the avatar itself unless it's a subtle name tag and the model is good at text): ${input.name}.
-    The avatar should be suitable for a profile picture. Square aspect ratio.`;
+    // Updated prompt to be more specific and request square aspect ratio
+    const fullPrompt = `Generate a professional, diverse, and inclusive avatar suitable for a Model UN conference context.
+    Focus on a clear, friendly facial portrait with a simple or neutral background. The image should be square aspect ratio.
+    Base description for generation: ${input.prompt}.
+    Person's Name (for contextual understanding, do not write the name on the avatar unless it's a subtle name tag and the model is good at text): ${input.name}.
+    The avatar should be suitable for a profile picture.`;
 
     try {
-      const {media, text, usage} = await ai.generate({ // Added 'text' to destructuring
+      const {media, text, usage} = await ai.generate({
         model: 'googleai/gemini-2.0-flash-exp',
         prompt: fullPrompt,
         config: {
@@ -55,7 +56,7 @@ const generateAvatarFlow = ai.defineFlow(
 
       return {
         imageDataUri: media.url,
-        revisedPrompt: text ?? undefined, // Use the 'text' field from the response
+        revisedPrompt: text ?? undefined,
       };
     } catch (error: any) {
       console.error('Error in generateAvatarFlow:', error);
