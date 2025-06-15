@@ -336,13 +336,13 @@ export async function quickSetParticipantStatusAction(
     };
   } catch (error: any) {
     console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
-    let message = 'An error occurred while updating status. Please try again.';
+    let message = 'An error occurred while updating participant status. Please try again.';
     let errorType = 'generic_error';
      if (error.code === 'permission-denied') {
-      message = 'Permission Denied: Could not update participant status. This action may require administrator privileges. Please ensure Firestore rules allow this update or the user has sufficient rights.';
+      message = `Permission Denied on '${PARTICIPANTS_COLLECTION}' collection: Could not update participant status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
       errorType = 'permission_denied';
     } else if (error.code) {
-      message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
+      message = `Update failed on '${PARTICIPANTS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
     return {
@@ -411,10 +411,10 @@ export async function quickSetStaffStatusAction(
     let message = 'An error occurred while updating staff status. Please try again.';
     let errorType = 'generic_error';
     if (error.code === 'permission-denied') {
-      message = 'Permission Denied: Could not update staff status. This action may require administrator privileges. Ensure Firestore rules allow this update or the user has sufficient rights.';
+      message = `Permission Denied on '${STAFF_MEMBERS_COLLECTION}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
       errorType = 'permission_denied';
     } else if (error.code) {
-      message = `Update failed. Error: ${error.code}. Please check server logs and try again.`;
+      message = `Update failed on '${STAFF_MEMBERS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
     return {
@@ -464,3 +464,4 @@ export async function validateStaffImportData(
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
 }
+
