@@ -26,11 +26,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import { quickSetParticipantStatusAction } from '@/lib/actions';
+// Removed: import { quickSetParticipantStatusAction } from '@/lib/actions';
 import type { Participant, AttendanceStatus, ActionResult } from '@/types';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore'; // Added FieldValue
 import { format, parseISO, isValid } from 'date-fns';
 
 const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
@@ -53,27 +53,16 @@ function CheckinPageContent() {
 
   const [effectiveParticipantId, setEffectiveParticipantId] = React.useState<string | null>(null);
   const [participant, setParticipant] = React.useState<Participant | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true); // Start true for consistent initial render
+  const [isLoading, setIsLoading] = React.useState(true);
   const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
 
   const [manualIdInput, setManualIdInput] = React.useState('');
   const [isManualLookupLoading, setIsManualLookupLoading] = React.useState(false);
 
-  // Effect to process searchParams and set the effective ID
   React.useEffect(() => {
     const idFromParams = searchParams.get('id');
-    setEffectiveParticipantId(idFromParams); // Update the ID state
-
-    if (idFromParams) {
-      // If there's an ID, we intend to load it. Keep isLoading true until fetch.
-      // actionInProgress might be set to 'initial_load' here or in fetchParticipantData
-    } else {
-      // No ID, means we're not loading a specific participant initially.
-      setIsLoading(false); // Show manual lookup or default view
-      setActionInProgress(null);
-      setParticipant(null);
-    }
+    setEffectiveParticipantId(idFromParams); 
   }, [searchParams]);
 
 
@@ -84,7 +73,7 @@ function CheckinPageContent() {
       setParticipant(null);
       return;
     }
-    setIsLoading(true); // Explicitly set loading before fetch
+    setIsLoading(true); 
     setActionInProgress('initial_load');
     setPageError(null);
     try {
@@ -112,49 +101,108 @@ function CheckinPageContent() {
       }
     } catch (error: any) {
       console.error("Error fetching participant (client-side for QR/Manual page):", error);
-      setPageError("Failed to load participant data. Please check the console and try again.");
+      setPageError("Failed to load participant data. Please try again.");
       toast({ title: "Error Loading Data", description: "Could not retrieve participant details.", variant: "destructive" });
     } finally {
       setIsLoading(false);
-      setActionInProgress(null); // Reset actionInProgress after fetch attempt
+      setActionInProgress(null);
       setIsManualLookupLoading(false);
     }
   }, [toast]);
 
-  // Effect to fetch data based on the effectiveParticipantId
   React.useEffect(() => {
     if (effectiveParticipantId) {
       fetchParticipantData(effectiveParticipantId);
+    } else {
+      setIsLoading(false);
+      setActionInProgress(null);
+      setParticipant(null);
     }
-    // If effectiveParticipantId is null, the previous useEffect already set isLoading to false
-    // and cleared participant, so no explicit 'else' needed here to trigger manual view.
   }, [effectiveParticipantId, fetchParticipantData]);
 
 
   const handleStatusUpdate = async (newStatus: AttendanceStatus, isCheckInIntent?: boolean) => {
-    if (!participant) return;
+    if (!participant) return { success: false, message: 'Participant data not loaded.', errorType: 'internal_error' };
     setActionInProgress(newStatus);
     setPageError(null);
 
-    const result: ActionResult = await quickSetParticipantStatusAction(participant.id, newStatus, { isCheckIn: isCheckInIntent });
+    let result: ActionResult;
 
-    if (result.success && result.participant) {
-      setParticipant(result.participant);
-      toast({
-        title: 'Status Updated Successfully',
-        description: result.message,
-        className: 'bg-green-100 dark:bg-green-900 border-green-500'
-      });
-    } else {
+    try {
+      const participantRef = doc(db, 'participants', participant.id);
+      const updates: { status: AttendanceStatus; updatedAt: FieldValue; attended?: boolean; checkInTime?: FieldValue | null } = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (isCheckInIntent && newStatus === 'Present') {
+        updates.attended = true;
+        if (!participant.attended || !participant.checkInTime) {
+          updates.checkInTime = serverTimestamp();
+        }
+      }
+      
+      await updateDoc(participantRef, updates);
+
+      // Fetch updated data to reflect server-generated timestamps
+      const updatedSnap = await getDoc(participantRef);
+      if (updatedSnap.exists()) {
+        const data = updatedSnap.data();
+        const updatedParticipant: Participant = {
+          id: updatedSnap.id,
+          name: data.name || '',
+          school: data.school || '',
+          committee: data.committee || '',
+          country: data.country || '',
+          status: data.status || 'Absent',
+          imageUrl: data.imageUrl,
+          attended: data.attended || false,
+          checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : data.checkInTime,
+          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        };
+        setParticipant(updatedParticipant);
+        result = {
+          success: true,
+          message: `Status for ${updatedParticipant.name} updated to ${newStatus}.`,
+          participant: updatedParticipant,
+        };
+        toast({
+          title: 'Status Updated Successfully',
+          description: result.message,
+          className: 'bg-green-100 dark:bg-green-900 border-green-500'
+        });
+      } else {
+        throw new Error("Failed to re-fetch participant after update.");
+      }
+    } catch (error: any) {
+      console.error(`[Client-Side Error] Updating participant ${participant.id} to ${newStatus}:`, error);
+      let message = 'An error occurred while updating participant status. Please try again.';
+      let errorType = 'generic_error';
+      if (error.code === 'permission-denied') {
+        message = `PERMISSION_DENIED: Could not update participant status. Ensure you are logged in and have permission.`;
+        errorType = 'permission_denied';
+      } else if (error.code) {
+        message = `Update failed. Error: ${error.code}.`;
+        errorType = error.code;
+      }
+      result = {
+        success: false,
+        message: message,
+        errorType: errorType,
+      };
       setPageError(result.message);
       toast({
         title: 'Update Failed',
         description: result.message,
         variant: 'destructive',
       });
+      // Attempt to refetch original data on failure to ensure consistency
       if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId);
+    } finally {
+      setActionInProgress(null);
     }
-    setActionInProgress(null);
+    return result;
   };
 
   const handleManualLookup = () => {
@@ -179,8 +227,6 @@ function CheckinPageContent() {
 
   const cardBorderColor = participant?.status === 'Present' ? 'border-green-500' : participant?.status === 'Absent' ? 'border-red-500' : 'border-primary';
 
-  // Show generic loader while effectiveParticipantId is being determined by the first useEffect
-  // or when actively fetching based on effectiveParticipantId
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
@@ -199,7 +245,6 @@ function CheckinPageContent() {
     );
   }
 
-  // Manual ID Input View: Only if not loading, no effectiveParticipantId (after params processed), and no page error
   if (!isLoading && !effectiveParticipantId && !pageError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
@@ -246,7 +291,7 @@ function CheckinPageContent() {
   }
 
 
-  if (pageError && !participant) { // Error occurred and no participant data to show
+  if (pageError && !participant) {
      return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-destructive">
@@ -258,7 +303,7 @@ function CheckinPageContent() {
             {effectiveParticipantId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveParticipantId}</p>}
             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
             <div className="flex flex-col gap-2 w-full mt-4">
-              <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading}>
+              <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading || !!actionInProgress && actionInProgress !== 'initial_load'}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveParticipantId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/checkin')}>
@@ -274,7 +319,6 @@ function CheckinPageContent() {
     );
   }
 
-  // Fallback if ID was in URL but participant is null after loading/error (should be caught by pageError usually)
   if (!participant && effectiveParticipantId) { 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
@@ -283,7 +327,7 @@ function CheckinPageContent() {
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
             <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {effectiveParticipantId}.</p>
-            <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
+             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
             <Button variant="outline" onClick={() => router.push('/checkin')} className="mt-4"> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
@@ -294,14 +338,11 @@ function CheckinPageContent() {
     );
   }
   
-  // This should only be reached if participant object exists
   if (!participant) {
-    // This is a safeguard, should ideally be handled by the manual input screen or error screen.
-    if (!effectiveParticipantId) { // If somehow landed here without ID, after initial param processing
-         router.replace('/checkin'); // Soft redirect to manual lookup
+    if (!effectiveParticipantId) { 
+         router.replace('/checkin'); 
          return null;
     }
-    // If there was an ID, but still no participant and no error, it's an unexpected state
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">

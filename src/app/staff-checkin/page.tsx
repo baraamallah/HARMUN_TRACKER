@@ -23,14 +23,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge'; // Badge was unused, but keeping for StaffMemberStatusBadge if used inline later
+import { Badge } from '@/components/ui/badge'; 
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import { quickSetStaffStatusAction } from '@/lib/actions';
+// Removed: import { quickSetStaffStatusAction } from '@/lib/actions';
 import type { StaffMember, StaffAttendanceStatus, ActionResultStaff } from '@/types';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore'; // Added FieldValue
 import { format, parseISO, isValid } from 'date-fns';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 
@@ -51,7 +51,7 @@ function StaffCheckinPageContent() {
   
   const [effectiveStaffId, setEffectiveStaffId] = React.useState<string | null>(null);
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true); // Start true
+  const [isLoading, setIsLoading] = React.useState(true); 
   const [actionInProgress, setActionInProgress] = React.useState<StaffAttendanceStatus | 'initial_load' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
 
@@ -61,15 +61,6 @@ function StaffCheckinPageContent() {
   React.useEffect(() => {
     const idFromParams = searchParams.get('id');
     setEffectiveStaffId(idFromParams);
-
-    if (idFromParams) {
-      // setIsLoading(true); // Handled by fetchStaffMemberData
-      // setActionInProgress('initial_load'); // Handled by fetchStaffMemberData
-    } else {
-      setIsLoading(false);
-      setActionInProgress(null);
-      setStaffMember(null);
-    }
   }, [searchParams]);
 
   const fetchStaffMemberData = React.useCallback(async (id: string) => {
@@ -122,24 +113,76 @@ function StaffCheckinPageContent() {
   React.useEffect(() => {
     if (effectiveStaffId) {
       fetchStaffMemberData(effectiveStaffId);
+    } else {
+        setIsLoading(false);
+        setActionInProgress(null);
+        setStaffMember(null);
     }
   }, [effectiveStaffId, fetchStaffMemberData]);
 
   const handleStatusUpdate = async (newStatus: StaffAttendanceStatus) => {
-    if (!staffMember) return;
+    if (!staffMember) return { success: false, message: 'Staff member data not loaded.', errorType: 'internal_error' };
     setActionInProgress(newStatus);
     setPageError(null);
+    let result: ActionResultStaff;
 
-    const result: ActionResultStaff = await quickSetStaffStatusAction(staffMember.id, newStatus);
+    try {
+      const staffMemberRef = doc(db, 'staff_members', staffMember.id);
+      const updates: { status: StaffAttendanceStatus; updatedAt: FieldValue } = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      };
+      
+      await updateDoc(staffMemberRef, updates);
 
-    if (result.success && result.staffMember) {
-      setStaffMember(result.staffMember);
-      toast({
-        title: 'Status Updated Successfully',
-        description: result.message,
-        className: 'bg-green-100 dark:bg-green-900 border-green-500'
-      });
-    } else {
+      const updatedSnap = await getDoc(staffMemberRef);
+      if (updatedSnap.exists()) {
+        const data = updatedSnap.data();
+        const updatedStaffMemberData: StaffMember = {
+            id: updatedSnap.id,
+            name: data.name || '',
+            role: data.role || '',
+            department: data.department,
+            team: data.team,
+            email: data.email,
+            phone: data.phone,
+            contactInfo: data.contactInfo,
+            status: data.status || 'Off Duty',
+            imageUrl: data.imageUrl,
+            notes: data.notes,
+            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
+            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        };
+        setStaffMember(updatedStaffMemberData);
+        result = {
+          success: true,
+          message: `Status for ${updatedStaffMemberData.name} updated to ${newStatus}.`,
+          staffMember: updatedStaffMemberData,
+        };
+        toast({
+          title: 'Status Updated Successfully',
+          description: result.message,
+          className: 'bg-green-100 dark:bg-green-900 border-green-500'
+        });
+      } else {
+        throw new Error("Failed to re-fetch staff member after update.");
+      }
+    } catch (error: any) {
+      console.error(`[Client-Side Error] Updating staff member ${staffMember.id} to ${newStatus}:`, error);
+      let message = 'An error occurred while updating staff status. Please try again.';
+      let errorType = 'generic_error';
+      if (error.code === 'permission-denied') {
+        message = `PERMISSION_DENIED: Could not update staff status. Ensure you are logged in and have permission.`;
+        errorType = 'permission_denied';
+      } else if (error.code) {
+        message = `Update failed. Error: ${error.code}.`;
+        errorType = error.code;
+      }
+      result = {
+        success: false,
+        message: message,
+        errorType: errorType,
+      };
       setPageError(result.message);
       toast({
         title: 'Update Failed',
@@ -147,8 +190,10 @@ function StaffCheckinPageContent() {
         variant: 'destructive',
       });
       if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId);
+    } finally {
+      setActionInProgress(null);
     }
-    setActionInProgress(null);
+    return result;
   };
 
   const handleManualLookup = () => {
@@ -242,7 +287,7 @@ function StaffCheckinPageContent() {
             {effectiveStaffId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveStaffId}</p>}
             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
             <div className="flex flex-col gap-2 w-full mt-4">
-              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading}>
+              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading || !!actionInProgress && actionInProgress !== 'initial_load'}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveStaffId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/staff-checkin')}>
@@ -278,7 +323,7 @@ function StaffCheckinPageContent() {
   }
   
   if (!staffMember) {
-    if (!effectiveStaffId) {
+    if (!effectiveStaffId) { 
          router.replace('/staff-checkin'); 
          return null; 
     }
