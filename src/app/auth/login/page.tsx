@@ -31,11 +31,15 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [errorTitle, setErrorTitle] = React.useState<string>('Login Error'); // Made errorTitle a state variable
+  const [isGenericError, setIsGenericError] = React.useState(false);
+
+  const ownerContactInfo = "If the problem persists, please contact the owner: baraa.elmallah@gmail.com or +961 76 791 088.";
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
+    setIsGenericError(false);
     let currentErrorTitle = 'Login Error'; // Local variable for this scope
 
     try {
@@ -53,6 +57,7 @@ export default function LoginPage() {
           console.warn(`Firebase Auth Rejected Login (${e.code}): ${e.message}. Email attempted: ${email}`);
         } else {
           console.error(`Firebase Auth Error (${e.code}): ${e.message}. Email attempted: ${email}`, e);
+          setIsGenericError(true); // Mark as generic for other Firebase errors
         }
 
         switch (e.code) {
@@ -77,18 +82,21 @@ export default function LoginPage() {
           default:
             errorMessage = `Login failed. Please try again. (Error code: ${e.code})`;
             currentErrorTitle = 'Login Error';
+            setIsGenericError(true); // Also generic for unhandled codes
         }
       } else {
         console.error('An unexpected login error occurred:', e);
         currentErrorTitle = 'Unexpected Error';
+        setIsGenericError(true);
       }
 
       setError(errorMessage); 
       setErrorTitle(currentErrorTitle); // Set the state for errorTitle
       toast({
         title: currentErrorTitle,
-        description: errorMessage,
+        description: isGenericError ? `${errorMessage} ${ownerContactInfo}` : errorMessage,
         variant: 'destructive',
+        duration: isGenericError ? 10000 : 5000,
       });
     } finally {
       setIsLoading(false);
@@ -112,7 +120,12 @@ export default function LoginPage() {
             <Alert variant="destructive" className="bg-destructive/10">
               <AlertCircle className="h-5 w-5" />
               <AlertTitle className="font-semibold">{errorTitle}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {isGenericError && (
+                  <p className="mt-2 text-xs">{ownerContactInfo}</p>
+                )}
+              </AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">

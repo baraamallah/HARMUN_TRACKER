@@ -43,6 +43,9 @@ const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string
     { status: 'Stepped Out', label: 'Stepped Out', icon: LogOutIcon },
 ];
 
+const ownerContactInfo = "If the problem persists, please contact the owner: baraa.elmallah@gmail.com or +961 76 791 088.";
+
+
 function CheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -253,7 +256,8 @@ function CheckinPageContent() {
             <p className="text-xl font-semibold text-destructive">Error</p>
             <p className="text-md text-muted-foreground">{pageError}</p>
             {effectiveParticipantId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveParticipantId}</p>}
-            <div className="flex flex-col gap-2 w-full">
+            <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
+            <div className="flex flex-col gap-2 w-full mt-4">
               <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveParticipantId}
               </Button>
@@ -279,7 +283,8 @@ function CheckinPageContent() {
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
             <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {effectiveParticipantId}.</p>
-            <Button variant="outline" onClick={() => router.push('/checkin')}> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
+            <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
+            <Button variant="outline" onClick={() => router.push('/checkin')} className="mt-4"> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
             <Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
@@ -304,6 +309,7 @@ function CheckinPageContent() {
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <AlertTriangle className="h-16 w-16 text-yellow-500" />
              <p className="text-xl text-muted-foreground">Unexpected state. Participant data missing for ID: {effectiveParticipantId}.</p>
+             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
           </CardContent>
         </Card>
       </div>
@@ -337,7 +343,10 @@ function CheckinPageContent() {
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-3 text-center py-6 px-6">
             {pageError && (
-                <p className="text-red-600 dark:text-red-400 text-sm mb-2 bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{pageError}</p>
+                <p className="text-red-600 dark:text-red-400 text-sm mb-2 bg-red-100 dark:bg-red-900/30 p-2 rounded-md">
+                  {pageError}
+                  <span className="block mt-1 text-xs">{ownerContactInfo}</span>
+                </p>
             )}
             <Button
                 onClick={() => handleStatusUpdate('Present', true)}
