@@ -191,15 +191,17 @@ export async function getSystemStaffTeams(): Promise<string[]> {
 // Import Participants Action
 export async function importParticipants(
   parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
-): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[] }> {
-  console.warn("[Server Action: importParticipants] Participant import functionality is currently paused pending further refactoring to client-side or Admin SDK implementation to resolve permission issues.");
+): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[]; message?: string }> {
+  // Participant import functionality is currently paused pending further refactoring
+  // or resolution of server-side permission issues.
+  console.warn("[Server Action: importParticipants] Participant import functionality is currently paused. No participants were imported.");
   return {
     count: 0,
     errors: 0,
     detectedNewSchools: [],
     detectedNewCommittees: [],
     message: "Participant import via Server Action is currently paused due to ongoing permission investigations. No participants were imported."
-  } as any; // Added 'any' to satisfy return type if message is added
+  };
 
   // Original logic commented out:
   /*
@@ -219,7 +221,8 @@ export async function importParticipants(
     existingSystemSchools = await getSystemSchools();
     existingSystemCommittees = await getSystemCommittees();
   } catch(e: any) {
-    console.error("[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check:", e);
+    const errorMessage = `[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check: ${e.message}`;
+    console.error(errorMessage, e);
     throw new Error(`Failed to load essential system data (schools/committees) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
   }
   
@@ -269,11 +272,9 @@ export async function importParticipants(
     await batch.commit();
   } catch (error: any) {
     const firebaseError = error as { code?: string; message?: string };
-    let detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
-     if (firebaseError.code === 'permission-denied') {
+    let detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
+    if (firebaseError.code === 'permission-denied') {
       detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    } else {
-      detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
     }
     console.error("[Server Action: importParticipants] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
@@ -450,7 +451,9 @@ export async function quickSetStaffStatusAction(
 export async function importStaffMembers(
   parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
 ): Promise<{ count: number; errors: number; detectedNewTeams: string[]; message?: string }> {
-  console.warn("[Server Action: importStaffMembers] Staff import functionality is currently paused pending further refactoring to client-side or Admin SDK implementation to resolve permission issues.");
+  // Staff import functionality is currently paused pending further refactoring
+  // or resolution of server-side permission issues.
+  console.warn("[Server Action: importStaffMembers] Staff import functionality is currently paused. No staff members were imported.");
   return {
     count: 0,
     errors: 0,
@@ -473,7 +476,8 @@ export async function importStaffMembers(
   try {
     existingSystemStaffTeams = await getSystemStaffTeams();
   } catch(e: any) {
-    console.error("[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check:", e);
+    const errorMessage = `[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check: ${e.message}`;
+    console.error(errorMessage, e);
     throw new Error(`Failed to load essential system data (staff teams) for import. Please check system configuration and Firestore permissions. Original error: ${e.message}`);
   }
 
@@ -513,11 +517,9 @@ export async function importStaffMembers(
     await batch.commit();
   } catch (error: any) {
     const firebaseError = error as { code?: string; message?: string };
-    let detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}).`;
+    let detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.`;
     if (firebaseError.code === 'permission-denied') {
       detailedErrorMessage += `\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    } else {
-      detailedErrorMessage += ` This could be a network issue or a different Firestore problem. Check server logs.`;
     }
     console.error("[Server Action: importStaffMembers] " + detailedErrorMessage, error);
     throw new Error(detailedErrorMessage);
@@ -537,3 +539,4 @@ export async function importStaffMembers(
     
 
     
+
