@@ -68,7 +68,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
             setFile(null); // Clear the file input
-            setIsPending(false); // Reset pending state
+            // setIsPending(false); // Removed incorrect call
             return;
         }
         
@@ -141,14 +141,14 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
             toast({ 
               title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Processed',
               description: description,
-              variant: importHadIssues ? 'default' : 'default', // Changed from destructive to default
-              duration: result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0 ? 15000 : 5000,
+              variant: importHadIssues ? 'default' : 'default',
+              duration: (result.detectedNewSchools?.length ?? 0) > 0 || (result.detectedNewCommittees?.length ?? 0) > 0 ? 15000 : 5000,
             });
             
-            if (result.detectedNewSchools.length > 0 || result.detectedNewCommittees.length > 0) {
+            if ((result.detectedNewSchools?.length ?? 0) > 0 || (result.detectedNewCommittees?.length ?? 0) > 0) {
               setImportSummary({
-                detectedNewSchools: result.detectedNewSchools,
-                detectedNewCommittees: result.detectedNewCommittees,
+                detectedNewSchools: result.detectedNewSchools || [],
+                detectedNewCommittees: result.detectedNewCommittees || [],
               });
             } else {
                setIsOpen(false); 
@@ -171,7 +171,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         toast({ title: 'Error reading file', description: 'Could not read the selected file. It might be corrupted or inaccessible.', variant: 'destructive' });
         console.error("FileReader error:", reader.error);
         setFile(null); 
-        setIsPending(false); // Reset pending state
+        // setIsPending(false); // Removed incorrect call
       }
       reader.readAsText(file);
     });

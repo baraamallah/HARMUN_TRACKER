@@ -53,7 +53,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
             setFile(null);
-            setIsPending(false); // Reset pending state
+            // setIsPending(false); // Removed incorrect call
             return;
         }
         
@@ -134,12 +134,12 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
             toast({ 
               title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
               description: description,
-              variant: importHadIssues ? 'default' : 'default', // Changed from destructive to default
-              duration: result.detectedNewTeams.length > 0 ? 15000 : 5000,
+              variant: importHadIssues ? 'default' : 'default',
+              duration: (result.detectedNewTeams?.length ?? 0) > 0 ? 15000 : 5000,
             });
             
-            if (result.detectedNewTeams.length > 0) {
-              setImportSummary({ detectedNewTeams: result.detectedNewTeams });
+            if ((result.detectedNewTeams?.length ?? 0) > 0) {
+              setImportSummary({ detectedNewTeams: result.detectedNewTeams || [] });
             } else {
                setIsOpen(false);
                setFile(null);
@@ -160,7 +160,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         toast({ title: 'Error reading file', description: 'Could not read the selected file.', variant: 'destructive' });
         console.error("FileReader error (staff import):", reader.error);
         setFile(null);
-        setIsPending(false); // Reset pending state
+        // setIsPending(false); // Removed incorrect call
       }
       reader.readAsText(file);
     });
