@@ -11,16 +11,16 @@ import {
   where,
   orderBy,
   Timestamp,
-  serverTimestamp as fsServerTimestamp,
+  serverTimestamp as fsServerTimestamp, // Keep for potential future use in other actions
   getDoc,
-  writeBatch as fsWriteBatch,
-  collection as fsCollection,
-  doc as fsDoc,
+  // writeBatch as fsWriteBatch, // No longer used for writes in these specific import actions
+  // collection as fsCollection, // No longer used for writes in these specific import actions
+  // doc as fsDoc, // No longer used for writes in these specific import actions
   FieldValue as FirestoreFieldValue,
   updateDoc,
-  setDoc,
+  // setDoc, // No longer used for writes in these specific import actions
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, AdminManagedUser, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
+import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -187,31 +187,20 @@ export async function getSystemStaffTeams(): Promise<string[]> {
   }
 }
 
+// This type represents what the server action will return after processing the CSV for new system items.
+// No actual import (write) happens here anymore.
+export type ParticipantImportValidationResult = {
+  detectedNewSchools: string[];
+  detectedNewCommittees: string[];
+  message?: string; // Optional message, e.g., if validation itself has issues
+};
 
-// Import Participants Action
-export async function importParticipants(
+// Import Participants Action (Validation Only)
+export async function validateParticipantImportData(
   parsedParticipants: Array<Partial<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>> & { name: string; school: string; committee: string; }>
-): Promise<{ count: number; errors: number; detectedNewSchools: string[]; detectedNewCommittees: string[]; message?: string }> {
-  // Participant import functionality is currently paused pending further refactoring
-  // or resolution of server-side permission issues.
-  console.warn("[Server Action: importParticipants] Participant import functionality is currently paused. No participants were imported.");
-  return {
-    count: 0,
-    errors: 0,
-    detectedNewSchools: [],
-    detectedNewCommittees: [],
-    message: "Participant import via Server Action is currently paused due to ongoing permission investigations. No participants were imported."
-  };
+): Promise<ParticipantImportValidationResult> {
+  console.log("[Server Action: validateParticipantImportData] Validating participant data and checking for new schools/committees.");
 
-  // Original logic commented out:
-  /*
-  if (parsedParticipants.length === 0) {
-    console.log("[Server Action: importParticipants] No parsed participants to import.");
-    return { count: 0, errors: 0, detectedNewSchools: [], detectedNewCommittees: [] };
-  }
-
-  let importedCount = 0;
-  let errorCount = 0;
   const detectedNewSchoolNames: Set<string> = new Set();
   const detectedNewCommitteeNames: Set<string> = new Set();
 
@@ -220,14 +209,16 @@ export async function importParticipants(
   try {
     existingSystemSchools = await getSystemSchools();
     existingSystemCommittees = await getSystemCommittees();
-  } catch(e: any) {
-    const detailedErrorMessage = `[Server Action: importParticipants] Critical error fetching system schools/committees during import pre-check. Firebase: ${e.code} - ${e.message || String(e)}. This is often a Firestore rules issue blocking server action access.`;
+  } catch (e: any) {
+    const detailedErrorMessage = `[Server Action: validateParticipantImportData] Critical error fetching system schools/committees during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
     console.error(detailedErrorMessage, e);
-    throw new Error(detailedErrorMessage);
+    // Still return detected items if any, but include an error message
+    return {
+      detectedNewSchools: Array.from(detectedNewSchoolNames),
+      detectedNewCommittees: Array.from(detectedNewCommitteeNames),
+      message: `Error during validation: ${detailedErrorMessage}`,
+    };
   }
-  
-  const defaultMunStatus = await getDefaultAttendanceStatusSetting();
-  const batch = fsWriteBatch(db);
 
   for (const data of parsedParticipants) {
     try {
@@ -240,55 +231,18 @@ export async function importParticipants(
       if (trimmedCommittee && !existingSystemCommittees.includes(trimmedCommittee)) {
         detectedNewCommitteeNames.add(trimmedCommittee);
       }
-
-      const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
-      const newParticipantData: Omit<Participant, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType, checkInTime: null } = {
-        name: data.name.trim(),
-        school: trimmedSchool,
-        committee: trimmedCommittee,
-        country: data.country?.trim() || '',
-        classGrade: data.classGrade?.trim() || '',
-        email: data.email?.trim() || '',
-        phone: data.phone?.trim() || '',
-        notes: data.notes?.trim() || '',
-        additionalDetails: data.additionalDetails?.trim() || '',
-        status: defaultMunStatus,
-        imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
-        attended: false,
-        checkInTime: null,
-        createdAt: fsServerTimestamp(),
-        updatedAt: fsServerTimestamp(),
-      };
-      const participantRef = fsDoc(fsCollection(db, PARTICIPANTS_COLLECTION));
-      batch.set(participantRef, newParticipantData);
-      importedCount++;
     } catch (error) {
-      console.error("[Server Action: importParticipants] Error preparing participant for batch import: ", data, error);
-      errorCount++;
+      console.error("[Server Action: validateParticipantImportData] Error processing a participant record for validation: ", data, error);
+      // Optionally, collect these errors if you want to report them
     }
   }
 
-  try {
-    await batch.commit();
-  } catch (error: any) {
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedErrorMessage = `Batch commit for participants failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    console.error("[Server Action: importParticipants] " + detailedErrorMessage, error);
-    throw new Error(detailedErrorMessage);
-  }
-
-  if (importedCount > 0) {
-    revalidatePath('/');
-    revalidatePath('/public');
-  }
   return {
-    count: importedCount,
-    errors: errorCount,
     detectedNewSchools: Array.from(detectedNewSchoolNames),
     detectedNewCommittees: Array.from(detectedNewCommitteeNames),
   };
-  */
 }
+
 
 export async function quickSetParticipantStatusAction(
   participantId: string,
@@ -444,94 +398,44 @@ export async function quickSetStaffStatusAction(
   }
 }
 
-// Import Staff Members Action
-export async function importStaffMembers(
-  parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
-): Promise<{ count: number; errors: number; detectedNewTeams: string[]; message?: string }> {
-  // Staff import functionality is currently paused pending further refactoring
-  // or resolution of server-side permission issues.
-  console.warn("[Server Action: importStaffMembers] Staff import functionality is currently paused. No staff members were imported.");
-  return {
-    count: 0,
-    errors: 0,
-    detectedNewTeams: [],
-    message: "Staff import via Server Action is currently paused due to ongoing permission investigations. No staff members were imported."
-  };
-  
-  // Original logic commented out:
-  /*
-  if (parsedStaffMembers.length === 0) {
-    console.log("[Server Action: importStaffMembers] No parsed staff members to import.");
-    return { count: 0, errors: 0, detectedNewTeams: [] };
-  }
+export type StaffImportValidationResult = {
+  detectedNewTeams: string[];
+  message?: string;
+};
 
-  let importedCount = 0;
-  let errorCount = 0;
+// Import Staff Members Action (Validation Only)
+export async function validateStaffImportData(
+  parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
+): Promise<StaffImportValidationResult> {
+  console.log("[Server Action: validateStaffImportData] Validating staff data and checking for new teams.");
+  
   const detectedNewTeamNames: Set<string> = new Set();
   
   let existingSystemStaffTeams: string[];
   try {
     existingSystemStaffTeams = await getSystemStaffTeams();
   } catch(e: any) {
-    const detailedErrorMessage = `[Server Action: importStaffMembers] Critical error fetching system staff teams during import pre-check. Firebase: ${e.code} - ${e.message || String(e)}. This is often a Firestore rules issue blocking server action access.`;
+    const detailedErrorMessage = `[Server Action: validateStaffImportData] Critical error fetching system staff teams during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
     console.error(detailedErrorMessage, e);
-    throw new Error(detailedErrorMessage);
+    return {
+      detectedNewTeams: Array.from(detectedNewTeamNames),
+      message: `Error during validation: ${detailedErrorMessage}`,
+    };
   }
 
-  const batch = fsWriteBatch(db);
   for (const data of parsedStaffMembers) {
     try {
       const trimmedTeam = data.team?.trim();
       if (trimmedTeam && !existingSystemStaffTeams.includes(trimmedTeam)) {
         detectedNewTeamNames.add(trimmedTeam);
       }
-
-      const nameInitial = (data.name.trim() || 'S').substring(0,2).toUpperCase();
-      const newStaffData: Omit<StaffMember, 'id'> & { createdAt: FieldValueType, updatedAt: FieldValueType, status: StaffAttendanceStatus } = {
-        name: data.name.trim(),
-        role: data.role.trim(),
-        department: data.department?.trim() || '',
-        team: trimmedTeam || '',
-        email: data.email?.trim() || '',
-        phone: data.phone?.trim() || '',
-        contactInfo: data.contactInfo?.trim() || '',
-        notes: data.notes?.trim() || '',
-        status: 'Off Duty', // Default status
-        imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
-        createdAt: fsServerTimestamp(),
-        updatedAt: fsServerTimestamp(),
-      };
-      const staffRef = fsDoc(fsCollection(db, STAFF_MEMBERS_COLLECTION));
-      batch.set(staffRef, newStaffData);
-      importedCount++;
     } catch (error) {
-      console.error("[Server Action: importStaffMembers] Error preparing staff member for batch import: ", data, error);
-      errorCount++;
+      console.error("[Server Action: validateStaffImportData] Error processing a staff record for validation: ", data, error);
     }
   }
 
-  try {
-    await batch.commit();
-  } catch (error: any) {
-    const firebaseError = error as { code?: string; message?: string };
-    const detailedErrorMessage = `Batch commit for staff members failed. Firebase Error: ${firebaseError.code || 'Unknown'} (${firebaseError.message || 'No details'}). This often indicates a Firestore security rule violation (e.g., server action lacks admin/owner permissions defined in rules) or a network issue. Check server logs.\n\n[DIAGNOSTIC DETAIL] This PERMISSION_DENIED error (${firebaseError.code}) during a server action batch commit usually means your Firestore Security Rules (isOwner/isAdmin) are blocking the operation. Server Actions using the client Firebase SDK (like this one) often don't have the end-user's authentication context (request.auth) when evaluated by Firestore rules. \n\nCommon Solutions:\n1. Re-evaluate Firestore Security Rules: Ensure they correctly handle server-originated requests if necessary, or that the client invoking this has the role.\n2. Use Firebase Admin SDK: For backend operations requiring elevated privileges or bypassing user-centric rules, the Admin SDK (initialized with a service account) is the standard approach. This is a more involved change.\n3. Verify Client Permissions: Ensure the client user actually holds the 'admin' or 'owner' role if the action is intended to run under their identity and rules depend on it (less common for pure server actions).\n\nCheck server logs on Vercel (or your hosting provider) for more specific details about the failed Firestore operation.`;
-    console.error("[Server Action: importStaffMembers] " + detailedErrorMessage, error);
-    throw new Error(detailedErrorMessage);
-  }
-
-  if (importedCount > 0) {
-    revalidatePath('/staff');
-    revalidatePath('/superior-admin'); 
-  }
   return {
-    count: importedCount,
-    errors: errorCount,
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
-  */
 }
     
-
-    
-
-

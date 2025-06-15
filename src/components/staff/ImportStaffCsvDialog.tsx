@@ -16,14 +16,29 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, AlertTriangle, Info } from 'lucide-react';
-import { importStaffMembers } from '@/lib/actions';
-import type { StaffMember } from '@/types';
+import { UploadCloud, AlertTriangle, Info, Loader2 } from 'lucide-react';
+import { validateStaffImportData, getSystemStaffTeams, type StaffImportValidationResult } from '@/lib/actions';
+import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { db } from '@/lib/firebase';
+import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
+
 
 interface ImportStaffCsvDialogProps {
   onImportSuccess?: () => void;
 }
+
+const staffCsvSchema: {
+  name: string;
+  role: string;
+  department?: string;
+  team?: string;
+  email?: string;
+  phone?: string;
+  contactInfo?: string;
+  notes?: string;
+}[] = [];
 
 export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -53,7 +68,6 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
             setFile(null);
-            // setIsPending(false); // Removed incorrect call
             return;
         }
         
@@ -61,16 +75,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         const headerLine = allLines[0];
         const dataLines = allLines.slice(1);
 
-        const parsedStaff: {
-          name: string;
-          role: string;
-          department?: string;
-          team?: string;
-          email?: string;
-          phone?: string;
-          contactInfo?: string;
-          notes?: string;
-        }[] = [];
+        const parsedCsvStaff: typeof staffCsvSchema = [];
         let skippedLineCount = 0;
 
         dataLines.forEach((line, index) => {
@@ -80,7 +85,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').trim());
 
           if (cleanedValues.length >= 2 && cleanedValues[0] && cleanedValues[1]) {
-            parsedStaff.push({
+            parsedCsvStaff.push({
               name: cleanedValues[0],
               role: cleanedValues[1],
               department: cleanedValues[2] || '',
@@ -96,61 +101,95 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           }
         });
 
-        console.log('Parsed staff CSV data being sent to server:', parsedStaff);
+        console.log('Parsed staff CSV data (client-side):', parsedCsvStaff);
 
-        if (parsedStaff.length === 0 && dataLines.filter(l => l.trim()).length > 0) {
+        if (parsedCsvStaff.length === 0) {
+          let description = "The CSV file for staff might be empty or all lines were incorrectly formatted.";
+          if (skippedLineCount > 0) {
+            description += ` ${skippedLineCount} line(s) were skipped. Header: "${headerLine}". Required: Name, Role.`;
+          }
           toast({ 
             title: 'No Valid Staff Data Found', 
-            description: `The CSV file might be empty or all lines were incorrectly formatted. ${skippedLineCount} line(s) were skipped. Required columns: Name, Role. Please check your CSV file and try again. Header row: "${headerLine}"`, 
+            description: description,
             variant: 'default',
             duration: 10000 
           });
           return;
         }
-        if (parsedStaff.length === 0 && dataLines.filter(l => l.trim()).length === 0) {
-          toast({ title: 'Empty CSV', description: 'The CSV file for staff appears to be empty or contains only a header row.', variant: 'default' });
-          return;
-        }
 
         try {
-          const result = await importStaffMembers(parsedStaff as Array<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>>);
+          const validationResult: StaffImportValidationResult = await validateStaffImportData(parsedCsvStaff);
           
-          if ('message' in result && typeof result.message === 'string' && result.message.includes("paused")) {
-            toast({
-              title: 'Import Notice',
-              description: result.message,
+          if (validationResult.message) {
+             toast({ title: 'Import Pre-check Failed', description: validationResult.message, variant: 'destructive', duration: 7000 });
+            return;
+          }
+
+          setImportSummary({ detectedNewTeams: validationResult.detectedNewTeams });
+
+          const batch = writeBatch(db);
+          let staffToImportCount = 0;
+
+          parsedCsvStaff.forEach(data => {
+            const nameInitial = (data.name.trim() || 'S').substring(0,2).toUpperCase();
+            const newStaffData: Omit<StaffMember, 'id'> = {
+              name: data.name.trim(),
+              role: data.role.trim(),
+              department: data.department?.trim() || '',
+              team: data.team?.trim() || '',
+              email: data.email?.trim() || '',
+              phone: data.phone?.trim() || '',
+              contactInfo: data.contactInfo?.trim() || '',
+              notes: data.notes?.trim() || '',
+              status: 'Off Duty' as StaffAttendanceStatus, // Default status
+              imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+            const staffRef = fsDoc(fsCollection(db, 'staff_members'), uuidv4());
+            batch.set(staffRef, newStaffData);
+            staffToImportCount++;
+          });
+
+          if (staffToImportCount > 0) {
+            await batch.commit();
+            toast({ 
+              title: 'Staff Import Successful', 
+              description: `${staffToImportCount} staff members imported. ${skippedLineCount > 0 ? `${skippedLineCount} CSV lines skipped.` : ''}`,
+              variant: 'default',
+              duration: validationResult.detectedNewTeams.length > 0 ? 10000 : 5000,
+            });
+            onImportSuccess?.();
+            if (!(validationResult.detectedNewTeams.length > 0)) {
+              setIsOpen(false);
+              setFile(null);
+            }
+          } else if (skippedLineCount > 0) {
+             toast({ 
+              title: 'Staff Import Note',
+              description: `No new staff members were imported. ${skippedLineCount} CSV lines were skipped.`,
               variant: 'default',
               duration: 7000,
             });
-            setIsOpen(false);
-            setFile(null);
           } else {
-            let description = `${result.count} staff members processed.`;
-            if (result.errors > 0) description += ` ${result.errors} staff members failed to import (check server console for details).`;
-            if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
-            
-            const importHadIssues = result.errors > 0 || (parsedStaff.length === 0 && skippedLineCount > 0 && result.count === 0);
-
-            toast({ 
-              title: importHadIssues ? 'Staff Import Partially Successful or Issues Found' : 'Staff Import Processed',
-              description: description,
-              variant: importHadIssues ? 'default' : 'default',
-              duration: (result.detectedNewTeams?.length ?? 0) > 0 ? 15000 : 5000,
+             toast({ 
+              title: 'Staff Import Note',
+              description: `No staff members to import.`,
+              variant: 'default',
             });
-            
-            if ((result.detectedNewTeams?.length ?? 0) > 0) {
-              setImportSummary({ detectedNewTeams: result.detectedNewTeams || [] });
-            } else {
-               setIsOpen(false);
-               setFile(null);
-            }
           }
-          onImportSuccess?.();
+
         } catch (error: any) {
-          console.error("Staff import error (client-side catch):", error);
+          console.error("Client-side Staff Import error:", error);
+          let errorMessage = "An unexpected error occurred during client-side staff import.";
+           if (error.code === 'permission-denied') {
+            errorMessage = "Permission Denied: Your account does not have permission to add staff members. Please contact the owner.";
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
           toast({ 
             title: 'Staff Import Failed', 
-            description: `Client-Side Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
+            description: errorMessage, 
             variant: 'destructive',
             duration: 10000
           });
@@ -160,7 +199,6 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
         toast({ title: 'Error reading file', description: 'Could not read the selected file.', variant: 'destructive' });
         console.error("FileReader error (staff import):", reader.error);
         setFile(null);
-        // setIsPending(false); // Removed incorrect call
       }
       reader.readAsText(file);
     });
@@ -209,7 +247,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
               <li>Notes (any relevant notes)</li>
             </ol>
             <div className="mt-2">
-              <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Staff Teams listed in the CSV must already exist in the system. New teams will <strong className="underline">not</strong> be automatically created. Please add them via the Superior Admin panel first.
+              <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Staff Teams listed in the CSV must already exist in the system. New teams will <strong className="underline">not</strong> be automatically created. Please add them via the Superior Admin panel first. The import will notify you of any new teams found.
             </div>
              <Alert variant="default" className="mt-3 bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700 text-blue-700 dark:text-blue-300">
                 <Info className="h-5 w-5" />
@@ -250,7 +288,7 @@ export function ImportStaffCsvDialog({ onImportSuccess }: ImportStaffCsvDialogPr
           </Button>
           {!importSummary && (
             <Button onClick={handleImport} disabled={isPending || !file}>
-              {isPending ? 'Importing...' : 'Import Staff'}
+              {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importing...</> : 'Import Staff'}
             </Button>
           )}
         </DialogFooter>

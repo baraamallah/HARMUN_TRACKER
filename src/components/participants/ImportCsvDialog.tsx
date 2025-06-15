@@ -16,15 +16,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, AlertTriangle, Info } from 'lucide-react';
-import { importParticipants } from '@/lib/actions';
-import type { Participant } from '@/types';
+import { UploadCloud, AlertTriangle, Info, Loader2 } from 'lucide-react';
+import { validateParticipantImportData, getDefaultAttendanceStatusSetting, getSystemSchools, getSystemCommittees, type ParticipantImportValidationResult } from '@/lib/actions';
+import type { Participant, AttendanceStatus } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { db } from '@/lib/firebase';
+import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp } from 'firebase/firestore'; // Renamed to avoid conflict
+import { v4 as uuidv4 } from 'uuid';
 
 interface ImportCsvDialogProps {
   onImportSuccess?: () => void; // Callback to refresh data on parent page
 }
 
+// Define the expected structure for CSV parsing
 const participantCsvSchema: {
   name: string;
   school: string;
@@ -67,8 +71,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         const text = e.target?.result as string;
         if (!text) {
             toast({ title: 'Error reading file', description: 'Could not read file content.', variant: 'destructive' });
-            setFile(null); // Clear the file input
-            // setIsPending(false); // Removed incorrect call
+            setFile(null);
             return;
         }
         
@@ -76,17 +79,17 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         const headerLine = allLines[0];
         const dataLines = allLines.slice(1); 
         
-        const parsedParticipants: typeof participantCsvSchema = [];
+        const parsedCsvParticipants: typeof participantCsvSchema = [];
         let skippedLineCount = 0;
         
         dataLines.forEach((line, index) => {
-          if (line.trim() === '') return; // Skip empty lines
+          if (line.trim() === '') return;
           
           const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
           const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').trim());
 
           if (cleanedValues.length >= 3 && cleanedValues[0] && cleanedValues[1] && cleanedValues[2]) {
-            parsedParticipants.push({
+            parsedCsvParticipants.push({
               name: cleanedValues[0],
               school: cleanedValues[1],
               committee: cleanedValues[2],
@@ -103,65 +106,106 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           }
         });
         
-        console.log('Parsed participant CSV data being sent to server:', parsedParticipants);
+        console.log('Parsed participant CSV data (client-side):', parsedCsvParticipants);
 
-        if (parsedParticipants.length === 0 && dataLines.filter(l => l.trim()).length > 0) {
+        if (parsedCsvParticipants.length === 0) {
+          let description = "The CSV file might be empty or all lines were incorrectly formatted.";
+          if (skippedLineCount > 0) {
+            description += ` ${skippedLineCount} line(s) were skipped. Header: "${headerLine}". Required: Name, School, Committee.`;
+          }
           toast({ 
             title: 'No Valid Data Found', 
-            description: `The CSV file might be empty or all lines were incorrectly formatted. ${skippedLineCount} line(s) were skipped. Required columns: Name, School, Committee. Header row: "${headerLine}"`, 
+            description: description,
             variant: 'default',
             duration: 10000,
           });
           return;
         }
-        if (parsedParticipants.length === 0 && dataLines.filter(l => l.trim()).length === 0) {
-            toast({ title: 'Empty CSV', description: 'The CSV file appears to be empty or contains only a header row.', variant: 'default' });
-            return;
-        }
 
         try {
-          const result = await importParticipants(parsedParticipants as Array<Omit<Participant, 'id' | 'status' | 'imageUrl' | 'attended' | 'checkInTime' | 'createdAt' | 'updatedAt'>>);
+          // Step 1: Validate data and get lists of new schools/committees from server action
+          const validationResult: ParticipantImportValidationResult = await validateParticipantImportData(parsedCsvParticipants);
+
+          if (validationResult.message) { // If validation itself had an error (e.g., fetching system lists)
+            toast({ title: 'Import Pre-check Failed', description: validationResult.message, variant: 'destructive', duration: 7000 });
+            return;
+          }
+
+          setImportSummary({
+            detectedNewSchools: validationResult.detectedNewSchools,
+            detectedNewCommittees: validationResult.detectedNewCommittees,
+          });
           
-          if ('message' in result && typeof result.message === 'string' && result.message.includes("paused")) { 
-            toast({
-              title: 'Import Notice',
-              description: result.message,
+          // Step 2: Prepare batch write on the client
+          const defaultStatus = await getDefaultAttendanceStatusSetting();
+          const batch = writeBatch(db);
+          let participantsToImportCount = 0;
+
+          parsedCsvParticipants.forEach(data => {
+            const nameInitial = (data.name.trim() || 'P').substring(0,2).toUpperCase();
+            const newParticipantData: Omit<Participant, 'id'> = {
+              name: data.name.trim(),
+              school: data.school.trim(),
+              committee: data.committee.trim(),
+              country: data.country?.trim() || '',
+              classGrade: data.classGrade?.trim() || '',
+              email: data.email?.trim() || '',
+              phone: data.phone?.trim() || '',
+              notes: data.notes?.trim() || '',
+              additionalDetails: data.additionalDetails?.trim() || '',
+              status: defaultStatus,
+              imageUrl: `https://placehold.co/40x40.png?text=${nameInitial}`,
+              attended: false,
+              checkInTime: null,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+            const participantRef = fsDoc(fsCollection(db, 'participants'), uuidv4()); // Generate client-side UUID
+            batch.set(participantRef, newParticipantData);
+            participantsToImportCount++;
+          });
+
+          // Step 3: Commit batch write
+          if (participantsToImportCount > 0) {
+            await batch.commit();
+            toast({ 
+              title: 'Import Successful',
+              description: `${participantsToImportCount} participants imported. ${skippedLineCount > 0 ? `${skippedLineCount} CSV lines skipped.` : ''}`,
+              variant: 'default',
+              duration: (validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0) ? 10000 : 5000,
+            });
+            onImportSuccess?.();
+             // Close dialog only if there are no new schools/committees to show in summary
+            if (!(validationResult.detectedNewSchools.length > 0 || validationResult.detectedNewCommittees.length > 0)) {
+              setIsOpen(false); 
+              setFile(null);
+            }
+          } else if (skippedLineCount > 0) {
+             toast({ 
+              title: 'Import Note',
+              description: `No new participants were imported. ${skippedLineCount} CSV lines were skipped.`,
               variant: 'default',
               duration: 7000,
             });
-            setIsOpen(false); 
-            setFile(null);
-          } else { 
-            let description = `${result.count} participants processed.`;
-            if (result.errors > 0) description += ` ${result.errors} participants failed to import (check server console for details).`;
-            if (skippedLineCount > 0) description += ` ${skippedLineCount} CSV lines were skipped due to formatting issues (check browser console).`;
-            
-            const importHadIssues = result.errors > 0 || (parsedParticipants.length === 0 && skippedLineCount > 0 && result.count === 0);
-
+          } else {
             toast({ 
-              title: importHadIssues ? 'Import Partially Successful or Issues Found' : 'Import Processed',
-              description: description,
-              variant: importHadIssues ? 'default' : 'default',
-              duration: (result.detectedNewSchools?.length ?? 0) > 0 || (result.detectedNewCommittees?.length ?? 0) > 0 ? 15000 : 5000,
+              title: 'Import Note',
+              description: `No participants to import.`,
+              variant: 'default',
             });
-            
-            if ((result.detectedNewSchools?.length ?? 0) > 0 || (result.detectedNewCommittees?.length ?? 0) > 0) {
-              setImportSummary({
-                detectedNewSchools: result.detectedNewSchools || [],
-                detectedNewCommittees: result.detectedNewCommittees || [],
-              });
-            } else {
-               setIsOpen(false); 
-               setFile(null);
-            }
           }
 
-          onImportSuccess?.();
         } catch (error: any) {
-          console.error("Import error (client-side catch):", error);
+          console.error("Client-side Import error:", error);
+          let errorMessage = "An unexpected error occurred during client-side import.";
+          if (error.code === 'permission-denied') {
+            errorMessage = "Permission Denied: Your account does not have permission to add participants. Please contact the owner.";
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
           toast({ 
             title: 'Import Failed', 
-            description: `Client-Side Error: ${error.message || 'An unexpected error occurred. Check server console for more details.'}`, 
+            description: errorMessage,
             variant: 'destructive',
             duration: 10000 
           });
@@ -171,7 +215,6 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
         toast({ title: 'Error reading file', description: 'Could not read the selected file. It might be corrupted or inaccessible.', variant: 'destructive' });
         console.error("FileReader error:", reader.error);
         setFile(null); 
-        // setIsPending(false); // Removed incorrect call
       }
       reader.readAsText(file);
     });
@@ -221,7 +264,7 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
               <li>Additional Details (other info)</li>
             </ol>
             <div className="mt-2">
-              <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees listed in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first.
+              <strong className="text-amber-600 dark:text-amber-400">Important:</strong> Schools and committees listed in the CSV must already exist in the system. New schools or committees will <strong className="underline">not</strong> be automatically created by this import. Please add them via the Superior Admin panel first. The import will notify you of any new schools/committees found.
             </div>
              <Alert variant="default" className="mt-3 bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700 text-blue-700 dark:text-blue-300">
                 <Info className="h-5 w-5" />
@@ -271,9 +314,9 @@ export function ImportCsvDialog({ onImportSuccess }: ImportCsvDialogProps) {
           <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isPending}>
             {importSummary ? 'Close' : 'Cancel'}
           </Button>
-          {!importSummary && (
+          {!importSummary && ( // Only show import button if no summary is active
             <Button onClick={handleImport} disabled={isPending || !file}>
-              {isPending ? 'Importing...' : 'Import Participants'}
+              {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importing...</> : 'Import Participants'}
             </Button>
           )}
         </DialogFooter>
