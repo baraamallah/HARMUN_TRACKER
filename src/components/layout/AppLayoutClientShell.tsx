@@ -14,7 +14,8 @@ import {
   LogIn,
   Users2, 
   QrCode, 
-  Clipboard
+  Clipboard,
+  ScanLine // Added ScanLine icon
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -27,7 +28,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
-  SidebarMenuSkeleton // Added import
+  SidebarMenuSkeleton
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,6 +65,7 @@ const baseNavItems: NavItem[] = [
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
+  { href: '/scan', icon: ScanLine, label: 'Scan QR', tooltip: 'Scan Participant/Staff QR Code' },
 ];
 
 const adminAndOwnerNavItems: NavItem[] = [
@@ -123,7 +125,6 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // User state will update via onAuthStateChanged, triggering re-render
       toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     } catch (error) {
       console.error("Error signing out: ", error);
@@ -149,9 +150,8 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
     if (userAppRole === 'owner') {
       items.push(...ownerOnlyNavItems);
     }
-    items.push(...publicNavItems); // Public items always last among main nav
+    items.push(...publicNavItems); 
     
-    // Ensure unique items by href in case of overlaps, though current structure avoids this.
     const uniqueItems = items.filter((item, index, self) =>
       index === self.findIndex((t) => t.href === item.href)
     );
@@ -168,7 +168,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
           <SidebarMenu>
             {authSessionLoading ? (
               <>
-                {[...Array(5)].map((_, i) => <SidebarMenuSkeleton key={`skel-nav-${i}`} showIcon />)}
+                {[...Array(6)].map((_, i) => <SidebarMenuSkeleton key={`skel-nav-${i}`} showIcon />)}
               </>
             ) : navItemsToRender.map((item) => (
               <SidebarMenuItem key={item.label}>
