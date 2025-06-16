@@ -13,19 +13,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { OWNER_UID } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Participant, StaffMember, AdminManagedUser } from '@/types';
-import { QrCodeDisplay } from '@/components/shared/QrCodeDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSystemLogoUrlSetting } from '@/lib/actions';
+import QRCodeStyling, { type Options as QRCodeStylingOptions } from 'qr-code-styling';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver'; // For triggering download
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -41,11 +42,13 @@ export default function QrManagementPage() {
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
   const [participantSearchTerm, setParticipantSearchTerm] = useState('');
   const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
+  const [isZippingParticipants, setIsZippingParticipants] = useState(false);
 
   const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]);
   const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
   const [staffSearchTerm, setStaffSearchTerm] = useState('');
   const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
+  const [isZippingStaff, setIsZippingStaff] = useState(false);
 
   const [appBaseUrl, setAppBaseUrl] = useState('');
   const [eventLogoUrl, setEventLogoUrl] = useState<string | undefined>(undefined);
@@ -88,7 +91,7 @@ export default function QrManagementPage() {
       console.error("Error fetching user role:", error);
       toast({ title: "Error", description: "Could not verify user role.", variant: "destructive" });
     }
-    setUserRole('user'); // Default to 'user' if not owner or admin
+    setUserRole('user'); 
     return 'user';
   }, [toast]);
 
@@ -112,7 +115,7 @@ export default function QrManagementPage() {
       setParticipants(fetchedParticipants);
     } catch (error: any) {
       console.error("Error fetching participants for QR codes: ", error);
-      toast({ title: 'Error Fetching Participants', description: error.message || "Failed to load participants for QR codes.", variant: 'destructive' });
+      toast({ title: 'Error Fetching Participants', description: error.message || "Failed to load participants.", variant: 'destructive' });
     } finally {
       setIsLoadingParticipants(false);
     }
@@ -138,7 +141,7 @@ export default function QrManagementPage() {
       setStaffForQr(fetchedStaff);
     } catch (error: any) {
       console.error("Error fetching staff for QR codes: ", error);
-      toast({ title: 'Error Fetching Staff (QR)', description: error.message || "Failed to load staff for QR codes.", variant: 'destructive' });
+      toast({ title: 'Error Fetching Staff (QR)', description: error.message || "Failed to load staff.", variant: 'destructive' });
     } finally {
       setIsLoadingStaffForQr(false);
     }
@@ -164,7 +167,6 @@ export default function QrManagementPage() {
   const handleSuperAdminLogout = async () => {
     try {
       await signOut(auth);
-      // No toast needed here as onAuthStateChanged will trigger redirect/UI update
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -183,10 +185,67 @@ export default function QrManagementPage() {
     (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))
   );
 
-  if (isLoadingAuth || userRole === null && currentUser) { // Show loader if auth is loading OR if user exists but role is not yet determined
+  const generateAndDownloadZip = async (items: Array<Participant | StaffMember>, type: 'participant' | 'staff') => {
+    if (!appBaseUrl) {
+      toast({ title: 'Error', description: 'Application base URL not available. Cannot generate QR links.', variant: 'destructive' });
+      return;
+    }
+    if (items.length === 0) {
+      toast({ title: 'No Data', description: `No ${type}s match the current filters to generate QRs for.`, variant: 'default' });
+      return;
+    }
+
+    if (type === 'participant') setIsZippingParticipants(true);
+    if (type === 'staff') setIsZippingStaff(true);
+
+    toast({ title: 'Processing QR Codes', description: `Generating QR codes for ${items.length} ${type}(s). This may take a moment...` });
+
+    const zip = new JSZip();
+    const qrOptionsBase: Omit<QRCodeStylingOptions, 'data'> = {
+      width: 300,
+      height: 300,
+      margin: 10,
+      qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
+      imageOptions: { hideBackgroundDots: true, imageSize: 0.35, margin: 8, crossOrigin: 'anonymous' },
+      dotsOptions: { type: 'rounded', color: '#2E7D32' }, // Default, can be themed later if needed
+      backgroundOptions: { color: '#ffffff' },
+      cornersSquareOptions: { type: 'extra-rounded', color: '#1976D2' },
+      cornersDotOptions: { type: 'dot', color: '#388E3C' },
+      image: eventLogoUrl || undefined,
+    };
+
+    try {
+      for (const item of items) {
+        const qrData = type === 'participant'
+          ? `${appBaseUrl}/checkin?id=${item.id}`
+          : `${appBaseUrl}/staff-checkin?id=${item.id}`;
+        
+        const qrInstance = new QRCodeStyling({ ...qrOptionsBase, data: qrData });
+        const blob = await qrInstance.getRawData('png');
+        if (blob) {
+          const fileName = `${type === 'participant' ? 'Participant' : 'Staff'}_${item.name.replace(/\s+/g, '_')}_${item.id}.png`;
+          zip.file(fileName, blob);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipBlob, `HARMUN_${type}_qrcodes.zip`);
+      toast({ title: 'Download Started', description: `ZIP file with ${type} QR codes is being downloaded.` });
+
+    } catch (error: any) {
+      console.error(`Error generating ZIP for ${type}s:`, error);
+      toast({ title: 'ZIP Generation Failed', description: error.message || `Could not create ZIP file for ${type} QR codes.`, variant: 'destructive' });
+    } finally {
+      if (type === 'participant') setIsZippingParticipants(false);
+      if (type === 'staff') setIsZippingStaff(false);
+    }
+  };
+
+
+  if (isLoadingAuth || (userRole === null && currentUser)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
-        <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary animate-pulse">
+        <Card className="w-full max-w-md shadow-2xl border-t-4 border-primary">
           <CardHeader className="text-center py-8">
             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Loader2 className="h-10 w-10 animate-spin" />
@@ -212,7 +271,7 @@ export default function QrManagementPage() {
             </div>
             <CardTitle className="text-4xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-xl mt-3 text-muted-foreground">
-              You do not have permission to access this page. Administrator access is required.
+              You do not have permission to access this page. Administrator or Owner access is required.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
@@ -238,19 +297,6 @@ export default function QrManagementPage() {
       </div>
     );
   }
-
-  const renderQrGridSkeleton = (count: number, keyPrefix: string) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-pulse">
-      {[...Array(count)].map((_, i) => (
-        <div key={`${keyPrefix}-skel-${i}`} className="p-4 border rounded-lg shadow-sm bg-muted/50 space-y-3">
-          <Skeleton className="h-6 w-3/4" />
-          <Skeleton className="h-40 w-40 mx-auto rounded-md" />
-          <Skeleton className="h-8 w-full mt-2" />
-          <Skeleton className="h-4 w-full mt-1" />
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/30 to-background">
@@ -289,39 +335,48 @@ export default function QrManagementPage() {
               <CardHeader>
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Participant Check-in QR Codes</CardTitle>
                 <CardDescription>
-                  Generate and view QR codes for individual participant check-in. Each QR code links to <code>{appBaseUrl}/checkin?id=PARTICIPANT_ID</code>.
+                  Manage and download QR codes for participant check-in.
                   {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="relative mb-6">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search participants by name, school, or committee..."
-                    value={participantSearchTerm}
-                    onChange={(e) => setParticipantSearchTerm(e.target.value)}
-                    className="pl-10 w-full focus-visible:ring-primary"
-                  />
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-grow">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Search participants..."
+                      value={participantSearchTerm}
+                      onChange={(e) => setParticipantSearchTerm(e.target.value)}
+                      className="pl-10 w-full focus-visible:ring-primary"
+                      disabled={isZippingParticipants}
+                    />
+                  </div>
+                  <Button 
+                    onClick={() => generateAndDownloadZip(filteredParticipantsForQr, 'participant')}
+                    disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0}
+                    className="w-full sm:w-auto"
+                  >
+                    {isZippingParticipants ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
+                    Download All QRs ({filteredParticipantsForQr.length})
+                  </Button>
                 </div>
-                {isLoadingParticipants || isLoadingLogo ? (
-                  renderQrGridSkeleton(8, 'p')
+                
+                {isLoadingParticipants ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Loader2 className="h-12 w-12 mx-auto mb-3 opacity-50 animate-spin" />
+                    Loading participants...
+                  </div>
                 ) : filteredParticipantsForQr.length > 0 && appBaseUrl ? (
-                  <ScrollArea className="h-[600px] pr-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                      {filteredParticipantsForQr.map(participant => (
-                        <div key={participant.id} className="flex flex-col items-center p-1 rounded-lg">
-                          <h3 className="text-md font-semibold mb-2 truncate w-full text-center" title={participant.name}>{participant.name}</h3>
-                          <QrCodeDisplay
-                            value={`${appBaseUrl}/checkin?id=${participant.id}`}
-                            initialSize={160}
-                            downloadFileName={`harmun-participant-qr-${participant.name.replace(/\s+/g, '_')}-${participant.id}.png`}
-                            eventLogoUrl={eventLogoUrl}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="text-center py-6 text-muted-foreground bg-muted/50 rounded-lg">
+                    <QrCodeIcon className="h-16 w-16 mx-auto mb-4 opacity-60" />
+                    <p className="text-lg">
+                      {filteredParticipantsForQr.length} participant(s) found matching your criteria.
+                    </p>
+                    <p className="text-sm">
+                      Click "Download All QRs" to generate a ZIP file.
+                    </p>
+                  </div>
                 ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />
@@ -339,39 +394,48 @@ export default function QrManagementPage() {
               <CardHeader>
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Staff Member Status QR Codes</CardTitle>
                 <CardDescription>
-                  Generate and view QR codes for individual staff member status updates. Each QR code links to <code>{appBaseUrl}/staff-checkin?id=STAFF_ID</code>.
+                  Manage and download QR codes for staff member status updates.
                   {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="relative mb-6">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search staff by name, role, or team..."
-                    value={staffSearchTerm}
-                    onChange={(e) => setStaffSearchTerm(e.target.value)}
-                    className="pl-10 w-full focus-visible:ring-primary"
-                  />
+                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-grow">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Search staff..."
+                      value={staffSearchTerm}
+                      onChange={(e) => setStaffSearchTerm(e.target.value)}
+                      className="pl-10 w-full focus-visible:ring-primary"
+                      disabled={isZippingStaff}
+                    />
+                  </div>
+                  <Button 
+                    onClick={() => generateAndDownloadZip(filteredStaffForQr, 'staff')}
+                    disabled={isLoadingStaffForQr || isZippingStaff || filteredStaffForQr.length === 0}
+                    className="w-full sm:w-auto"
+                  >
+                    {isZippingStaff ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
+                    Download All QRs ({filteredStaffForQr.length})
+                  </Button>
                 </div>
-                {isLoadingStaffForQr || isLoadingLogo ? (
-                  renderQrGridSkeleton(4, 's')
+
+                {isLoadingStaffForQr ? (
+                   <div className="text-center py-10 text-muted-foreground">
+                    <Loader2 className="h-12 w-12 mx-auto mb-3 opacity-50 animate-spin" />
+                    Loading staff members...
+                  </div>
                 ) : filteredStaffForQr.length > 0 && appBaseUrl ? (
-                  <ScrollArea className="h-[600px] pr-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                      {filteredStaffForQr.map(staff => (
-                        <div key={staff.id} className="flex flex-col items-center p-1 rounded-lg">
-                          <h3 className="text-md font-semibold mb-2 truncate w-full text-center" title={`${staff.name} (${staff.role})`}>{staff.name}</h3>
-                          <QrCodeDisplay
-                            value={`${appBaseUrl}/staff-checkin?id=${staff.id}`}
-                            initialSize={160}
-                            downloadFileName={`harmun-staff-qr-${staff.name.replace(/\s+/g, '_')}-${staff.id}.png`}
-                            eventLogoUrl={eventLogoUrl}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="text-center py-6 text-muted-foreground bg-muted/50 rounded-lg">
+                    <QrCodeIcon className="h-16 w-16 mx-auto mb-4 opacity-60" />
+                    <p className="text-lg">
+                      {filteredStaffForQr.length} staff member(s) found matching your criteria.
+                    </p>
+                    <p className="text-sm">
+                      Click "Download All QRs" to generate a ZIP file.
+                    </p>
+                  </div>
                 ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
                     <div className="text-center py-10 text-muted-foreground">
                         <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />

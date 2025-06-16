@@ -15,7 +15,7 @@ import {
   Users2, 
   QrCode, 
   Clipboard,
-  ScanLine // Added ScanLine icon
+  // ScanLine // Removed ScanLine icon
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -65,7 +65,7 @@ const baseNavItems: NavItem[] = [
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
-  { href: '/scan', icon: ScanLine, label: 'Scan QR', tooltip: 'Scan Participant/Staff QR Code' },
+  // { href: '/scan', icon: ScanLine, label: 'Scan QR', tooltip: 'Scan Participant/Staff QR Code' }, // Removed Scan QR link
 ];
 
 const adminAndOwnerNavItems: NavItem[] = [
@@ -168,7 +168,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
           <SidebarMenu>
             {authSessionLoading ? (
               <>
-                {[...Array(6)].map((_, i) => <SidebarMenuSkeleton key={`skel-nav-${i}`} showIcon />)}
+                {[...Array(5)].map((_, i) => <SidebarMenuSkeleton key={`skel-nav-${i}`} showIcon />)}
               </>
             ) : navItemsToRender.map((item) => (
               <SidebarMenuItem key={item.label}>
