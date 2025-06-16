@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Html5Qrcode, type Html5QrcodeError, type Html5QrcodeResult, type Html5QrcodeCameraScanConfig } from 'html5-qrcode';
+import { Html5Qrcode, type Html5QrcodeResult, type Html5QrcodeCameraScanConfig } from 'html5-qrcode'; // Changed here
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -92,7 +92,7 @@ export default function ScanPage() {
                 });
             }
           },
-          (errorMessage: string, error: Html5QrcodeError) => { // Optional: For continuous scanning errors
+          (errorMessage: string, error: any) => { // Optional: For continuous scanning errors - Changed Html5QrcodeError to any
             // This callback can be noisy. Use sparingly.
             // console.warn(`QR Scan Error: ${errorMessage}`, error);
           }
