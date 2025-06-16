@@ -401,12 +401,22 @@ function CheckinPageContent() {
             <Button
                 onClick={() => handleStatusUpdate('Absent')}
                 disabled={!!actionInProgress || participant.status === 'Absent'}
+                variant="outline"
+                className="w-full text-md py-5"
+                size="lg"
+            >
+                {actionInProgress === 'Absent' && (!participant || participant.status !== 'Present') ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <LogOutIcon className="mr-2 h-5 w-5" />}
+                Check Out (Mark Absent)
+            </Button>
+            <Button
+                onClick={() => handleStatusUpdate('Absent')}
+                disabled={!!actionInProgress || participant.status === 'Absent'}
                 variant="destructive"
                 className="w-full text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'Absent' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <XCircle className="mr-2 h-5 w-5" />}
-                Mark as Absent
+                {actionInProgress === 'Absent' && (!participant || participant.status === 'Present') ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <XCircle className="mr-2 h-5 w-5" />}
+                Mark as Absent (Force)
             </Button>
 
             <DropdownMenu>
@@ -477,3 +487,5 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
+
+        
