@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, UserCircleIcon, RefreshCw, ListRestart, Edit3, Coffee, AlertOctagon, Wrench, LogOutIcon, UserSearch } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, UserCircleIcon, RefreshCw, ListRestart, Edit3, Coffee, AlertOctagon, Wrench, LogOutIcon, UserSearch, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,17 +20,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-// Removed: import { quickSetParticipantStatusAction } from '@/lib/actions';
 import type { Participant, AttendanceStatus, ActionResult } from '@/types';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore'; // Added FieldValue
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 import { format, parseISO, isValid } from 'date-fns';
 
 const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
@@ -54,8 +63,9 @@ function CheckinPageContent() {
   const [effectiveParticipantId, setEffectiveParticipantId] = React.useState<string | null>(null);
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | null>(null);
+  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | 'reset' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
+  const [isResetConfirmationOpen, setIsResetConfirmationOpen] = React.useState(false);
 
   const [manualIdInput, setManualIdInput] = React.useState('');
   const [isManualLookupLoading, setIsManualLookupLoading] = React.useState(false);
@@ -137,6 +147,8 @@ function CheckinPageContent() {
 
       if (isCheckInIntent && newStatus === 'Present') {
         updates.attended = true;
+        // Only set checkInTime if participant hasn't been attended before OR if checkInTime is explicitly null/missing
+        // This ensures the original check-in time is preserved if they were already marked 'Present' once.
         if (!participant.attended || !participant.checkInTime) {
           updates.checkInTime = serverTimestamp();
         }
@@ -144,7 +156,6 @@ function CheckinPageContent() {
       
       await updateDoc(participantRef, updates);
 
-      // Fetch updated data to reflect server-generated timestamps
       const updatedSnap = await getDoc(participantRef);
       if (updatedSnap.exists()) {
         const data = updatedSnap.data();
@@ -197,12 +208,61 @@ function CheckinPageContent() {
         description: result.message,
         variant: 'destructive',
       });
-      // Attempt to refetch original data on failure to ensure consistency
       if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId);
     } finally {
       setActionInProgress(null);
     }
     return result;
+  };
+
+  const handleResetAttendance = async () => {
+    if (!participant) return;
+    setActionInProgress('reset');
+    setPageError(null);
+    setIsResetConfirmationOpen(false);
+
+    try {
+      const participantRef = doc(db, 'participants', participant.id);
+      const updates = {
+        status: 'Absent' as AttendanceStatus,
+        attended: false,
+        checkInTime: null,
+        updatedAt: serverTimestamp(),
+      };
+      await updateDoc(participantRef, updates);
+
+      const updatedSnap = await getDoc(participantRef);
+      if (updatedSnap.exists()) {
+        const data = updatedSnap.data();
+        const updatedParticipant: Participant = {
+          id: updatedSnap.id,
+          name: data.name || '',
+          school: data.school || '',
+          committee: data.committee || '',
+          status: data.status || 'Absent',
+          imageUrl: data.imageUrl,
+          attended: data.attended || false,
+          checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : data.checkInTime,
+          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        };
+        setParticipant(updatedParticipant);
+        toast({
+          title: 'Attendance Reset',
+          description: `Attendance for ${updatedParticipant.name} has been reset.`,
+          className: 'bg-blue-100 dark:bg-blue-900 border-blue-500',
+        });
+      } else {
+        throw new Error("Failed to re-fetch participant after reset.");
+      }
+    } catch (error: any) {
+      console.error(`[Client-Side Error] Resetting attendance for ${participant.id}:`, error);
+      setPageError(error.message || "An error occurred during reset.");
+      toast({ title: "Reset Failed", description: error.message, variant: "destructive" });
+      if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId); // Refresh data on error
+    } finally {
+      setActionInProgress(null);
+    }
   };
 
   const handleManualLookup = () => {
@@ -277,7 +337,7 @@ function CheckinPageContent() {
           </CardContent>
           <CardFooter className="flex-col items-center gap-3 pb-8 text-sm">
             <p className="text-muted-foreground">
-              Alternatively, scan a participant's QR code.
+              Alternatively, scan a participant's QR code or <Link href="/scan" className="font-medium text-primary hover:underline">use the scanner page</Link>.
             </p>
             <Button asChild className="w-full mt-2" variant="outline">
               <Link href="/">
@@ -377,8 +437,13 @@ function CheckinPageContent() {
             </Badge>
            </div>
            {participant.attended && participant.checkInTime && (
-             <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium">
-                Checked In: {isValid(parseISO(participant.checkInTime as string)) ? format(parseISO(participant.checkInTime as string), 'PPpp') : 'Previously'}
+             <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium flex items-center">
+                <CheckCircle className="mr-2 h-4 w-4"/> Checked In: {isValid(parseISO(participant.checkInTime as string)) ? format(parseISO(participant.checkInTime as string), 'PPpp') : 'Previously'}
+             </p>
+           )}
+           {participant.updatedAt && (
+             <p className="text-xs text-muted-foreground mt-1 flex items-center">
+                <History className="mr-1.5 h-3 w-3"/> Last Update: {isValid(parseISO(participant.updatedAt as string)) ? format(parseISO(participant.updatedAt as string), 'PPpp') : 'N/A'}
              </p>
            )}
         </CardHeader>
@@ -422,7 +487,7 @@ function CheckinPageContent() {
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full text-md py-5" size="lg" disabled={!!actionInProgress}>
-                        {actionInProgress && actionInProgress !== 'initial_load' && actionInProgress !== 'Present' && actionInProgress !== 'Absent'
+                        {actionInProgress && actionInProgress !== 'initial_load' && actionInProgress !== 'Present' && actionInProgress !== 'Absent' && actionInProgress !== 'reset'
                           ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
                           : <ListRestart className="mr-2 h-5 w-5" />}
                         Update Other Status...
@@ -442,6 +507,16 @@ function CheckinPageContent() {
                     ))}
                 </DropdownMenuContent>
             </DropdownMenu>
+            <Button
+                onClick={() => setIsResetConfirmationOpen(true)}
+                disabled={!!actionInProgress}
+                variant="ghost"
+                className="w-full text-md py-5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                size="lg"
+            >
+                {actionInProgress === 'reset' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <ListRestart className="mr-2 h-5 w-5" />}
+                Reset Attendance
+            </Button>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
             <Button onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
@@ -462,6 +537,29 @@ function CheckinPageContent() {
             </div>
         </CardFooter>
       </Card>
+
+      <AlertDialog open={isResetConfirmationOpen} onOpenChange={setIsResetConfirmationOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Reset Attendance</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to reset the attendance for {participant.name}?
+              This will mark them as "Absent", clear their check-in time, and set their "Attended" status to false. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionInProgress === 'reset'}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetAttendance}
+              disabled={actionInProgress === 'reset'}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {actionInProgress === 'reset' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yes, Reset Attendance
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -487,5 +585,3 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
-
-        
