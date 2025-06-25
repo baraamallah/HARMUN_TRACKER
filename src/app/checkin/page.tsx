@@ -466,22 +466,12 @@ function CheckinPageContent() {
             <Button
                 onClick={() => handleStatusUpdate('Absent')}
                 disabled={!!actionInProgress || participant.status === 'Absent'}
-                variant="outline"
-                className="w-full text-md py-5"
-                size="lg"
-            >
-                {actionInProgress === 'Absent' && (!participant || participant.status !== 'Present') ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <LogOutIcon className="mr-2 h-5 w-5" />}
-                Check Out (Mark Absent)
-            </Button>
-            <Button
-                onClick={() => handleStatusUpdate('Absent')}
-                disabled={!!actionInProgress || participant.status === 'Absent'}
                 variant="destructive"
                 className="w-full text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'Absent' && (!participant || participant.status === 'Present') ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <XCircle className="mr-2 h-5 w-5" />}
-                Mark as Absent (Force)
+                {actionInProgress === 'Absent' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <LogOutIcon className="mr-2 h-5 w-5" />}
+                Check Out (Mark as Absent)
             </Button>
 
             <DropdownMenu>
@@ -515,7 +505,7 @@ function CheckinPageContent() {
                 size="lg"
             >
                 {actionInProgress === 'reset' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <ListRestart className="mr-2 h-5 w-5" />}
-                Reset Attendance
+                Reset Full Attendance
             </Button>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
@@ -541,9 +531,9 @@ function CheckinPageContent() {
       <AlertDialog open={isResetConfirmationOpen} onOpenChange={setIsResetConfirmationOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Reset Attendance</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Attendance Reset</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to reset the attendance for {participant.name}?
+              Are you sure you want to completely reset the attendance for {participant.name}?
               This will mark them as "Absent", clear their check-in time, and set their "Attended" status to false. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -585,3 +575,5 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
+
+    
