@@ -83,9 +83,16 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   try {
     const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-    let q;
-    const queryConstraints = [];
+    
+    // Base query with ordering
+    let q = query(participantsColRef, orderBy('name'));
 
+    // Note: Firestore does not support combining inequality filters with orderBy on a different field,
+    // or multiple inequality filters on different fields. Search/filter logic must be carefully constructed.
+    // For this reason, we fetch a base set and then apply text search client-side or server-side.
+    // Here we apply Firestore 'where' clauses for exact matches.
+    
+    const queryConstraints = [];
     if (filters?.school && filters.school !== "All Schools") {
       queryConstraints.push(where('school', '==', filters.school));
     }
@@ -96,7 +103,9 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       queryConstraints.push(where('status', '==', filters.status));
     }
 
-    q = query(participantsColRef, ...queryConstraints, orderBy('name'));
+    if(queryConstraints.length > 0) {
+        q = query(participantsColRef, ...queryConstraints, orderBy('name'));
+    }
 
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => {
@@ -121,6 +130,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       } as Participant;
     });
 
+    // Apply search term filtering after fetching from Firestore
     if (filters?.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       participantsData = participantsData.filter(p =>
@@ -132,22 +142,76 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     }
     return participantsData;
   } catch (error) {
-      console.error(
-        "[Server Action - getParticipants (Public/Fallback)] Error fetching participants. Filters:",
-        filters, "Error:", error
-      );
+      console.error("[Server Action - getParticipants] Error fetching participants. Filters:", filters, "Error:", error);
       const firebaseError = error as { code?: string; message?: string };
-      let detailedMessage = `Failed to fetch participants (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}.`;
+      let detailedMessage = `Failed to fetch participants. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
       if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-        detailedMessage += " Firestore index missing. Check browser console for link to create it.";
+        detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
       } else if (firebaseError.code === 'permission-denied') {
-        detailedMessage += " PERMISSION_DENIED. Firestore rules blocking read.";
-      } else {
-        detailedMessage += ` Details: ${firebaseError.message || String(error)}.`;
+        detailedMessage += " Permission denied. Check Firestore rules.";
       }
       throw new Error(detailedMessage);
   }
 }
+
+export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
+    try {
+        const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
+        const queryConstraints = [];
+
+        if (filters?.team && filters.team !== "All Teams") {
+            queryConstraints.push(where('team', '==', filters.team));
+        }
+        if (filters?.status && filters.status !== 'All') {
+            queryConstraints.push(where('status', '==', filters.status));
+        }
+        
+        const q = query(staffColRef, ...queryConstraints, orderBy('name'));
+        const querySnapshot = await getDocs(q);
+
+        let staffData = querySnapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                name: data.name || '',
+                role: data.role || '',
+                department: data.department || '',
+                team: data.team || '',
+                email: data.email || '',
+                phone: data.phone || '',
+                contactInfo: data.contactInfo || '',
+                status: data.status || 'Off Duty',
+                imageUrl: data.imageUrl,
+                notes: data.notes,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            } as StaffMember;
+        });
+
+        if (filters?.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            staffData = staffData.filter(s =>
+                s.name.toLowerCase().includes(term) ||
+                s.role.toLowerCase().includes(term) ||
+                (s.department && s.department.toLowerCase().includes(term)) ||
+                (s.team && s.team.toLowerCase().includes(term))
+            );
+        }
+
+        return staffData;
+    } catch (error) {
+        console.error("[Server Action - getStaffMembers] Error fetching staff. Filters:", filters, "Error:", error);
+        const firebaseError = error as { code?: string; message?: string };
+        let detailedMessage = `Failed to fetch staff members. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
+        if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
+            detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
+        } else if (firebaseError.code === 'permission-denied') {
+            detailedMessage += " Permission denied. Check Firestore rules.";
+        }
+        throw new Error(detailedMessage);
+    }
+}
+
 
 export async function getParticipantById(id: string): Promise<Participant | null> {
   try {
@@ -464,5 +528,3 @@ export async function validateStaffImportData(
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
 }
-
-
