@@ -35,20 +35,22 @@ export default function ParticipantProfilePage() {
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false); // For status updates
+  const [isLoadingSecondary, setIsLoadingSecondary] = React.useState(true); // For lazy loading
 
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
 
 
-  const fetchParticipantData = React.useCallback(async () => {
+  const fetchParticipantData = React.useCallback(async (isInitialLoad = true) => {
     if (!id) {
-      setIsLoading(false);
+      if(isInitialLoad) setIsLoading(false);
       toast({ title: "Error", description: "Participant ID is missing.", variant: "destructive" });
       router.push('/');
       return;
     }
-    setIsLoading(true);
+    if(isInitialLoad) setIsLoading(true);
+    
     try {
       const participantRef = doc(db, 'participants', id);
       const docSnap = await getDoc(participantRef);
@@ -63,8 +65,9 @@ export default function ParticipantProfilePage() {
             country: data.country,
             status: data.status || 'Absent',
             imageUrl: data.imageUrl,
-            notes: data.notes,
-            additionalDetails: data.additionalDetails,
+            // Lazily loaded fields are initially omitted or set to null
+            notes: data.notes || '', // Still get initial value if present
+            additionalDetails: data.additionalDetails || '', // Still get initial value
             classGrade: data.classGrade,
             email: data.email,
             phone: data.phone,
@@ -74,10 +77,15 @@ export default function ParticipantProfilePage() {
             updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
           } as Participant;
       }
-      const [systemSchools, systemCommittees] = await Promise.all([
-        getSystemSchools(),
-        getSystemCommittees(),
-      ]);
+
+      if (isInitialLoad) {
+        const [systemSchools, systemCommittees] = await Promise.all([
+          getSystemSchools(),
+          getSystemCommittees(),
+        ]);
+        setSchools(systemSchools.filter(s => s !== 'All Schools'));
+        setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
+      }
 
       if (participantData) {
         setParticipant(participantData);
@@ -85,23 +93,52 @@ export default function ParticipantProfilePage() {
         toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
         router.push('/');
       }
-      setSchools(systemSchools.filter(s => s !== 'All Schools'));
-      setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
 
     } catch (error: any) {
       console.error("Failed to fetch participant data:", error);
       toast({ title: "Error Fetching Data", description: error.message || "Failed to load participant data.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      if(isInitialLoad) setIsLoading(false);
     }
   }, [id, toast, router]);
 
   React.useEffect(() => {
-    fetchParticipantData();
+    fetchParticipantData(true);
   }, [fetchParticipantData]);
+  
+  // Lazy load notes and additional details
+  React.useEffect(() => {
+      if (!id || !participant) return;
+
+      const fetchSecondaryData = async () => {
+          setIsLoadingSecondary(true);
+          try {
+              const participantRef = doc(db, 'participants', id);
+              const docSnap = await getDoc(participantRef);
+              if (docSnap.exists()) {
+                  const data = docSnap.data();
+                  setParticipant(p => p ? ({
+                      ...p,
+                      notes: data.notes || '',
+                      additionalDetails: data.additionalDetails || '',
+                  }) : null);
+              }
+          } catch (error) {
+              console.error("Failed to lazy load secondary participant data:", error);
+              toast({ title: "Could not load details", description: "Failed to load notes and other details.", variant: 'default' });
+          } finally {
+              setIsLoadingSecondary(false);
+          }
+      };
+
+      // Use a timeout to simulate loading for UX, or just fetch immediately
+      const timer = setTimeout(fetchSecondaryData, 500); // 500ms delay before fetching
+      return () => clearTimeout(timer);
+  }, [id, participant?.id, toast]);
+
 
   const handleFormSubmitSuccess = () => {
-    fetchParticipantData();
+    fetchParticipantData(false); // Re-fetch without full loading state
     setIsParticipantFormOpen(false);
   };
 
@@ -112,12 +149,8 @@ export default function ParticipantProfilePage() {
       const participantRef = doc(db, 'participants', participant.id);
       await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
 
-      // Optimistically update local state, or rely on fetchParticipantData to refresh
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
-      // To ensure data consistency, especially for `updatedAt`, we could call fetchParticipantData()
-      // but this might cause a brief flash. For now, optimistic update is fine for status.
-      // fetchParticipantData(); // Uncomment if strict consistency is needed immediately
-
+      
       toast({
         title: 'Attendance Updated',
         description: `${participant.name}'s status set to ${status}.`,
@@ -129,7 +162,7 @@ export default function ParticipantProfilePage() {
         description: error.message || 'An unknown error occurred while updating attendance.',
         variant: 'destructive',
       });
-       fetchParticipantData(); // Refresh data on error to ensure consistency
+       fetchParticipantData(false); // Refresh data on error
     } finally {
       setIsSubmitting(false);
     }
@@ -146,7 +179,7 @@ export default function ParticipantProfilePage() {
   ];
 
 
-  if (isLoading && !participant) { // Show full page skeleton only on initial load without data
+  if (isLoading) { // Show full page skeleton only on initial load
     return (
       <div className="container mx-auto p-4 md:p-8 animate-pulse">
         <Skeleton className="h-8 w-32 mb-2" />
@@ -154,7 +187,7 @@ export default function ParticipantProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-6">
             <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-64 w-full rounded-lg" /> {/* Increased size for more fields */}
+            <Skeleton className="h-64 w-full rounded-lg" />
           </div>
           <div className="md:col-span-2 space-y-6">
             <Skeleton className="h-32 w-full rounded-lg" />
@@ -165,7 +198,7 @@ export default function ParticipantProfilePage() {
     );
   }
 
-  if (!participant) { // This renders after isLoading is false and participant is still null
+  if (!participant) {
     return (
       <div className="container mx-auto p-4 md:p-8 text-center">
         <UserCircle className="h-32 w-32 mx-auto text-muted-foreground mb-4" data-ai-hint="error user" />
@@ -273,22 +306,17 @@ export default function ParticipantProfilePage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={fetchParticipantData}
+                onClick={() => fetchParticipantData(false)}
                 disabled={isLoading || isSubmitting}
                 aria-label="Refresh participant data"
               >
-                {isLoading && !isSubmitting ? ( // Only show loader on refresh button if it's the main page load
+                {isLoading && !isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Refresh Data
               </Button>
-              {participant.updatedAt && typeof participant.updatedAt === 'string' && isValid(parseISO(participant.updatedAt)) && (
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Last updated: {format(parseISO(participant.updatedAt), 'PP p')}
-                </p>
-              )}
             </CardFooter>
           </Card>
         </section>
@@ -300,7 +328,7 @@ export default function ParticipantProfilePage() {
               <CardDescription>Private notes and observations about the participant.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && !participant.notes ? <Skeleton className="h-20 w-full" /> : participant.notes ? (
+              {isLoadingSecondary ? <Skeleton className="h-20 w-full" /> : participant.notes ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{participant.notes}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No notes recorded for this participant.</p>
@@ -314,7 +342,7 @@ export default function ParticipantProfilePage() {
               <CardDescription>Other relevant information.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && !participant.additionalDetails ? <Skeleton className="h-20 w-full" /> : participant.additionalDetails ? (
+              {isLoadingSecondary ? <Skeleton className="h-20 w-full" /> : participant.additionalDetails ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{participant.additionalDetails}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No additional details provided.</p>

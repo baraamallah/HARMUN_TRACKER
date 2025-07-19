@@ -35,18 +35,19 @@ export default function StaffMemberProfilePage() {
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmittingStatus, setIsSubmittingStatus] = React.useState(false);
+  const [isLoadingSecondary, setIsLoadingSecondary] = React.useState(true); // For lazy loading
 
   const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
   const [systemStaffTeams, setSystemStaffTeams] = React.useState<string[]>([]); 
 
-  const fetchStaffDataAndTeams = React.useCallback(async () => { 
+  const fetchStaffDataAndTeams = React.useCallback(async (isInitialLoad = true) => { 
     if (!id) {
-      setIsLoading(false);
+      if(isInitialLoad) setIsLoading(false);
       toast({ title: "Error", description: "Staff Member ID is missing.", variant: "destructive" });
       router.push('/staff');
       return;
     }
-    setIsLoading(true);
+    if(isInitialLoad) setIsLoading(true);
     try {
       const staffMemberRef = doc(db, 'staff_members', id);
       const staffDocSnap = await getDoc(staffMemberRef);
@@ -65,13 +66,17 @@ export default function StaffMemberProfilePage() {
           contactInfo: data.contactInfo,
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
-          notes: data.notes,
+          // Lazily loaded fields are initially omitted or set to null
+          notes: data.notes || '',
           createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as StaffMember;
       }
       
-      const teamsData = await getSystemStaffTeams(); 
+      if (isInitialLoad) {
+        const teamsData = await getSystemStaffTeams(); 
+        setSystemStaffTeams(teamsData); 
+      }
 
       if (fetchedStaffData) {
         setStaffMember(fetchedStaffData);
@@ -79,7 +84,6 @@ export default function StaffMemberProfilePage() {
         toast({ title: "Not Found", description: "Staff member data could not be found.", variant: "destructive" });
         router.push('/staff');
       }
-      setSystemStaffTeams(teamsData); 
     } catch (error: any) {
       console.error("Failed to fetch staff member data or teams (client-side for staff data):", error);
       let errorMessage = "Failed to load staff member data or teams.";
@@ -88,16 +92,41 @@ export default function StaffMemberProfilePage() {
       }
       toast({ title: "Error Fetching Data", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      if(isInitialLoad) setIsLoading(false);
     }
   }, [id, toast, router]);
 
   React.useEffect(() => {
-    fetchStaffDataAndTeams();
+    fetchStaffDataAndTeams(true);
   }, [fetchStaffDataAndTeams]);
+  
+  // Lazy load notes
+  React.useEffect(() => {
+    if (!id || !staffMember) return;
+
+    const fetchSecondaryData = async () => {
+        setIsLoadingSecondary(true);
+        try {
+            const staffRef = doc(db, 'staff_members', id);
+            const docSnap = await getDoc(staffRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setStaffMember(sm => sm ? ({ ...sm, notes: data.notes || '' }) : null);
+            }
+        } catch (error) {
+            console.error("Failed to lazy load secondary staff data:", error);
+            toast({ title: "Could not load details", description: "Failed to load notes.", variant: 'default' });
+        } finally {
+            setIsLoadingSecondary(false);
+        }
+    };
+
+    const timer = setTimeout(fetchSecondaryData, 500); // 500ms delay before fetching
+    return () => clearTimeout(timer);
+  }, [id, staffMember?.id, toast]);
 
   const handleFormSubmitSuccess = () => {
-    fetchStaffDataAndTeams(); 
+    fetchStaffDataAndTeams(false); // Re-fetch without full loading state
     setIsStaffFormOpen(false);
   };
 
@@ -120,7 +149,7 @@ export default function StaffMemberProfilePage() {
         description: error.message || 'An unknown error occurred while updating status.',
         variant: 'destructive',
       });
-       fetchStaffDataAndTeams(); 
+       fetchStaffDataAndTeams(false); // Refresh data on error
     } finally {
       setIsSubmittingStatus(false);
     }
@@ -134,7 +163,7 @@ export default function StaffMemberProfilePage() {
   ];
 
 
-  if (isLoading && !staffMember) { 
+  if (isLoading) { 
     return (
       <div className="container mx-auto p-4 md:p-8 animate-pulse">
         <Skeleton className="h-8 w-32 mb-2" />
@@ -256,7 +285,7 @@ export default function StaffMemberProfilePage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={fetchStaffDataAndTeams}
+                onClick={() => fetchStaffDataAndTeams(false)}
                 disabled={isLoading || isSubmittingStatus}
                 aria-label="Refresh staff data"
               >
@@ -267,11 +296,6 @@ export default function StaffMemberProfilePage() {
                 )}
                 Refresh Data
               </Button>
-              {staffMember.updatedAt && typeof staffMember.updatedAt === 'string' && isValid(parseISO(staffMember.updatedAt as string)) && (
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Last updated: {format(parseISO(staffMember.updatedAt as string), 'PP p')}
-                </p>
-              )}
             </CardFooter>
           </Card>
         </section>
@@ -283,7 +307,7 @@ export default function StaffMemberProfilePage() {
               <CardDescription>Private notes and observations about the staff member.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && !staffMember.notes ? <Skeleton className="h-20 w-full" /> : staffMember.notes ? (
+              {isLoadingSecondary ? <Skeleton className="h-20 w-full" /> : staffMember.notes ? (
                 <p className="text-sm whitespace-pre-wrap p-3 bg-muted/50 rounded-md min-h-[80px]">{staffMember.notes}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic p-3 bg-muted/50 rounded-md min-h-[80px]">No notes recorded for this staff member.</p>
