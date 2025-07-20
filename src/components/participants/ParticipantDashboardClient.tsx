@@ -4,9 +4,8 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, Timestamp, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, CheckSquare, Square, Loader2, Layers, CheckCircle, XCircle, Coffee, UserRound, Wrench, LogOutIcon, AlertOctagon, Trash2, Users as UsersIcon, Filter } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { PlusCircle, Layers, Trash2, Loader2, Users as UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,8 +20,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -43,19 +40,12 @@ import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
-
-const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
-    { status: 'Present', label: 'Present', icon: CheckCircle },
-    { status: 'Absent', label: 'Absent', icon: XCircle },
-    { status: 'Present On Account', label: 'Present (On Account)', icon: AlertOctagon },
-    { status: 'In Break', label: 'In Break', icon: Coffee },
-    { status: 'Restroom Break', label: 'Restroom Break', icon: UserRound },
-    { status: 'Technical Issue', label: 'Technical Issue', icon: Wrench },
-    { status: 'Stepped Out', label: 'Stepped Out', icon: LogOutIcon },
-];
+import { db } from '@/lib/firebase';
+import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants'; // Using shared constants
 
 interface ParticipantDashboardClientProps {
-  initialParticipants: Participant[];
+  initialParticipants: Participant[]; // Will be empty initially
   systemSchools: string[];
   systemCommittees: string[];
 }
@@ -64,9 +54,10 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
   const router = useRouter();
   const { toast } = useToast();
   
-  // State management
+  const [user, setUser] = React.useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [participants, setParticipants] = React.useState<Participant[]>(initialParticipants);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true); // Start true for initial fetch
   
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
@@ -83,18 +74,28 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     committee: true, country: true, status: true, actions: true,
   });
   
-  const columnLabels: Record<keyof VisibleColumns, string> = {
-    selection: 'Select', avatar: 'Avatar', name: 'Name', school: 'School',
-    committee: 'Committee', country: 'Country', status: 'Status', actions: 'Actions',
-  };
-
   const [selectedParticipantIds, setSelectedParticipantIds] = React.useState<string[]>([]);
   const [isBulkUpdating, setIsBulkUpdating] = React.useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
 
-  // Effect for fetching data when filters change
+  // Authentication check
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push('/auth/login');
+      } else {
+        setUser(currentUser);
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
+
   const fetchData = React.useCallback(async () => {
+    // Prevent fetching if auth is still loading or user is not set
+    if (isAuthLoading || !user) return;
+
     setIsLoading(true);
     try {
       const fetchedParticipants = await getParticipants({
@@ -110,15 +111,12 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSchool, selectedCommittee, statusFilter, debouncedSearchTerm, toast]);
+  }, [selectedSchool, selectedCommittee, statusFilter, debouncedSearchTerm, toast, isAuthLoading, user]);
 
   React.useEffect(() => {
-    // We don't fetch on initial load because we have initialParticipants
-    // This effect runs only when filters change.
     fetchData();
   }, [fetchData]);
 
-  // Handlers
   const handleAddParticipant = () => {
     setParticipantToEdit(null);
     setIsFormOpen(true);
@@ -155,6 +153,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
       toast({ title: "Bulk Update Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsBulkUpdating(false);
+      setSelectedParticipantIds([]);
     }
   };
 
@@ -183,6 +182,15 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
       setIsBulkDeleteConfirmOpen(false);
     }
   };
+  
+  if (isAuthLoading) {
+     return (
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Verifying authentication...</p>
+        </div>
+      );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -209,15 +217,15 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
               className="flex-grow focus-visible:ring-primary"
             />
             <div className="flex gap-4">
-                <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+                <Select value={selectedSchool} onValueChange={setSelectedSchool} disabled={isLoading}>
                   <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="All Schools" /></SelectTrigger>
                   <SelectContent>{systemSchools.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
-                <Select value={selectedCommittee} onValueChange={setSelectedCommittee}>
+                <Select value={selectedCommittee} onValueChange={setSelectedCommittee} disabled={isLoading}>
                   <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="All Committees" /></SelectTrigger>
                   <SelectContent>{systemCommittees.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
-                 <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as AttendanceStatus | 'All')}>
+                 <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as AttendanceStatus | 'All')} disabled={isLoading}>
                   <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Statuses</SelectItem>
@@ -259,7 +267,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
         participants={participants}
         isLoading={isLoading}
         onEditParticipant={handleEditParticipant}
-        visibleColumns={visibleColumns} // This can be managed by a column dropdown if needed
+        visibleColumns={visibleColumns}
         selectedParticipants={selectedParticipantIds}
         onSelectParticipant={handleSelectParticipant}
         onSelectAll={handleSelectAll}

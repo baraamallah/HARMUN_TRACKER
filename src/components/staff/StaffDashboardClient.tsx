@@ -5,8 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, Timestamp, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
-import { PlusCircle, ListFilter, Loader2, Users2 as UsersIcon, Layers, Trash2, CheckSquare, Square, UploadCloud, DownloadCloud } from 'lucide-react';
+import { PlusCircle, Loader2, Users2 as UsersIcon, Layers, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,8 +20,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -43,21 +40,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
-
-const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
-    { status: 'All', label: 'All Statuses' },
-    { status: 'On Duty', label: 'On Duty' },
-    { status: 'Off Duty', label: 'Off Duty' },
-    { status: 'On Break', label: 'On Break' },
-    { status: 'Away', label: 'Away' },
-];
-
-const STAFF_BULK_STATUS_OPTIONS: { status: StaffAttendanceStatus; label: string; icon: React.ElementType }[] = [
-    { status: 'On Duty', label: 'On Duty', icon: UsersIcon },
-    { status: 'Off Duty', label: 'Off Duty', icon: UsersIcon },
-    { status: 'On Break', label: 'On Break', icon: UsersIcon },
-    { status: 'Away', label: 'Away', icon: UsersIcon },
-];
+import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
 
 interface StaffDashboardClientProps {
     initialStaffMembers: StaffMember[];
@@ -68,8 +52,10 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   const router = useRouter();
   const { toast } = useToast();
   
+  const [user, setUser] = React.useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>(initialStaffMembers);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const [searchTerm, setSearchTerm] = React.useState('');
   const [quickStatusFilter, setQuickStatusFilter] = React.useState<StaffAttendanceStatus | 'All'>('All');
@@ -85,18 +71,26 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     team: true, contactInfo: true, status: true, actions: true,
   });
 
-  const columnLabels: Record<keyof StaffVisibleColumns, string> = {
-    selection: 'Select', avatar: 'Avatar', name: 'Name', role: 'Role',
-    department: 'Department', team: 'Team', contactInfo: 'Contact Info',
-    status: 'Status', actions: 'Actions',
-  };
-
   const [selectedStaffMemberIds, setSelectedStaffMemberIds] = React.useState<string[]>([]);
   const [isBulkUpdating, setIsBulkUpdating] = React.useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push('/auth/login');
+      } else {
+        setUser(currentUser);
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
   
   const fetchData = React.useCallback(async () => {
+    if (isAuthLoading || !user) return;
+
     setIsLoading(true);
     try {
         const fetchedStaff = await getStaffMembers({
@@ -111,12 +105,11 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     } finally {
         setIsLoading(false);
     }
-  }, [selectedTeamFilter, quickStatusFilter, debouncedSearchTerm, toast]);
+  }, [selectedTeamFilter, quickStatusFilter, debouncedSearchTerm, toast, isAuthLoading, user]);
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
-
 
   const handleAddStaffMember = () => {
     setStaffToEdit(null);
@@ -184,6 +177,14 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     }
   };
 
+  if (isAuthLoading) {
+     return (
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Verifying authentication...</p>
+        </div>
+      );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -208,15 +209,16 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow focus-visible:ring-primary"
+            disabled={isLoading}
           />
           <div className="flex gap-4">
-             <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')}>
+             <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')} disabled={isLoading}>
               <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="Filter by status" /></SelectTrigger>
               <SelectContent>
                 {ALL_STAFF_STATUS_FILTER_OPTIONS.map((opt) => <SelectItem key={opt.status} value={opt.status}>{opt.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
+            <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter} disabled={isLoading}>
               <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="Filter by team" /></SelectTrigger>
               <SelectContent>
                 {systemStaffTeams.map((team) => <SelectItem key={team} value={team}>{team}</SelectItem>)}

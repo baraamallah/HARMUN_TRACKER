@@ -1,36 +1,23 @@
-
 import * as React from 'react';
-import { getStaffMembers, getSystemStaffTeams } from '@/lib/actions';
+import { getSystemStaffTeams } from '@/lib/actions';
 import { StaffDashboardClient } from '@/components/staff/StaffDashboardClient';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
-import { auth } from '@/lib/firebase';
-import { redirect }from 'next/navigation';
-
 
 /**
  * Server component for the Staff Dashboard.
- * Fetches initial staff members and teams on the server for a faster initial page load.
- * The client component handles all interactivity like filtering, searching, and forms.
+ * Fetches system teams for filters on the server. The main staff list is now
+ * fetched on the client to ensure authentication before hitting Firestore.
  */
 export default async function StaffDashboardPage() {
-    const user = auth.currentUser;
-    if (!user) {
-        // As with the main dashboard, client-side checks in the layout are the primary guard.
-        // redirect('/auth/login');
-    }
-
-    const [initialStaffMembers, systemStaffTeams] = await Promise.all([
-        getStaffMembers(),
-        getSystemStaffTeams(),
-    ]);
+    const systemStaffTeams = await getSystemStaffTeams();
 
     return (
         <AppLayoutClientShell>
             <StaffDashboardClient
-                initialStaffMembers={initialStaffMembers}
+                // Pass empty initial staff; client will fetch them.
+                initialStaffMembers={[]}
                 systemStaffTeams={['All Teams', ...systemStaffTeams]}
             />
         </AppLayoutClientShell>
     );
 }
-
