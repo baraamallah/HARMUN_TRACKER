@@ -128,12 +128,13 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
         // Participants Collection
         match /participants/{participantId} {
           allow read: if true; // Public read for list and profiles
-          allow write: if isOwner() || isAdmin();
+          allow create, delete: if isOwner() || isAdmin();
+          allow update: if (isOwner() || isAdmin()) || 
+                           (request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'attended', 'checkInTime']));
         }
 
         // Staff Members Collection
         match /staff_members/{staffMemberId} {
-          // Admin/Owner can read/write.
           allow read, write: if isOwner() || isAdmin();
         }
 
