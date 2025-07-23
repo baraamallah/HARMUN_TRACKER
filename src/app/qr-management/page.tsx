@@ -510,7 +510,9 @@ export default function QrManagementPage() {
                     <DropdownMenuContent className="w-56">
                       <DropdownMenuLabel>Filter by Team</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {staffTeams.map(team => (
+                      {staffTeams
+                        .filter(team => team !== undefined) // Filter out undefined values
+                        .map(team => (
                         <DropdownMenuItem key={team} onClick={() => setSelectedStaffTeam(team)}>
                           {team}
                         </DropdownMenuItem>
