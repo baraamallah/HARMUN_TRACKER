@@ -88,8 +88,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     let q = query(participantsColRef, orderBy('name'));
 
     // Note: Firestore does not support combining inequality filters with orderBy on a different field,
-    // or multiple inequality filters on different fields. Search/filter logic must be carefully constructed.
-    // For this reason, we fetch a base set and then apply text search client-side or server-side.
+    // or multiple inequality filters on different fields. For this reason, we fetch a base set and then apply text search client-side or server-side.
     // Here we apply Firestore 'where' clauses for exact matches.
     
     const queryConstraints = [];
@@ -527,4 +526,48 @@ export async function validateStaffImportData(
   return {
     detectedNewTeams: Array.from(detectedNewTeamNames),
   };
+}
+
+export async function getParticipantCountByCommittee(): Promise<{ committee: string; count: number }[]> {
+  try {
+    const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
+    const snapshot = await getDocs(participantsColRef);
+    const committeeCounts: { [key: string]: number } = {};
+
+    snapshot.docs.forEach(doc => {
+      const participant = doc.data() as Participant;
+      if (participant.committee) {
+        committeeCounts[participant.committee] = (committeeCounts[participant.committee] || 0) + 1;
+      }
+    });
+
+    return Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count }));
+  } catch (error) {
+    console.error("[Server Action] Error fetching participant count by committee: ", error);
+    throw new Error("Failed to fetch participant count by committee.");
+  }
+}
+
+export async function getCheckInTrend(): Promise<{ time: string; count: number }[]> {
+  try {
+    const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
+    const q = query(participantsColRef, where('checkInTime', '!=', null));
+    const snapshot = await getDocs(q);
+    const checkInCounts: { [key: string]: number } = {};
+
+    snapshot.docs.forEach(doc => {
+      const participant = doc.data() as Participant;
+      if (participant.checkInTime) {
+        const checkInDate = new Date(participant.checkInTime);
+        const hour = checkInDate.getHours();
+        const timeSlot = `${hour}:00 - ${hour + 1}:00`;
+        checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
+      }
+    });
+
+    return Object.entries(checkInCounts).map(([time, count]) => ({ time, count }));
+  } catch (error) {
+    console.error("[Server Action] Error fetching check-in trend: ", error);
+    throw new Error("Failed to fetch check-in trend.");
+  }
 }

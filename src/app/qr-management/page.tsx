@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, FileText } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -26,7 +26,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getSystemLogoUrlSetting } from '@/lib/actions';
 import QRCodeStyling, { type Options as QRCodeStylingOptions } from 'qr-code-styling';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver'; // For triggering download
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -43,6 +45,7 @@ export default function QrManagementPage() {
   const [participantSearchTerm, setParticipantSearchTerm] = useState('');
   const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
   const [isZippingParticipants, setIsZippingParticipants] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]);
   const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
@@ -207,7 +210,7 @@ export default function QrManagementPage() {
       margin: 10,
       qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
       imageOptions: { hideBackgroundDots: true, imageSize: 0.35, margin: 8, crossOrigin: 'anonymous' },
-      dotsOptions: { type: 'rounded', color: '#2E7D32' }, // Default, can be themed later if needed
+      dotsOptions: { type: 'rounded', color: '#2E7D32' },
       backgroundOptions: { color: '#ffffff' },
       cornersSquareOptions: { type: 'extra-rounded', color: '#1976D2' },
       cornersDotOptions: { type: 'dot', color: '#388E3C' },
@@ -239,6 +242,63 @@ export default function QrManagementPage() {
       if (type === 'participant') setIsZippingParticipants(false);
       if (type === 'staff') setIsZippingStaff(false);
     }
+  };
+
+  const generateAndDownloadPdf = async (items: Participant[]) => {
+    if (!appBaseUrl) {
+      toast({ title: 'Error', description: 'Application base URL not available.', variant: 'destructive' });
+      return;
+    }
+    if (items.length === 0) {
+      toast({ title: 'No Data', description: 'No participants match the current filters.', variant: 'default' });
+      return;
+    }
+
+    setIsGeneratingPdf(true);
+    toast({ title: 'Processing PDF', description: `Generating PDF for ${items.length} participant(s)...` });
+
+    const doc = new jsPDF();
+    const qrOptionsBase: Omit<QRCodeStylingOptions, 'data'> = {
+      width: 150,
+      height: 150,
+      margin: 5,
+      qrOptions: { errorCorrectionLevel: 'H' },
+      imageOptions: { hideBackgroundDots: true, imageSize: 0.4, margin: 4, crossOrigin: 'anonymous' },
+      dotsOptions: { type: 'rounded', color: '#000' },
+      backgroundOptions: { color: '#fff' },
+      image: eventLogoUrl,
+    };
+
+    let x = 10, y = 10;
+    const qrSize = 50;
+    const pageHeight = doc.internal.pageSize.height;
+
+    for (const item of items) {
+      const qrData = `${appBaseUrl}/checkin?id=${item.id}`;
+      const qrInstance = new QRCodeStyling({ ...qrOptionsBase, data: qrData });
+      const qrImage = await qrInstance.getRawData('png');
+
+      if (y + qrSize + 20 > pageHeight) {
+        doc.addPage();
+        y = 10;
+      }
+      
+      if (qrImage) {
+        doc.addImage(qrImage, 'PNG', x, y, qrSize, qrSize);
+      }
+      doc.text(item.name, x + qrSize / 2, y + qrSize + 5, { align: 'center' });
+      doc.text(item.school, x + qrSize / 2, y + qrSize + 10, { align: 'center' });
+
+      x += qrSize + 10;
+      if (x + qrSize > doc.internal.pageSize.width) {
+        x = 10;
+        y += qrSize + 20;
+      }
+    }
+
+    doc.save('participants-qrcodes.pdf');
+    toast({ title: 'PDF Download Started' });
+    setIsGeneratingPdf(false);
   };
 
 
@@ -349,16 +409,24 @@ export default function QrManagementPage() {
                       value={participantSearchTerm}
                       onChange={(e) => setParticipantSearchTerm(e.target.value)}
                       className="pl-10 w-full focus-visible:ring-primary"
-                      disabled={isZippingParticipants}
+                      disabled={isZippingParticipants || isGeneratingPdf}
                     />
                   </div>
                   <Button 
                     onClick={() => generateAndDownloadZip(filteredParticipantsForQr, 'participant')}
-                    disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0}
+                    disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0 || isGeneratingPdf}
                     className="w-full sm:w-auto"
                   >
                     {isZippingParticipants ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
                     Download All QRs ({filteredParticipantsForQr.length})
+                  </Button>
+                  <Button
+                    onClick={() => generateAndDownloadPdf(filteredParticipantsForQr)}
+                    disabled={isLoadingParticipants || isGeneratingPdf || filteredParticipantsForQr.length === 0 || isZippingParticipants}
+                    className="w-full sm:w-auto"
+                  >
+                    {isGeneratingPdf ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileText className="mr-2 h-5 w-5" />}
+                    Download as PDF ({filteredParticipantsForQr.length})
                   </Button>
                 </div>
                 
@@ -374,7 +442,7 @@ export default function QrManagementPage() {
                       {filteredParticipantsForQr.length} participant(s) found matching your criteria.
                     </p>
                     <p className="text-sm">
-                      Click "Download All QRs" to generate a ZIP file.
+                      Click "Download All QRs" to generate a ZIP file or "Download as PDF" for a printable sheet.
                     </p>
                   </div>
                 ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (

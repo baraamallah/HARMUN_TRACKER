@@ -15,6 +15,7 @@ import {
   Users2, 
   QrCode, 
   Clipboard,
+  BarChart,
   // ScanLine // Removed ScanLine icon
 } from 'lucide-react';
 import {
@@ -74,6 +75,7 @@ const adminAndOwnerNavItems: NavItem[] = [
 
 const ownerOnlyNavItems: NavItem[] = [
   { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel', ownerOnly: true },
+  { href: '/superior-admin/analytics', icon: BarChart, label: 'Analytics', tooltip: 'Analytics Dashboard', ownerOnly: true },
 ];
 
 const publicNavItems: NavItem[] = [

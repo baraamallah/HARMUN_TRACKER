@@ -37,8 +37,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { getDefaultStaffStatusSetting } from '@/lib/actions';
-import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
+import { getDefaultStaffStatusSetting, generateAvatar } from '@/lib/actions';
+import { Upload, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
 
 const staffMemberFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -76,6 +76,7 @@ export function StaffMemberForm({
   const [isPending, startTransition] = useTransition();
   const [defaultStatus, setDefaultStatus] = useState<StaffAttendanceStatus>('Off Duty');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState(false);
 
   useEffect(() => {
     if (isOpen && !staffMemberToEdit) {
@@ -149,6 +150,37 @@ export function StaffMemberForm({
     }
   }, [currentImageUrl, imagePreview]);
 
+  const handleGenerateAiAvatar = async () => {
+    const name = form.getValues('name');
+    if (!name) {
+      toast({
+        title: 'Name Required',
+        description: 'Please enter a name before generating an avatar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeneratingAiAvatar(true);
+    try {
+      const { imageDataUri } = await generateAvatar({
+        prompt: `A professional and friendly avatar for a staff member named ${name}.`,
+        name,
+      });
+      form.setValue('imageUrl', imageDataUri, { shouldValidate: true, shouldDirty: true });
+      setImagePreview(imageDataUri);
+      toast({ title: 'Avatar Generated', description: 'A new avatar has been generated and set.' });
+    } catch (error: any) {
+      toast({
+        title: 'Avatar Generation Failed',
+        description: error.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingAiAvatar(false);
+    }
+  };
+
   const onSubmit = (data: StaffMemberFormData) => {
     startTransition(async () => {
       try {
@@ -192,7 +224,7 @@ export function StaffMemberForm({
         console.error("Error in StaffMemberForm onSubmit:", error);
         toast({
           title: 'Error',
-          description: error.message || `Failed to ${staffMemberToEdit ? 'update' : 'add'} staff member.`,
+          description: error.message || `Failed to ${staffMemberTo-edit ? 'update' : 'add'} staff member.`,
           variant: 'destructive',
         });
       }
@@ -338,6 +370,20 @@ export function StaffMemberForm({
                   <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
                 </Avatar>
                 <div className="flex-grow space-y-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateAiAvatar}
+                    disabled={isPending || isGeneratingAiAvatar}
+                    className="w-full"
+                  >
+                    {isGeneratingAiAvatar ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    Generate with AI
+                  </Button>
                   <FormField
                     control={form.control}
                     name="imageUrl"
@@ -352,7 +398,7 @@ export function StaffMemberForm({
                             placeholder="https://example.com/image.png" 
                             {...field} 
                             value={field.value ?? ''} 
-                            disabled={isPending} 
+                            disabled={isPending || isGeneratingAiAvatar} 
                             onChange={(e) => {
                                 field.onChange(e);
                                 setImagePreview(e.target.value);
@@ -374,7 +420,7 @@ export function StaffMemberForm({
                         type="file" 
                         accept="image/*" 
                         onChange={handleImageFileChange} 
-                        disabled={isPending}
+                        disabled={isPending || isGeneratingAiAvatar}
                         className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
                     </FormControl>
@@ -401,7 +447,7 @@ export function StaffMemberForm({
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isPending} onClick={handleDialogClose}> Cancel </Button>
               </DialogClose>
-              <Button type="submit" disabled={isPending || (!form.formState.isDirty && !!staffMemberToEdit)}>
+              <Button type="submit" disabled={isPending || (!form.formState.isDirty && !!staffMemberToEdit) || isGeneratingAiAvatar}>
                 {isPending ? (staffMemberToEdit ? 'Saving...' : 'Adding...') : (staffMemberToEdit ? 'Save Changes' : 'Add Staff Member')}
               </Button>
             </DialogFooter>
