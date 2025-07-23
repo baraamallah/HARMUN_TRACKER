@@ -123,7 +123,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         email: data.email,
         phone: data.phone,
         attended: data.attended || false,
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
@@ -232,7 +232,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
         email: data.email,
         phone: data.phone,
         attended: data.attended || false,
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
+        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Participant;
@@ -382,7 +382,7 @@ export async function quickSetParticipantStatusAction(
         email: updatedData?.email,
         phone: updatedData?.phone,
         attended: updatedData?.attended || false,
-        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : updatedData?.checkInTime,
+        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
         createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
         updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
     };
@@ -558,7 +558,9 @@ export async function getCheckInTrend(): Promise<{ time: string; count: number }
     snapshot.docs.forEach(doc => {
       const participant = doc.data() as Participant;
       if (participant.checkInTime) {
-        const checkInDate = new Date(participant.checkInTime);
+        const checkInDate = participant.checkInTime instanceof Timestamp
+          ? participant.checkInTime.toDate()
+          : new Date(participant.checkInTime as string);
         const hour = checkInDate.getHours();
         const timeSlot = `${hour}:00 - ${hour + 1}:00`;
         checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
