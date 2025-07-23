@@ -154,6 +154,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 }
 
 export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
+    let staffData: StaffMember[] = []; // Declare staffData with an initial empty array
     try {
         const staffColRef = collection(db, STAFF_MEMBERS_COLlection);
         const queryConstraints = [];
@@ -168,7 +169,7 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         const q = query(staffColRef, ...queryConstraints, orderBy('name'));
         const querySnapshot = await getDocs(q);
 
-        let staffData = querySnapshot.docs.map(docSnap => {
+        staffData = querySnapshot.docs.map(docSnap => { // Assign value in try block
             const data = docSnap.data();
             return {
                 id: docSnap.id,
@@ -205,7 +206,12 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
             detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
         }
-        return staffData;
+        // It's generally better to throw an error or return a specific error object
+        // rather than potentially returning partial data in a catch block.
+        // However, to match the original code's attempt to return staffData,
+        // we'll return the potentially empty staffData array.
+        // A more robust approach might be to return { success: false, error: detailedMessage };
+        return staffData; // Return the potentially empty array
     }
 }
 
