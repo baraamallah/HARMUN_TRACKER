@@ -474,10 +474,10 @@ export async function quickSetStaffStatusAction(
     let message = 'An error occurred while updating staff status. Please try again.';
     let errorType = 'generic_error';
     if (error.code === 'permission-denied') {
-      message = `Permission Denied on '${STAFF_MEMBERS_COLLECTION}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
+      message = `Permission Denied on '${STAFF_MEMBERS_COLlection}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
       errorType = 'permission_denied';
     } else if (error.code) {
-      message = `Update failed on '${STAFF_MEMBERS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
+      message = `Update failed on '${STAFF_MEMBERS_COLlection}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
     return {
