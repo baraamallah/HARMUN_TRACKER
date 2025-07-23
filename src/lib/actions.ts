@@ -1,4 +1,4 @@
-
+lets 
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -204,10 +204,8 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         let detailedMessage = `Failed to fetch staff members. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
         if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
             detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
-        } else if (firebaseError.code === 'permission-denied') {
-            detailedMessage += " Permission denied. Check Firestore rules.";
         }
-        throw new Error(detailedMessage);
+        return staffData;
     }
 }
 
@@ -571,5 +569,29 @@ export async function getCheckInTrend(): Promise<{ time: string; count: number }
   } catch (error) {
     console.error("[Server Action] Error fetching check-in trend: ", error);
     throw new Error("Failed to fetch check-in trend.");
+  }
+}
+
+export async function getSystemSchoolsForFilter(): Promise<string[]> {
+  try {
+    const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
+    const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
+    const schools = schoolsSnapshot.docs.map(doc => doc.data().name as string);
+    return ["All Schools", ...schools];
+  } catch (error) {
+    console.error("[Server Action] Error fetching system schools for filter: ", error);
+    throw new Error("Failed to fetch system schools for filter.");
+  }
+}
+
+export async function getSystemCommitteesForFilter(): Promise<string[]> {
+  try {
+    const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
+    const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
+    const committees = committeesSnapshot.docs.map(doc => doc.data().name as string);
+    return ["All Committees", ...committees];
+  } catch (error) {
+    console.error("[Server Action] Error fetching system committees for filter: ", error);
+    throw new Error("Failed to fetch system committees for filter.");
   }
 }

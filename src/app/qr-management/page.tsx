@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, FileText } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, Filter } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -27,8 +27,14 @@ import { getSystemLogoUrlSetting } from '@/lib/actions';
 import QRCodeStyling, { type Options as QRCodeStylingOptions } from 'qr-code-styling';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -44,18 +50,38 @@ export default function QrManagementPage() {
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
   const [participantSearchTerm, setParticipantSearchTerm] = useState('');
   const debouncedParticipantSearchTerm = useDebounce(participantSearchTerm, 300);
+  const [selectedParticipantSchool, setSelectedParticipantSchool] = useState('All Schools');
+  const [selectedParticipantCommittee, setSelectedParticipantCommittee] = useState('All Committees');
   const [isZippingParticipants, setIsZippingParticipants] = useState(false);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [staffForQr, setStaffForQr] = useState<StaffMember[]>([]);
   const [isLoadingStaffForQr, setIsLoadingStaffForQr] = useState(false);
   const [staffSearchTerm, setStaffSearchTerm] = useState('');
   const debouncedStaffSearchTerm = useDebounce(staffSearchTerm, 300);
+  const [selectedStaffRole, setSelectedStaffRole] = useState('All Roles');
+  const [selectedStaffTeam, setSelectedStaffTeam] = useState('All Teams');
   const [isZippingStaff, setIsZippingStaff] = useState(false);
 
   const [appBaseUrl, setAppBaseUrl] = useState('');
   const [eventLogoUrl, setEventLogoUrl] = useState<string | undefined>(undefined);
   const [isLoadingLogo, setIsLoadingLogo] = useState(true);
+
+  const participantSchools = [
+    'All Schools',
+    ...new Set(participants.map(p => p.school).filter(Boolean).sort()),
+  ];
+  const participantCommittees = [
+    'All Committees',
+    ...new Set(participants.map(p => p.committee).filter(Boolean).sort()),
+  ];
+  const staffRoles = [
+    'All Roles',
+    ...new Set(staffForQr.map(s => s.role).filter(Boolean).sort()),
+  ];
+  const staffTeams = [
+    'All Teams',
+    ...new Set(staffForQr.map(s => s.team).filter(Boolean).sort()),
+  ];
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -177,15 +203,19 @@ export default function QrManagementPage() {
   };
 
   const filteredParticipantsForQr = participants.filter(p =>
-    p.name.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
+    (p.name.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
     p.school.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase()) ||
-    p.committee.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase())
+    p.committee.toLowerCase().includes(debouncedParticipantSearchTerm.toLowerCase())) &&
+    (selectedParticipantSchool === 'All Schools' || p.school === selectedParticipantSchool) &&
+    (selectedParticipantCommittee === 'All Committees' || p.committee === selectedParticipantCommittee)
   );
 
   const filteredStaffForQr = staffForQr.filter(s =>
-    s.name.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()) ||
+    (s.name.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()) ||
     (s.role && s.role.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase())) ||
-    (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))
+    (s.team && s.team.toLowerCase().includes(debouncedStaffSearchTerm.toLowerCase()))) &&
+    (selectedStaffRole === 'All Roles' || s.role === selectedStaffRole) &&
+    (selectedStaffTeam === 'All Teams' || s.team === selectedStaffTeam)
   );
 
   const generateAndDownloadZip = async (items: Array<Participant | StaffMember>, type: 'participant' | 'staff') => {
@@ -226,7 +256,7 @@ export default function QrManagementPage() {
         const qrInstance = new QRCodeStyling({ ...qrOptionsBase, data: qrData });
         const blob = await qrInstance.getRawData('png');
         if (blob) {
-          const fileName = `${type === 'participant' ? 'Participant' : 'Staff'}_${item.name.replace(/\s+/g, '_')}_${item.id}.png`;
+          const fileName = `${type === 'participant' ? 'Participant' : 'Staff'}_${item.name.replace(/s+/g, '_')}_${item.id}.png`;
           zip.file(fileName, blob);
         }
       }
@@ -242,63 +272,6 @@ export default function QrManagementPage() {
       if (type === 'participant') setIsZippingParticipants(false);
       if (type === 'staff') setIsZippingStaff(false);
     }
-  };
-
-  const generateAndDownloadPdf = async (items: Participant[]) => {
-    if (!appBaseUrl) {
-      toast({ title: 'Error', description: 'Application base URL not available.', variant: 'destructive' });
-      return;
-    }
-    if (items.length === 0) {
-      toast({ title: 'No Data', description: 'No participants match the current filters.', variant: 'default' });
-      return;
-    }
-
-    setIsGeneratingPdf(true);
-    toast({ title: 'Processing PDF', description: `Generating PDF for ${items.length} participant(s)...` });
-
-    const doc = new jsPDF();
-    const qrOptionsBase: Omit<QRCodeStylingOptions, 'data'> = {
-      width: 150,
-      height: 150,
-      margin: 5,
-      qrOptions: { errorCorrectionLevel: 'H' },
-      imageOptions: { hideBackgroundDots: true, imageSize: 0.4, margin: 4, crossOrigin: 'anonymous' },
-      dotsOptions: { type: 'rounded', color: '#000' },
-      backgroundOptions: { color: '#fff' },
-      image: eventLogoUrl,
-    };
-
-    let x = 10, y = 10;
-    const qrSize = 50;
-    const pageHeight = doc.internal.pageSize.height;
-
-    for (const item of items) {
-      const qrData = `${appBaseUrl}/checkin?id=${item.id}`;
-      const qrInstance = new QRCodeStyling({ ...qrOptionsBase, data: qrData });
-      const qrImage = await qrInstance.getRawData('png');
-
-      if (y + qrSize + 20 > pageHeight) {
-        doc.addPage();
-        y = 10;
-      }
-      
-      if (qrImage) {
-        doc.addImage(qrImage, 'PNG', x, y, qrSize, qrSize);
-      }
-      doc.text(item.name, x + qrSize / 2, y + qrSize + 5, { align: 'center' });
-      doc.text(item.school, x + qrSize / 2, y + qrSize + 10, { align: 'center' });
-
-      x += qrSize + 10;
-      if (x + qrSize > doc.internal.pageSize.width) {
-        x = 10;
-        y += qrSize + 20;
-      }
-    }
-
-    doc.save('participants-qrcodes.pdf');
-    toast({ title: 'PDF Download Started' });
-    setIsGeneratingPdf(false);
   };
 
 
@@ -409,24 +382,53 @@ export default function QrManagementPage() {
                       value={participantSearchTerm}
                       onChange={(e) => setParticipantSearchTerm(e.target.value)}
                       className="pl-10 w-full focus-visible:ring-primary"
-                      disabled={isZippingParticipants || isGeneratingPdf}
+                      disabled={isLoadingParticipants || isZippingParticipants}
                     />
                   </div>
+
+                  {/* Participant School Filter */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={isLoadingParticipants || isZippingParticipants}>
+                        <Filter className="mr-2 h-4 w-4" /> {selectedParticipantSchool}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by School</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {participantSchools.map(school => (
+                        <DropdownMenuItem key={school} onClick={() => setSelectedParticipantSchool(school)}>
+                          {school}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Participant Committee Filter */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={isLoadingParticipants || isZippingParticipants}>
+                         <Filter className="mr-2 h-4 w-4" /> {selectedParticipantCommittee}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by Committee</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {participantCommittees.map(committee => (
+                        <DropdownMenuItem key={committee} onClick={() => setSelectedParticipantCommittee(committee)}>
+                          {committee}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <Button 
                     onClick={() => generateAndDownloadZip(filteredParticipantsForQr, 'participant')}
-                    disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0 || isGeneratingPdf}
+                    disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0 || !appBaseUrl}
                     className="w-full sm:w-auto"
                   >
                     {isZippingParticipants ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
                     Download All QRs ({filteredParticipantsForQr.length})
-                  </Button>
-                  <Button
-                    onClick={() => generateAndDownloadPdf(filteredParticipantsForQr)}
-                    disabled={isLoadingParticipants || isGeneratingPdf || filteredParticipantsForQr.length === 0 || isZippingParticipants}
-                    className="w-full sm:w-auto"
-                  >
-                    {isGeneratingPdf ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileText className="mr-2 h-5 w-5" />}
-                    Download as PDF ({filteredParticipantsForQr.length})
                   </Button>
                 </div>
                 
@@ -442,13 +444,13 @@ export default function QrManagementPage() {
                       {filteredParticipantsForQr.length} participant(s) found matching your criteria.
                     </p>
                     <p className="text-sm">
-                      Click "Download All QRs" to generate a ZIP file or "Download as PDF" for a printable sheet.
+                      Click "Download All QRs" to generate a ZIP file.
                     </p>
                   </div>
                 ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />
-                    No participants match your search, or no participants available.
+                    No participants match your search and filter criteria, or no participants available.
                   </div>
                 ) : !appBaseUrl && !isLoadingParticipants ? (
                   <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
@@ -476,12 +478,50 @@ export default function QrManagementPage() {
                       value={staffSearchTerm}
                       onChange={(e) => setStaffSearchTerm(e.target.value)}
                       className="pl-10 w-full focus-visible:ring-primary"
-                      disabled={isZippingStaff}
+                      disabled={isLoadingStaffForQr || isZippingStaff}
                     />
                   </div>
+
+                  {/* Staff Role Filter */}
+                   <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={isLoadingStaffForQr || isZippingStaff}>
+                         <Filter className="mr-2 h-4 w-4" /> {selectedStaffRole}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by Role</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {staffRoles.map(role => (
+                        <DropdownMenuItem key={role} onClick={() => setSelectedStaffRole(role)}>
+                          {role}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Staff Team Filter */}
+                   <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={isLoadingStaffForQr || isZippingStaff}>
+                         <Filter className="mr-2 h-4 w-4" /> {selectedStaffTeam}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by Team</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {staffTeams.map(team => (
+                        <DropdownMenuItem key={team} onClick={() => setSelectedStaffTeam(team)}>
+                          {team}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+
                   <Button 
                     onClick={() => generateAndDownloadZip(filteredStaffForQr, 'staff')}
-                    disabled={isLoadingStaffForQr || isZippingStaff || filteredStaffForQr.length === 0}
+                    disabled={isLoadingStaffForQr || isZippingStaff || filteredStaffForQr.length === 0 || !appBaseUrl}
                     className="w-full sm:w-auto"
                   >
                     {isZippingStaff ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
@@ -507,7 +547,7 @@ export default function QrManagementPage() {
                 ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
                     <div className="text-center py-10 text-muted-foreground">
                         <Users className="h-16 w-16 mx-auto mb-3 opacity-50" />
-                        No staff members match your search, or no staff available.
+                        No staff members match your search and filter criteria, or no staff available.
                     </div>
                 ) : !appBaseUrl && !isLoadingStaffForQr ? (
                   <p className="text-center text-orange-500 py-10">Initializing application base URL to generate QR links...</p>
