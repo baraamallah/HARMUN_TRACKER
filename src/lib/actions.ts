@@ -155,7 +155,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 
 export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
     try {
-        const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
+        const staffColRef = collection(db, STAFF_MEMBERS_COLlection);
         const queryConstraints = [];
 
         if (filters?.team && filters.team !== "All Teams") {
@@ -425,7 +425,7 @@ export async function quickSetStaffStatusAction(
   }
 
   try {
-    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffId);
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLlection, staffId);
     const staffMemberSnap = await getDoc(staffMemberRef);
 
     if (!staffMemberSnap.exists()) {
