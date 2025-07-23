@@ -38,8 +38,8 @@ import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { getDefaultAttendanceStatusSetting, generateAvatar } from '@/lib/actions';
-import { Upload, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
+import { getDefaultAttendanceStatusSetting } from '@/lib/actions';
+import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
 
 const participantFormSchema = z.object({
   id: z.string()
@@ -82,7 +82,6 @@ export function ParticipantForm({
   const [isPending, startTransition] = useTransition();
   const [defaultStatus, setDefaultStatus] = useState<AttendanceStatus>('Absent');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState(false);
 
   useEffect(() => {
     if (isOpen && !participantToEdit) {
@@ -159,7 +158,7 @@ export function ParticipantForm({
       };
       reader.onerror = () => {
         toast({ title: 'Error Reading File', description: 'Could not read the selected image file.', variant: 'destructive'});
-        setImagePreview(form.getValues('imageUrl') || null);
+        setImagePreview(form.getValues('imageUrl') || null); // revert to whatever was in form
       }
       reader.readAsDataURL(file);
     }
@@ -168,6 +167,8 @@ export function ParticipantForm({
   const currentImageUrl = form.watch('imageUrl');
   useEffect(() => {
     if (currentImageUrl && currentImageUrl !== imagePreview) {
+      // Only update preview from URL field if it's a valid URL and not a data URI already set by file upload
+      // This simple check might need refinement if data URIs can be manually pasted and are very long.
       if (currentImageUrl.startsWith('http://') || currentImageUrl.startsWith('https://')) {
          setImagePreview(currentImageUrl);
       } else if (currentImageUrl === '') {
@@ -175,37 +176,6 @@ export function ParticipantForm({
       }
     }
   }, [currentImageUrl, imagePreview]);
-
-  const handleGenerateAiAvatar = async () => {
-    const name = form.getValues('name');
-    if (!name) {
-      toast({
-        title: 'Name Required',
-        description: 'Please enter a name before generating an avatar.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsGeneratingAiAvatar(true);
-    try {
-      const { imageDataUri } = await generateAvatar({
-        prompt: `A professional and friendly avatar for a student named ${name}.`,
-        name,
-      });
-      form.setValue('imageUrl', imageDataUri, { shouldValidate: true, shouldDirty: true });
-      setImagePreview(imageDataUri);
-      toast({ title: 'Avatar Generated', description: 'A new avatar has been generated and set.' });
-    } catch (error: any) {
-      toast({
-        title: 'Avatar Generation Failed',
-        description: error.message || 'An unexpected error occurred.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsGeneratingAiAvatar(false);
-    }
-  };
 
 
   const onSubmit = (data: ParticipantFormData) => {
@@ -226,10 +196,11 @@ export function ParticipantForm({
 
         const formImageUrl = data.imageUrl?.trim();
         if (!formImageUrl || (formImageUrl.startsWith('https://placehold.co') && !imagePreview?.startsWith('data:image'))) {
+          // If no image URL, or it's a placeholder AND no file was uploaded (preview isn't a data URI)
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-          submissionData.imageUrl = formImageUrl;
+          submissionData.imageUrl = formImageUrl; // This will be either user's URL or data URI from upload
         }
 
         if (participantToEdit) {
@@ -259,7 +230,7 @@ export function ParticipantForm({
 
           submissionData.status = defaultStatus;
           submissionData.attended = false;
-          submissionAta.checkInTime = null;
+          submissionData.checkInTime = null;
           submissionData.createdAt = serverTimestamp();
 
           const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);
@@ -450,20 +421,6 @@ export function ParticipantForm({
                   <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
                 </Avatar>
                 <div className="flex-grow space-y-3">
-                   <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleGenerateAiAvatar}
-                    disabled={isPending || isGeneratingAiAvatar}
-                    className="w-full"
-                  >
-                    {isGeneratingAiAvatar ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4" />
-                    )}
-                    Generate with AI
-                  </Button>
                   <FormField
                     control={form.control}
                     name="imageUrl"
@@ -478,7 +435,7 @@ export function ParticipantForm({
                             placeholder="https://example.com/image.png" 
                             {...field} 
                             value={field.value ?? ''} 
-                            disabled={isPending || isGeneratingAiAvatar}
+                            disabled={isPending}
                             onChange={(e) => {
                                 field.onChange(e);
                                 setImagePreview(e.target.value);
@@ -500,7 +457,7 @@ export function ParticipantForm({
                         type="file" 
                         accept="image/*" 
                         onChange={handleImageFileChange} 
-                        disabled={isPending || isGeneratingAiAvatar}
+                        disabled={isPending}
                         className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
                     </FormControl>
@@ -540,7 +497,7 @@ export function ParticipantForm({
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isPending} onClick={handleDialogClose}> Cancel </Button>
               </DialogClose>
-              <Button type="submit" disabled={isPending || (!form.formState.isDirty && !!participantToEdit) || isGeneratingAiAvatar}>
+              <Button type="submit" disabled={isPending || (!form.formState.isDirty && !!participantToEdit)}>
                 {isPending ? (participantToEdit ? 'Saving...' : 'Adding...') : (participantToEdit ? 'Save Changes' : 'Add Participant')}
               </Button>
             </DialogFooter>

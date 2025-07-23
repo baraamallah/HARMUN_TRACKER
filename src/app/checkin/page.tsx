@@ -147,8 +147,6 @@ function CheckinPageContent() {
 
       if (isCheckInIntent && newStatus === 'Present') {
         updates.attended = true;
-        // Only set checkInTime if participant hasn't been attended before OR if checkInTime is explicitly null/missing
-        // This ensures the original check-in time is preserved if they were already marked 'Present' once.
         if (!participant.attended || !participant.checkInTime) {
           updates.checkInTime = serverTimestamp();
         }
@@ -575,5 +573,3 @@ export default function CheckinPage() {
     </React.Suspense>
   );
 }
-
-    

@@ -23,7 +23,7 @@ import type { Participant, AttendanceStatus, StaffMember, FieldValueType, Action
 import { v4 as uuidv4 } from 'uuid';
 
 const PARTICIPANTS_COLLECTION = 'participants';
-const STAFF_MEMBERS_COLLECTION = 'staff_members';
+const STAFF_MEMBERS_COLlection = 'staff_members';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
