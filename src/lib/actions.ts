@@ -382,7 +382,7 @@ export async function quickSetParticipantStatusAction(
         email: updatedData?.email,
         phone: updatedData?.phone,
         attended: updatedData?.attended || false,
-        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
+        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : updatedData?.checkInTime as string || null,
         createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
         updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
     };
