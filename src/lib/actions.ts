@@ -32,6 +32,84 @@ const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
 
+// --- Data Transformation Helpers ---
+
+/**
+ * Safely converts a Firestore Timestamp, a date string, or other values to an ISO string or null.
+ * @param dateValue The value to convert.
+ * @returns An ISO date string or null.
+ */
+function toISODateString(dateValue: any): string | null {
+  if (!dateValue) return null;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate().toISOString();
+  }
+  if (typeof dateValue === 'string') {
+    // Basic check if it's already an ISO string
+    if (!isNaN(Date.parse(dateValue))) {
+       return new Date(dateValue).toISOString();
+    }
+  }
+  // For serverTimestamp() on write/update, this might be null on immediate read.
+  // Returning null is a safe default.
+  return null;
+}
+
+
+/**
+ * Transforms raw Firestore participant data into a consistent, serializable Participant object.
+ * @param docSnap A Firestore document snapshot.
+ * @returns A Participant object with standardized data types.
+ */
+function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Participant {
+    const data = docSnap.data();
+    return {
+        id: docSnap.id,
+        name: data.name || '',
+        school: data.school || '',
+        committee: data.committee || '',
+        country: data.country || '',
+        status: data.status || 'Absent',
+        imageUrl: data.imageUrl,
+        notes: data.notes || '',
+        additionalDetails: data.additionalDetails || '',
+        classGrade: data.classGrade || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        attended: data.attended || false,
+        checkInTime: toISODateString(data.checkInTime),
+        createdAt: toISODateString(data.createdAt),
+        updatedAt: toISODateString(data.updatedAt),
+    };
+}
+
+/**
+ * Transforms raw Firestore staff data into a consistent, serializable StaffMember object.
+ * @param docSnap A Firestore document snapshot.
+ * @returns A StaffMember object with standardized data types.
+ */
+function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMember {
+    const data = docSnap.data();
+    return {
+        id: docSnap.id,
+        name: data.name || '',
+        role: data.role || '',
+        department: data.department || '',
+        team: data.team || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        contactInfo: data.contactInfo || '',
+        status: data.status || 'Off Duty',
+        imageUrl: data.imageUrl,
+        notes: data.notes || '',
+        createdAt: toISODateString(data.createdAt),
+        updatedAt: toISODateString(data.updatedAt),
+    };
+}
+
+
+// --- Setting Actions ---
+
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default participant status.`);
   try {
@@ -80,17 +158,11 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
   }
 }
 
+// --- Data Fetching Actions ---
 
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   try {
     const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-    
-    // Base query with ordering
-    let q = query(participantsColRef, orderBy('name'));
-
-    // Note: Firestore does not support combining inequality filters with orderBy on a different field,
-    // or multiple inequality filters on different fields. For this reason, we fetch a base set and then apply text search client-side or server-side.
-    // Here we apply Firestore 'where' clauses for exact matches.
     
     const queryConstraints = [];
     if (filters?.school && filters.school !== "All Schools") {
@@ -103,34 +175,11 @@ export async function getParticipants(filters?: { school?: string; committee?: s
       queryConstraints.push(where('status', '==', filters.status));
     }
 
-    if(queryConstraints.length > 0) {
-        q = query(participantsColRef, ...queryConstraints, orderBy('name'));
-    }
+    const q = query(participantsColRef, ...queryConstraints, orderBy('name'));
 
     const querySnapshot = await getDocs(q);
-    let participantsData = querySnapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || '',
-        school: data.school || '',
-        committee: data.committee || '',
-        country: data.country || '',
-        status: data.status || 'Absent',
-        imageUrl: data.imageUrl,
-        notes: data.notes,
-        additionalDetails: data.additionalDetails,
-        classGrade: data.classGrade,
-        email: data.email,
-        phone: data.phone,
-        attended: data.attended || false,
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-      } as Participant;
-    });
+    let participantsData = querySnapshot.docs.map(docSnap => transformParticipantDoc(docSnap));
 
-    // Apply search term filtering after fetching from Firestore
     if (filters?.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       participantsData = participantsData.filter(p =>
@@ -155,7 +204,6 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 }
 
 export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
-    let staffData: StaffMember[] = []; // Declare staffData with an initial empty array
     try {
         const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
         const queryConstraints = [];
@@ -170,24 +218,7 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         const q = query(staffColRef, ...queryConstraints, orderBy('name'));
         const querySnapshot = await getDocs(q);
 
-        staffData = querySnapshot.docs.map(docSnap => { // Assign value in try block
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                name: data.name || '',
-                role: data.role || '',
-                department: data.department || '',
-                team: data.team || '',
-                email: data.email || '',
-                phone: data.phone || '',
-                contactInfo: data.contactInfo || '',
-                status: data.status || 'Off Duty',
-                imageUrl: data.imageUrl,
-                notes: data.notes,
-                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-            } as StaffMember;
-        });
+        let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
 
         if (filters?.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
@@ -207,12 +238,7 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
             detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
         }
-        // It's generally better to throw an error or return a specific error object
-        // rather than potentially returning partial data in a catch block.
-        // However, to match the original code's attempt to return staffData,
-        // we'll return the potentially empty staffData array.
-        // A more robust approach might be to return { success: false, error: detailedMessage };
-        return staffData; // Return the potentially empty array
+        throw new Error(detailedMessage);
     }
 }
 
@@ -220,25 +246,7 @@ export async function getStaffMemberById(id: string): Promise<StaffMember | null
   try {
     const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, id);
     const docSnap = await getDoc(staffMemberRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || '',
-        role: data.role || '',
-        department: data.department || '',
-        team: data.team || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        contactInfo: data.contactInfo || '',
-        status: data.status || 'Off Duty',
-        imageUrl: data.imageUrl,
-        notes: data.notes,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-      } as StaffMember;
-    }
-    return null;
+    return docSnap.exists() ? transformStaffDoc(docSnap) : null;
   } catch (error) {
     console.error(`[Server Action - getStaffMemberById] Error fetching staff member by ID ${id}: `, error);
     const firebaseError = error as { code?: string; message?: string };
@@ -250,28 +258,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
   try {
     const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
     const docSnap = await getDoc(participantRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || '',
-        school: data.school || '',
-        committee: data.committee || '',
-        country: data.country || '',
-        status: data.status || 'Absent',
-        imageUrl: data.imageUrl,
-        notes: data.notes,
-        additionalDetails: data.additionalDetails,
-        classGrade: data.classGrade,
-        email: data.email,
-        phone: data.phone,
-        attended: data.attended || false,
-        checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : data?.checkInTime as string || null,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-      } as Participant;
-    }
-    return null;
+    return docSnap.exists() ? transformParticipantDoc(docSnap) : null;
   } catch (error) {
     console.error(`[Server Action - getParticipantById (Public/Fallback)] Error fetching participant by ID ${id}: `, error);
     const firebaseError = error as { code?: string; message?: string };
@@ -280,7 +267,7 @@ export async function getParticipantById(id: string): Promise<Participant | null
 }
 
 
-// System School Actions
+// System List Actions
 export async function getSystemSchools(): Promise<string[]> {
   try {
     const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
@@ -292,7 +279,6 @@ export async function getSystemSchools(): Promise<string[]> {
   }
 }
 
-// System Committee Actions
 export async function getSystemCommittees(): Promise<string[]> {
   try {
     const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
@@ -304,7 +290,6 @@ export async function getSystemCommittees(): Promise<string[]> {
   }
 }
 
-// System Staff Teams Actions
 export async function getSystemStaffTeams(): Promise<string[]> {
   try {
     const staffTeamsColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
@@ -315,6 +300,9 @@ export async function getSystemStaffTeams(): Promise<string[]> {
     throw new Error("Failed to fetch system staff teams (Server Action). Check Firestore rules and connectivity.");
   }
 }
+
+
+// --- Import Validation Actions ---
 
 export type ParticipantImportValidationResult = {
   detectedNewSchools: string[];
@@ -330,43 +318,70 @@ export async function validateParticipantImportData(
   const detectedNewSchoolNames: Set<string> = new Set();
   const detectedNewCommitteeNames: Set<string> = new Set();
 
-  let existingSystemSchools: string[];
-  let existingSystemCommittees: string[];
   try {
-    existingSystemSchools = await getSystemSchools();
-    existingSystemCommittees = await getSystemCommittees();
+    const [existingSystemSchools, existingSystemCommittees] = await Promise.all([getSystemSchools(), getSystemCommittees()]);
+
+    for (const data of parsedParticipants) {
+        const trimmedSchool = data.school.trim();
+        const trimmedCommittee = data.committee.trim();
+
+        if (trimmedSchool && !existingSystemSchools.includes(trimmedSchool)) {
+            detectedNewSchoolNames.add(trimmedSchool);
+        }
+        if (trimmedCommittee && !existingSystemCommittees.includes(trimmedCommittee)) {
+            detectedNewCommitteeNames.add(trimmedCommittee);
+        }
+    }
+
+    return {
+        detectedNewSchools: Array.from(detectedNewSchoolNames),
+        detectedNewCommittees: Array.from(detectedNewCommitteeNames),
+    };
   } catch (e: any) {
-    const detailedErrorMessage = `[Server Action: validateParticipantImportData] Critical error fetching system schools/committees during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
+    const detailedErrorMessage = `[Server Action: validateParticipantImportData] Critical error fetching system lists during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
     console.error(detailedErrorMessage, e);
     return {
-      detectedNewSchools: Array.from(detectedNewSchoolNames),
-      detectedNewCommittees: Array.from(detectedNewCommitteeNames),
+      detectedNewSchools: [],
+      detectedNewCommittees: [],
       message: `Error during validation: ${detailedErrorMessage}`,
     };
   }
-
-  for (const data of parsedParticipants) {
-    try {
-      const trimmedSchool = data.school.trim();
-      const trimmedCommittee = data.committee.trim();
-
-      if (trimmedSchool && !existingSystemSchools.includes(trimmedSchool)) {
-        detectedNewSchoolNames.add(trimmedSchool);
-      }
-      if (trimmedCommittee && !existingSystemCommittees.includes(trimmedCommittee)) {
-        detectedNewCommitteeNames.add(trimmedCommittee);
-      }
-    } catch (error) {
-      console.error("[Server Action: validateParticipantImportData] Error processing a participant record for validation: ", data, error);
-    }
-  }
-
-  return {
-    detectedNewSchools: Array.from(detectedNewSchoolNames),
-    detectedNewCommittees: Array.from(detectedNewCommitteeNames),
-  };
 }
 
+export type StaffImportValidationResult = {
+  detectedNewTeams: string[];
+  message?: string;
+};
+
+export async function validateStaffImportData(
+  parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
+): Promise<StaffImportValidationResult> {
+  console.log("[Server Action: validateStaffImportData] Validating staff data and checking for new teams.");
+  
+  const detectedNewTeamNames: Set<string> = new Set();
+  
+  try {
+    const existingSystemStaffTeams = await getSystemStaffTeams();
+
+    for (const data of parsedStaffMembers) {
+      const trimmedTeam = data.team?.trim();
+      if (trimmedTeam && !existingSystemStaffTeams.includes(trimmedTeam)) {
+        detectedNewTeamNames.add(trimmedTeam);
+      }
+    }
+    return { detectedNewTeams: Array.from(detectedNewTeamNames) };
+  } catch(e: any) {
+    const detailedErrorMessage = `[Server Action: validateStaffImportData] Critical error fetching system staff teams during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
+    console.error(detailedErrorMessage, e);
+    return {
+      detectedNewTeams: [],
+      message: `Error during validation: ${detailedErrorMessage}`,
+    };
+  }
+}
+
+
+// --- Mutation Actions ---
 
 export async function quickSetParticipantStatusAction(
   participantId: string,
@@ -385,8 +400,8 @@ export async function quickSetParticipantStatusAction(
       return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
     }
 
-    const participantData = participantSnap.data() as Participant;
-    const updates: Partial<Participant> & { updatedAt: FieldValueType } = {
+    const participantData = participantSnap.data();
+    const updates: { [key: string]: any } = {
       status: newStatus,
       updatedAt: fsServerTimestamp(),
     };
@@ -398,28 +413,10 @@ export async function quickSetParticipantStatusAction(
       }
     }
 
-    await updateDoc(participantRef, updates as { [x: string]: any; });
+    await updateDoc(participantRef, updates);
 
     const updatedSnap = await getDoc(participantRef);
-    const updatedData = updatedSnap.data();
-    const updatedParticipant: Participant = {
-        id: updatedSnap.id,
-        name: updatedData?.name || '',
-        school: updatedData?.school || '',
-        committee: updatedData?.committee || '',
-        country: updatedData?.country || '',
-        status: updatedData?.status || 'Absent',
-        imageUrl: updatedData?.imageUrl,
-        notes: updatedData?.notes,
-        additionalDetails: updatedData?.additionalDetails,
-        classGrade: updatedData?.classGrade,
-        email: updatedData?.email,
-        phone: updatedData?.phone,
-        attended: updatedData?.attended || false,
-        checkInTime: updatedData?.checkInTime instanceof Timestamp ? updatedData.checkInTime.toDate().toISOString() : updatedData?.checkInTime as string || null,
-        createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
-        updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
-    };
+    const updatedParticipant = transformParticipantDoc(updatedSnap);
 
     revalidatePath(`/checkin`, 'page');
     revalidatePath(`/participants/${participantId}`);
@@ -444,11 +441,7 @@ export async function quickSetParticipantStatusAction(
       message = `Update failed on '${PARTICIPANTS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
-    return {
-      success: false,
-      message: message,
-      errorType: errorType,
-    };
+    return { success: false, message, errorType };
   }
 }
 
@@ -475,9 +468,8 @@ export async function resetParticipantAttendanceAction(participantId: string): P
     await updateDoc(participantRef, updates);
 
     const updatedSnap = await getDoc(participantRef);
-    const updatedParticipant = { id: updatedSnap.id, ...updatedSnap.data() } as Participant;
+    const updatedParticipant = transformParticipantDoc(updatedSnap);
     
-    // Revalidate paths to ensure UI updates
     revalidatePath(`/checkin`, 'page');
     revalidatePath(`/participants/${participantId}`);
     revalidatePath('/');
@@ -511,38 +503,22 @@ export async function quickSetStaffStatusAction(
       return { success: false, message: `Staff member with ID "${staffId}" not found.`, errorType: 'not_found' };
     }
 
-    const staffMemberData = staffMemberSnap.data() as StaffMember;
-    const updates: Partial<StaffMember> & { updatedAt: FieldValueType } = {
+    const staffMemberData = staffMemberSnap.data();
+    const updates = {
       status: newStatus,
       updatedAt: fsServerTimestamp(),
     };
 
-    await updateDoc(staffMemberRef, updates as { [x: string]: any; });
+    await updateDoc(staffMemberRef, updates);
 
     const updatedSnap = await getDoc(staffMemberRef);
-    const updatedData = updatedSnap.data();
-    const updatedStaffMember: StaffMember = {
-        id: updatedSnap.id,
-        name: updatedData?.name || '',
-        role: updatedData?.role || '',
-        department: updatedData?.department,
-        team: updatedData?.team,
-        email: updatedData?.email,
-        phone: updatedData?.phone,
-        contactInfo: updatedData?.contactInfo,
-        status: updatedData?.status || 'Off Duty',
-        imageUrl: updatedData?.imageUrl,
-        notes: updatedData?.notes,
-        createdAt: updatedData?.createdAt instanceof Timestamp ? updatedData.createdAt.toDate().toISOString() : updatedData?.createdAt,
-        updatedAt: updatedData?.updatedAt instanceof Timestamp ? updatedData.updatedAt.toDate().toISOString() : updatedData?.updatedAt,
-    };
+    const updatedStaffMember = transformStaffDoc(updatedSnap);
 
     revalidatePath(`/staff-checkin`, 'page');
     revalidatePath(`/staff/${staffId}`);
     revalidatePath('/staff');
     revalidatePath('/superior-admin');
     revalidatePath('/superior-admin/analytics');
-
 
     return {
       success: true,
@@ -560,56 +536,11 @@ export async function quickSetStaffStatusAction(
       message = `Update failed on '${STAFF_MEMBERS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
-    return {
-      success: false,
-      message: message,
-      errorType: errorType,
-    };
+    return { success: false, message, errorType };
   }
 }
 
-export type StaffImportValidationResult = {
-  detectedNewTeams: string[];
-  message?: string;
-};
-
-export async function validateStaffImportData(
-  parsedStaffMembers: Array<Partial<Omit<StaffMember, 'id' | 'status' | 'imageUrl' | 'createdAt' | 'updatedAt'>> & { name: string; role: string; }>
-): Promise<StaffImportValidationResult> {
-  console.log("[Server Action: validateStaffImportData] Validating staff data and checking for new teams.");
-  
-  const detectedNewTeamNames: Set<string> = new Set();
-  
-  let existingSystemStaffTeams: string[];
-  try {
-    existingSystemStaffTeams = await getSystemStaffTeams();
-  } catch(e: any) {
-    const detailedErrorMessage = `[Server Action: validateStaffImportData] Critical error fetching system staff teams during validation. Firebase: ${e.code} - ${e.message || String(e)}.`;
-    console.error(detailedErrorMessage, e);
-    return {
-      detectedNewTeams: Array.from(detectedNewTeamNames),
-      message: `Error during validation: ${detailedErrorMessage}`,
-    };
-  }
-
-  for (const data of parsedStaffMembers) {
-    try {
-      const trimmedTeam = data.team?.trim();
-      if (trimmedTeam && !existingSystemStaffTeams.includes(trimmedTeam)) {
-        detectedNewTeamNames.add(trimmedTeam);
-      }
-    } catch (error) {
-      console.error("[Server Action: validateStaffImportData] Error processing a staff record for validation: ", data, error);
-    }
-  }
-
-  return {
-    detectedNewTeams: Array.from(detectedNewTeamNames),
-  };
-}
-
-
-// Analytics Actions
+// --- Analytics Actions ---
 export interface AnalyticsData {
   totalParticipants: number;
   totalStaff: number;
@@ -617,12 +548,6 @@ export interface AnalyticsData {
   totalCommittees: number;
   participantsByCommittee: { committee: string; count: number }[];
   statusDistribution: { status: string; count: number }[];
-  checkInTrend?: { time: string; count: number }[];
-}
-
-async function getCollectionCount(collectionName: string): Promise<number> {
-  const snapshot = await getCountFromServer(collection(db, collectionName));
-  return snapshot.data().count;
 }
 
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
@@ -648,9 +573,9 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       totalSchools,
       totalCommittees,
     ] = await Promise.all([
-      getCollectionCount(STAFF_MEMBERS_COLLECTION),
-      getCollectionCount(SYSTEM_SCHOOLS_COLLECTION),
-      getCollectionCount(SYSTEM_COMMITTEES_COLLECTION),
+      getCountFromServer(collection(db, STAFF_MEMBERS_COLLECTION)).then(snap => snap.data().count),
+      getCountFromServer(collection(db, SYSTEM_SCHOOLS_COLLECTION)).then(snap => snap.data().count),
+      getCountFromServer(collection(db, SYSTEM_COMMITTEES_COLLECTION)).then(snap => snap.data().count),
     ]);
 
     return {
