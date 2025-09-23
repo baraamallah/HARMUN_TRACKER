@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart, LineChart, Loader2, Users, School, Briefcase, PieChart as PieChartIcon, Percent, RefreshCw } from "lucide-react";
+import { BarChart, Loader2, Users, School, Briefcase, PieChart as PieChartIcon, Percent, RefreshCw } from "lucide-react";
 import { getAllAnalyticsData, type AnalyticsData } from '@/lib/actions';
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, PieChart, Pie, Cell, TooltipProps } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
@@ -144,28 +144,6 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LineChart className="h-5 w-5" />
-              Check-in Trends
-            </CardTitle>
-            <CardDescription>Number of participant check-ins over time.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={analyticsData.checkInTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" name="Check-ins" strokeWidth={2} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

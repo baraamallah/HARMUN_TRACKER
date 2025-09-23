@@ -617,7 +617,7 @@ export interface AnalyticsData {
   totalCommittees: number;
   participantsByCommittee: { committee: string; count: number }[];
   statusDistribution: { status: string; count: number }[];
-  checkInTrend: { time: string; count: number }[];
+  checkInTrend?: { time: string; count: number }[];
 }
 
 async function getCollectionCount(collectionName: string): Promise<number> {
@@ -647,8 +647,7 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
     // Process the snapshot for detailed analytics
     const committeeCounts: { [key: string]: number } = {};
     const statusCounts: { [key: string]: number } = {};
-    const checkInCounts: { [key: string]: number } = {};
-
+    
     participantsSnapshot.docs.forEach(doc => {
       const p = doc.data();
       
@@ -661,22 +660,6 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       if (p.status) {
         statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
       }
-      
-      // Count check-ins by hour
-      if (p.checkInTime) { // Check if checkInTime exists
-        let checkInDate: Date | null = null;
-        if (p.checkInTime instanceof Timestamp) {
-            checkInDate = p.checkInTime.toDate();
-        } else if (typeof p.checkInTime === 'string') {
-            checkInDate = new Date(p.checkInTime);
-        }
-        
-        if (checkInDate && !isNaN(checkInDate.getTime())) { // Check if the date is valid
-            const hour = checkInDate.getHours();
-            const timeSlot = `${String(hour).padStart(2, '0')}:00`;
-            checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
-        }
-      }
     });
 
     return {
@@ -686,7 +669,6 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       totalCommittees,
       participantsByCommittee: Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count })).sort((a, b) => b.count - a.count),
       statusDistribution: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
-      checkInTrend: Object.entries(checkInCounts).map(([time, count]) => ({ time, count })).sort((a, b) => a.time.localeCompare(b.time)),
     };
   } catch (error) {
     console.error("[Server Action - getAllAnalyticsData] Error fetching comprehensive analytics: ", error);
