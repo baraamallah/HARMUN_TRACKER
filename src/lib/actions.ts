@@ -18,12 +18,13 @@ import {
   writeBatch,
   setDoc,
   addDoc,
+  getCountFromServer,
 } from 'firebase/firestore';
 import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
 const PARTICIPANTS_COLLECTION = 'participants';
-const STAFF_MEMBERS_COLlection = 'staff_members';
+const STAFF_MEMBERS_COLLECTION = 'staff_members';
 const SYSTEM_SCHOOLS_COLLECTION = 'system_schools';
 const SYSTEM_COMMITTEES_COLLECTION = 'system_committees';
 const SYSTEM_STAFF_TEAMS_COLLECTION = 'system_staff_teams';
@@ -156,7 +157,7 @@ export async function getParticipants(filters?: { school?: string; committee?: s
 export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
     let staffData: StaffMember[] = []; // Declare staffData with an initial empty array
     try {
-        const staffColRef = collection(db, STAFF_MEMBERS_COLlection);
+        const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
         const queryConstraints = [];
 
         if (filters?.team && filters.team !== "All Teams") {
@@ -215,6 +216,35 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
     }
 }
 
+export async function getStaffMemberById(id: string): Promise<StaffMember | null> {
+  try {
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, id);
+    const docSnap = await getDoc(staffMemberRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        name: data.name || '',
+        role: data.role || '',
+        department: data.department || '',
+        team: data.team || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        contactInfo: data.contactInfo || '',
+        status: data.status || 'Off Duty',
+        imageUrl: data.imageUrl,
+        notes: data.notes,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+      } as StaffMember;
+    }
+    return null;
+  } catch (error) {
+    console.error(`[Server Action - getStaffMemberById] Error fetching staff member by ID ${id}: `, error);
+    const firebaseError = error as { code?: string; message?: string };
+    throw new Error(`Failed to fetch staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`);
+  }
+}
 
 export async function getParticipantById(id: string): Promise<Participant | null> {
   try {
@@ -395,6 +425,8 @@ export async function quickSetParticipantStatusAction(
     revalidatePath(`/participants/${participantId}`);
     revalidatePath('/');
     revalidatePath('/public');
+    revalidatePath('/superior-admin/analytics');
+
 
     return {
       success: true,
@@ -420,6 +452,49 @@ export async function quickSetParticipantStatusAction(
   }
 }
 
+export async function resetParticipantAttendanceAction(participantId: string): Promise<ActionResult> {
+  if (!participantId) {
+    return { success: false, message: 'Participant ID is required.', errorType: 'missing_id' };
+  }
+
+  try {
+    const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
+    const participantSnap = await getDoc(participantRef);
+
+    if (!participantSnap.exists()) {
+      return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
+    }
+
+    const updates = {
+      status: 'Absent' as AttendanceStatus,
+      attended: false,
+      checkInTime: null,
+      updatedAt: fsServerTimestamp(),
+    };
+
+    await updateDoc(participantRef, updates);
+
+    const updatedSnap = await getDoc(participantRef);
+    const updatedParticipant = { id: updatedSnap.id, ...updatedSnap.data() } as Participant;
+    
+    // Revalidate paths to ensure UI updates
+    revalidatePath(`/checkin`, 'page');
+    revalidatePath(`/participants/${participantId}`);
+    revalidatePath('/');
+    revalidatePath('/public');
+    revalidatePath('/superior-admin/analytics');
+
+    return {
+      success: true,
+      message: `Attendance for ${updatedParticipant.name} has been reset.`,
+      participant: updatedParticipant,
+    };
+  } catch (error: any) {
+    console.error(`[Server Action - resetParticipantAttendanceAction] Error for ID ${participantId}:`, error);
+    return { success: false, message: 'Failed to reset attendance.', errorType: 'generic_error' };
+  }
+}
+
 export async function quickSetStaffStatusAction(
   staffId: string,
   newStatus: StaffAttendanceStatus
@@ -429,7 +504,7 @@ export async function quickSetStaffStatusAction(
   }
 
   try {
-    const staffMemberRef = doc(db, STAFF_MEMBERS_COLlection, staffId);
+    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffId);
     const staffMemberSnap = await getDoc(staffMemberRef);
 
     if (!staffMemberSnap.exists()) {
@@ -466,6 +541,7 @@ export async function quickSetStaffStatusAction(
     revalidatePath(`/staff/${staffId}`);
     revalidatePath('/staff');
     revalidatePath('/superior-admin');
+    revalidatePath('/superior-admin/analytics');
 
 
     return {
@@ -478,10 +554,10 @@ export async function quickSetStaffStatusAction(
     let message = 'An error occurred while updating staff status. Please try again.';
     let errorType = 'generic_error';
     if (error.code === 'permission-denied') {
-      message = `Permission Denied on '${STAFF_MEMBERS_COLlection}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
+      message = `Permission Denied on '${STAFF_MEMBERS_COLLECTION}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
       errorType = 'permission_denied';
     } else if (error.code) {
-      message = `Update failed on '${STAFF_MEMBERS_COLlection}'. Error: ${error.code}. Please check server logs and try again.`;
+      message = `Update failed on '${STAFF_MEMBERS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
       errorType = error.code;
     }
     return {
@@ -532,72 +608,85 @@ export async function validateStaffImportData(
   };
 }
 
-export async function getParticipantCountByCommittee(): Promise<{ committee: string; count: number }[]> {
-  try {
-    const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-    const snapshot = await getDocs(participantsColRef);
-    const committeeCounts: { [key: string]: number } = {};
 
-    snapshot.docs.forEach(doc => {
-      const participant = doc.data() as Participant;
-      if (participant.committee) {
-        committeeCounts[participant.committee] = (committeeCounts[participant.committee] || 0) + 1;
-      }
-    });
-
-    return Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count }));
-  } catch (error) {
-    console.error("[Server Action] Error fetching participant count by committee: ", error);
-    throw new Error("Failed to fetch participant count by committee.");
-  }
+// Analytics Actions
+export interface AnalyticsData {
+  totalParticipants: number;
+  totalStaff: number;
+  totalSchools: number;
+  totalCommittees: number;
+  participantsByCommittee: { committee: string; count: number }[];
+  statusDistribution: { status: string; count: number }[];
+  checkInTrend: { time: string; count: number }[];
 }
 
-export async function getCheckInTrend(): Promise<{ time: string; count: number }[]> {
+async function getCollectionCount(collectionName: string): Promise<number> {
+  const snapshot = await getCountFromServer(collection(db, collectionName));
+  return snapshot.data().count;
+}
+
+export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
-    const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-    const q = query(participantsColRef, where('checkInTime', '!=', null));
-    const snapshot = await getDocs(q);
+    const participantsCollection = collection(db, PARTICIPANTS_COLLECTION);
+    
+    // Perform all data fetching in parallel
+    const [
+      totalParticipants,
+      totalStaff,
+      totalSchools,
+      totalCommittees,
+      participantsSnapshot,
+    ] = await Promise.all([
+      getCollectionCount(PARTICIPANTS_COLLECTION),
+      getCollectionCount(STAFF_MEMBERS_COLLECTION),
+      getCollectionCount(SYSTEM_SCHOOLS_COLLECTION),
+      getCollectionCount(SYSTEM_COMMITTEES_COLLECTION),
+      getDocs(participantsCollection)
+    ]);
+    
+    // Process the snapshot for detailed analytics
+    const committeeCounts: { [key: string]: number } = {};
+    const statusCounts: { [key: string]: number } = {};
     const checkInCounts: { [key: string]: number } = {};
 
-    snapshot.docs.forEach(doc => {
-      const participant = doc.data() as Participant;
-      if (participant.checkInTime) {
-        const checkInDate = participant.checkInTime instanceof Timestamp
-          ? participant.checkInTime.toDate()
-          : new Date(participant.checkInTime as string);
-        const hour = checkInDate.getHours();
-        const timeSlot = `${hour}:00 - ${hour + 1}:00`;
-        checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
+    participantsSnapshot.docs.forEach(doc => {
+      const p = doc.data() as Participant;
+      
+      // Count by committee
+      if (p.committee) {
+        committeeCounts[p.committee] = (committeeCounts[p.committee] || 0) + 1;
+      }
+      
+      // Count by status
+      if (p.status) {
+        statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
+      }
+      
+      // Count check-ins by hour
+      if (p.checkInTime) {
+        const checkInDate = p.checkInTime instanceof Timestamp
+          ? p.checkInTime.toDate()
+          : new Date(p.checkInTime as string);
+        
+        if (!isNaN(checkInDate.getTime())) { // Check if the date is valid
+            const hour = checkInDate.getHours();
+            const timeSlot = `${String(hour).padStart(2, '0')}:00`;
+            checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
+        }
       }
     });
 
-    return Object.entries(checkInCounts).map(([time, count]) => ({ time, count }));
+    return {
+      totalParticipants,
+      totalStaff,
+      totalSchools,
+      totalCommittees,
+      participantsByCommittee: Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count })).sort((a, b) => b.count - a.count),
+      statusDistribution: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
+      checkInTrend: Object.entries(checkInCounts).map(([time, count]) => ({ time, count })).sort((a, b) => a.time.localeCompare(b.time)),
+    };
   } catch (error) {
-    console.error("[Server Action] Error fetching check-in trend: ", error);
-    throw new Error("Failed to fetch check-in trend.");
-  }
-}
-
-export async function getSystemSchoolsForFilter(): Promise<string[]> {
-  try {
-    const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-    const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
-    const schools = schoolsSnapshot.docs.map(doc => doc.data().name as string);
-    return ["All Schools", ...schools];
-  } catch (error) {
-    console.error("[Server Action] Error fetching system schools for filter: ", error);
-    throw new Error("Failed to fetch system schools for filter.");
-  }
-}
-
-export async function getSystemCommitteesForFilter(): Promise<string[]> {
-  try {
-    const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-    const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
-    const committees = committeesSnapshot.docs.map(doc => doc.data().name as string);
-    return ["All Committees", ...committees];
-  } catch (error) {
-    console.error("[Server Action] Error fetching system committees for filter: ", error);
-    throw new Error("Failed to fetch system committees for filter.");
+    console.error("[Server Action - getAllAnalyticsData] Error fetching comprehensive analytics: ", error);
+    throw new Error("Failed to fetch analytics data. Check server logs for details.");
   }
 }
