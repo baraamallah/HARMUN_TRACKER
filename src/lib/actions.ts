@@ -650,7 +650,7 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
     const checkInCounts: { [key: string]: number } = {};
 
     participantsSnapshot.docs.forEach(doc => {
-      const p = doc.data() as Participant;
+      const p = doc.data();
       
       // Count by committee
       if (p.committee) {
@@ -663,7 +663,7 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       }
       
       // Count check-ins by hour
-      if (p.checkInTime) {
+      if (p.checkInTime) { // Check if checkInTime exists
         const checkInDate = p.checkInTime instanceof Timestamp
           ? p.checkInTime.toDate()
           : new Date(p.checkInTime as string);
