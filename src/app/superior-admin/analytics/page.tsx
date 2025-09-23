@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [toast]);
+  }, []);
   
   const attendanceRate = useMemo(() => {
     if (!analyticsData || analyticsData.totalParticipants === 0) return 0;
