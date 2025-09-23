@@ -664,11 +664,14 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       
       // Count check-ins by hour
       if (p.checkInTime) { // Check if checkInTime exists
-        const checkInDate = p.checkInTime instanceof Timestamp
-          ? p.checkInTime.toDate()
-          : new Date(p.checkInTime as string);
+        let checkInDate: Date | null = null;
+        if (p.checkInTime instanceof Timestamp) {
+            checkInDate = p.checkInTime.toDate();
+        } else if (typeof p.checkInTime === 'string') {
+            checkInDate = new Date(p.checkInTime);
+        }
         
-        if (!isNaN(checkInDate.getTime())) { // Check if the date is valid
+        if (checkInDate && !isNaN(checkInDate.getTime())) { // Check if the date is valid
             const hour = checkInDate.getHours();
             const timeSlot = `${String(hour).padStart(2, '0')}:00`;
             checkInCounts[timeSlot] = (checkInCounts[timeSlot] || 0) + 1;
