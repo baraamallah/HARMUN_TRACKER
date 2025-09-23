@@ -627,40 +627,31 @@ async function getCollectionCount(collectionName: string): Promise<number> {
 
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
-    const participantsCollection = collection(db, PARTICIPANTS_COLLECTION);
-    
-    // Perform all data fetching in parallel
-    const [
-      totalParticipants,
-      totalStaff,
-      totalSchools,
-      totalCommittees,
-      participantsSnapshot,
-    ] = await Promise.all([
-      getCollectionCount(PARTICIPANTS_COLLECTION),
-      getCollectionCount(STAFF_MEMBERS_COLLECTION),
-      getCollectionCount(SYSTEM_SCHOOLS_COLLECTION),
-      getCollectionCount(SYSTEM_COMMITTEES_COLLECTION),
-      getDocs(participantsCollection)
-    ]);
-    
-    // Process the snapshot for detailed analytics
+    const participantsSnapshot = await getDocs(collection(db, PARTICIPANTS_COLLECTION));
+    const totalParticipants = participantsSnapshot.size;
+
     const committeeCounts: { [key: string]: number } = {};
     const statusCounts: { [key: string]: number } = {};
     
     participantsSnapshot.docs.forEach(doc => {
       const p = doc.data();
-      
-      // Count by committee
       if (p.committee) {
         committeeCounts[p.committee] = (committeeCounts[p.committee] || 0) + 1;
       }
-      
-      // Count by status
       if (p.status) {
         statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
       }
     });
+
+    const [
+      totalStaff,
+      totalSchools,
+      totalCommittees,
+    ] = await Promise.all([
+      getCollectionCount(STAFF_MEMBERS_COLLECTION),
+      getCollectionCount(SYSTEM_SCHOOLS_COLLECTION),
+      getCollectionCount(SYSTEM_COMMITTEES_COLLECTION),
+    ]);
 
     return {
       totalParticipants,
