@@ -8,15 +8,12 @@ import {
   Home,
   Eye,
   LogOut,
-  UserCog, 
-  SettingsIcon, 
   ShieldCheck, 
   LogIn,
   Users2, 
   QrCode, 
   Clipboard,
   BarChart,
-  // ScanLine // Removed ScanLine icon
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -66,7 +63,6 @@ const baseNavItems: NavItem[] = [
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
-  // { href: '/scan', icon: ScanLine, label: 'Scan QR', tooltip: 'Scan Participant/Staff QR Code' }, // Removed Scan QR link
 ];
 
 const adminAndOwnerNavItems: NavItem[] = [

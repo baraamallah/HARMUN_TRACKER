@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, UserCircleIcon as UserIcon, RefreshCw, ListRestart, Edit3, UserSearch, Briefcase, Plane, Coffee, UserX, UserCheck } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, RefreshCw, ListRestart, Edit3, UserSearch, Plane, Coffee, UserX, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,14 +23,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge'; 
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-// Removed: import { quickSetStaffStatusAction } from '@/lib/actions';
-import type { StaffMember, StaffAttendanceStatus, ActionResultStaff } from '@/types';
+import { quickSetStaffStatusAction, getStaffMemberById } from '@/lib/actions';
+import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { cn } from '@/lib/utils';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore'; // Added FieldValue
 import { format, parseISO, isValid } from 'date-fns';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
 
@@ -48,11 +45,11 @@ function StaffCheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const [isPending, startTransition] = React.useTransition();
   
   const [effectiveStaffId, setEffectiveStaffId] = React.useState<string | null>(null);
   const [staffMember, setStaffMember] = React.useState<StaffMember | null>(null);
   const [isLoading, setIsLoading] = React.useState(true); 
-  const [actionInProgress, setActionInProgress] = React.useState<StaffAttendanceStatus | 'initial_load' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
 
   const [manualIdInput, setManualIdInput] = React.useState('');
@@ -66,33 +63,14 @@ function StaffCheckinPageContent() {
   const fetchStaffMemberData = React.useCallback(async (id: string) => {
     if (!id) {
       setIsLoading(false);
-      setActionInProgress(null);
       setStaffMember(null);
       return;
     }
     setIsLoading(true);
-    setActionInProgress('initial_load');
     setPageError(null);
     try {
-      const staffMemberRef = doc(db, 'staff_members', id);
-      const docSnap = await getDoc(staffMemberRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const fetchedStaffMember = {
-            id: docSnap.id,
-            name: data.name || '',
-            role: data.role || '',
-            department: data.department,
-            team: data.team,
-            email: data.email,
-            phone: data.phone,
-            contactInfo: data.contactInfo,
-            status: data.status || 'Off Duty',
-            imageUrl: data.imageUrl,
-            notes: data.notes,
-            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as StaffMember;
+      const fetchedStaffMember = await getStaffMemberById(id);
+      if (fetchedStaffMember) {
         setStaffMember(fetchedStaffMember);
       } else {
         setPageError(`Staff member with ID "${id}" not found.`);
@@ -105,7 +83,6 @@ function StaffCheckinPageContent() {
       toast({ title: "Error Loading Data", description: "Could not retrieve staff member details.", variant: "destructive" });
     } finally {
       setIsLoading(false);
-      setActionInProgress(null);
       setIsManualLookupLoading(false);
     }
   }, [toast]);
@@ -115,85 +92,33 @@ function StaffCheckinPageContent() {
       fetchStaffMemberData(effectiveStaffId);
     } else {
         setIsLoading(false);
-        setActionInProgress(null);
         setStaffMember(null);
     }
   }, [effectiveStaffId, fetchStaffMemberData]);
 
   const handleStatusUpdate = async (newStatus: StaffAttendanceStatus) => {
-    if (!staffMember) return { success: false, message: 'Staff member data not loaded.', errorType: 'internal_error' };
-    setActionInProgress(newStatus);
+    if (!staffMember) return;
     setPageError(null);
-    let result: ActionResultStaff;
 
-    try {
-      const staffMemberRef = doc(db, 'staff_members', staffMember.id);
-      const updates: { status: StaffAttendanceStatus; updatedAt: FieldValue } = {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      };
-      
-      await updateDoc(staffMemberRef, updates);
-
-      const updatedSnap = await getDoc(staffMemberRef);
-      if (updatedSnap.exists()) {
-        const data = updatedSnap.data();
-        const updatedStaffMemberData: StaffMember = {
-            id: updatedSnap.id,
-            name: data.name || '',
-            role: data.role || '',
-            department: data.department,
-            team: data.team,
-            email: data.email,
-            phone: data.phone,
-            contactInfo: data.contactInfo,
-            status: data.status || 'Off Duty',
-            imageUrl: data.imageUrl,
-            notes: data.notes,
-            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        };
-        setStaffMember(updatedStaffMemberData);
-        result = {
-          success: true,
-          message: `Status for ${updatedStaffMemberData.name} updated to ${newStatus}.`,
-          staffMember: updatedStaffMemberData,
-        };
+    startTransition(async () => {
+      const result = await quickSetStaffStatusAction(staffMember.id, newStatus);
+      if (result.success && result.staffMember) {
+        setStaffMember(result.staffMember);
         toast({
           title: 'Status Updated Successfully',
           description: result.message,
           className: 'bg-green-100 dark:bg-green-900 border-green-500'
         });
       } else {
-        throw new Error("Failed to re-fetch staff member after update.");
+        setPageError(result.message);
+        toast({
+          title: 'Update Failed',
+          description: result.message,
+          variant: 'destructive',
+        });
+        if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId); // Refresh data on error
       }
-    } catch (error: any) {
-      console.error(`[Client-Side Error] Updating staff member ${staffMember.id} to ${newStatus}:`, error);
-      let message = 'An error occurred while updating staff status. Please try again.';
-      let errorType = 'generic_error';
-      if (error.code === 'permission-denied') {
-        message = `PERMISSION_DENIED: Could not update staff status. Ensure you are logged in and have permission.`;
-        errorType = 'permission_denied';
-      } else if (error.code) {
-        message = `Update failed. Error: ${error.code}.`;
-        errorType = error.code;
-      }
-      result = {
-        success: false,
-        message: message,
-        errorType: errorType,
-      };
-      setPageError(result.message);
-      toast({
-        title: 'Update Failed',
-        description: result.message,
-        variant: 'destructive',
-      });
-      if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId);
-    } finally {
-      setActionInProgress(null);
-    }
-    return result;
+    });
   };
 
   const handleManualLookup = () => {
@@ -220,7 +145,7 @@ function StaffCheckinPageContent() {
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
             <p className="text-xl text-muted-foreground">Loading Staff Data...</p>
-            {effectiveStaffId && actionInProgress === 'initial_load' && <p className="text-sm text-muted-foreground">ID: {effectiveStaffId}</p>}
+            {effectiveStaffId && <p className="text-sm text-muted-foreground">ID: {effectiveStaffId}</p>}
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8">
              <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
@@ -287,7 +212,7 @@ function StaffCheckinPageContent() {
             {effectiveStaffId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveStaffId}</p>}
             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
             <div className="flex flex-col gap-2 w-full mt-4">
-              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading || !!actionInProgress && actionInProgress !== 'initial_load'}>
+              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading || isPending}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveStaffId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/staff-checkin')}>
@@ -303,25 +228,6 @@ function StaffCheckinPageContent() {
     );
   }
 
-  if (!staffMember && effectiveStaffId) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-        <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
-          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
-            <AlertTriangle className="h-16 w-16 text-yellow-500" />
-            <p className="text-xl text-muted-foreground">Staff data unavailable for ID: {effectiveStaffId}.</p>
-            <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
-            <Button variant="outline" onClick={() => router.push('/staff-checkin')} className="mt-4"> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
-          </CardContent>
-           <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
-            <Button asChild className="w-full" variant="outline"><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-  
   if (!staffMember) {
     if (!effectiveStaffId) { 
          router.replace('/staff-checkin'); 
@@ -372,28 +278,28 @@ function StaffCheckinPageContent() {
             )}
             <Button
                 onClick={() => handleStatusUpdate('On Duty')}
-                disabled={!!actionInProgress || staffMember.status === 'On Duty'}
+                disabled={isPending || staffMember.status === 'On Duty'}
                 className="w-full bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'On Duty' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <UserCheck className="mr-2 h-5 w-5" />}
+                {isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <UserCheck className="mr-2 h-5 w-5" />}
                 Set to On Duty
             </Button>
             <Button
                 onClick={() => handleStatusUpdate('Off Duty')}
-                disabled={!!actionInProgress || staffMember.status === 'Off Duty'}
+                disabled={isPending || staffMember.status === 'Off Duty'}
                 variant="outline" 
                 className="w-full text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'Off Duty' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <UserX className="mr-2 h-5 w-5" />}
+                {isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <UserX className="mr-2 h-5 w-5" />}
                 Set to Off Duty
             </Button>
 
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="secondary" className="w-full text-md py-5" size="lg" disabled={!!actionInProgress}>
-                        {actionInProgress && actionInProgress !== 'initial_load' && !['On Duty', 'Off Duty'].includes(actionInProgress as string)
+                    <Button variant="secondary" className="w-full text-md py-5" size="lg" disabled={isPending}>
+                        {isPending
                           ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
                           : <ListRestart className="mr-2 h-5 w-5" />}
                         Other Statuses...
@@ -406,7 +312,7 @@ function StaffCheckinPageContent() {
                         <DropdownMenuItem
                             key={opt.status}
                             onClick={() => handleStatusUpdate(opt.status)}
-                            disabled={!!actionInProgress || staffMember.status === opt.status}
+                            disabled={isPending || staffMember.status === opt.status}
                             className={cn("text-md py-3", staffMember.status === opt.status && "bg-accent text-accent-foreground focus:bg-accent focus:text-accent-foreground")}
                         >
                             <opt.icon className="mr-3 h-5 w-5" />
@@ -417,7 +323,7 @@ function StaffCheckinPageContent() {
             </DropdownMenu>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
-            <Button onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
+            <Button onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={isPending}>
                 <RefreshCw className="mr-2 h-4 w-4"/> Refresh Staff Data
             </Button>
              <Button variant="secondary" onClick={() => router.push('/staff-checkin')} className="w-full">

@@ -36,10 +36,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
-import type { Participant, AttendanceStatus, ActionResult } from '@/types';
+import type { Participant, AttendanceStatus } from '@/types';
 import { cn } from '@/lib/utils';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
+import { getParticipantById, quickSetParticipantStatusAction, resetParticipantAttendanceAction } from '@/lib/actions';
 import { format, parseISO, isValid } from 'date-fns';
 
 const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
@@ -59,11 +58,11 @@ function CheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const [isPending, startTransition] = React.useTransition();
 
   const [effectiveParticipantId, setEffectiveParticipantId] = React.useState<string | null>(null);
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [actionInProgress, setActionInProgress] = React.useState<AttendanceStatus | 'initial_load' | 'reset' | null>(null);
   const [pageError, setPageError] = React.useState<string | null>(null);
   const [isResetConfirmationOpen, setIsResetConfirmationOpen] = React.useState(false);
 
@@ -79,30 +78,14 @@ function CheckinPageContent() {
   const fetchParticipantData = React.useCallback(async (id: string) => {
     if (!id) {
       setIsLoading(false);
-      setActionInProgress(null);
       setParticipant(null);
       return;
     }
     setIsLoading(true); 
-    setActionInProgress('initial_load');
     setPageError(null);
     try {
-      const participantRef = doc(db, 'participants', id);
-      const docSnap = await getDoc(participantRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const fetchedParticipant = {
-            id: docSnap.id,
-            name: data.name || '',
-            school: data.school || '',
-            committee: data.committee || '',
-            status: data.status || 'Absent',
-            imageUrl: data.imageUrl,
-            attended: data.attended || false,
-            checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : (data.checkInTime || null),
-            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as Participant;
+      const fetchedParticipant = await getParticipantById(id);
+      if (fetchedParticipant) {
         setParticipant(fetchedParticipant);
       } else {
         setPageError(`Participant with ID "${id}" not found.`);
@@ -115,7 +98,6 @@ function CheckinPageContent() {
       toast({ title: "Error Loading Data", description: "Could not retrieve participant details.", variant: "destructive" });
     } finally {
       setIsLoading(false);
-      setActionInProgress(null);
       setIsManualLookupLoading(false);
     }
   }, [toast]);
@@ -125,142 +107,56 @@ function CheckinPageContent() {
       fetchParticipantData(effectiveParticipantId);
     } else {
       setIsLoading(false);
-      setActionInProgress(null);
       setParticipant(null);
     }
   }, [effectiveParticipantId, fetchParticipantData]);
 
 
   const handleStatusUpdate = async (newStatus: AttendanceStatus, isCheckInIntent?: boolean) => {
-    if (!participant) return { success: false, message: 'Participant data not loaded.', errorType: 'internal_error' };
-    setActionInProgress(newStatus);
+    if (!participant) return;
     setPageError(null);
 
-    let result: ActionResult;
-
-    try {
-      const participantRef = doc(db, 'participants', participant.id);
-      const updates: { status: AttendanceStatus; updatedAt: FieldValue; attended?: boolean; checkInTime?: FieldValue | null } = {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      };
-
-      if (isCheckInIntent && newStatus === 'Present') {
-        updates.attended = true;
-        if (!participant.attended || !participant.checkInTime) {
-          updates.checkInTime = serverTimestamp();
-        }
-      }
-      
-      await updateDoc(participantRef, updates);
-
-      const updatedSnap = await getDoc(participantRef);
-      if (updatedSnap.exists()) {
-        const data = updatedSnap.data();
-        const updatedParticipant: Participant = {
-          id: updatedSnap.id,
-          name: data.name || '',
-          school: data.school || '',
-          committee: data.committee || '',
-          country: data.country || '',
-          status: data.status || 'Absent',
-          imageUrl: data.imageUrl,
-          attended: data.attended || false,
-          checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : data.checkInTime,
-          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        };
-        setParticipant(updatedParticipant);
-        result = {
-          success: true,
-          message: `Status for ${updatedParticipant.name} updated to ${newStatus}.`,
-          participant: updatedParticipant,
-        };
+    startTransition(async () => {
+      const result = await quickSetParticipantStatusAction(participant.id, newStatus, { isCheckIn: isCheckInIntent });
+      if (result.success && result.participant) {
+        setParticipant(result.participant);
         toast({
           title: 'Status Updated Successfully',
           description: result.message,
           className: 'bg-green-100 dark:bg-green-900 border-green-500'
         });
       } else {
-        throw new Error("Failed to re-fetch participant after update.");
+        setPageError(result.message);
+        toast({
+          title: 'Update Failed',
+          description: result.message,
+          variant: 'destructive',
+        });
+        if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId); // Refresh data on error
       }
-    } catch (error: any) {
-      console.error(`[Client-Side Error] Updating participant ${participant.id} to ${newStatus}:`, error);
-      let message = 'An error occurred while updating participant status. Please try again.';
-      let errorType = 'generic_error';
-      if (error.code === 'permission-denied') {
-        message = `PERMISSION_DENIED: Could not update participant status. Ensure you are logged in and have permission.`;
-        errorType = 'permission_denied';
-      } else if (error.code) {
-        message = `Update failed. Error: ${error.code}.`;
-        errorType = error.code;
-      }
-      result = {
-        success: false,
-        message: message,
-        errorType: errorType,
-      };
-      setPageError(result.message);
-      toast({
-        title: 'Update Failed',
-        description: result.message,
-        variant: 'destructive',
-      });
-      if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId);
-    } finally {
-      setActionInProgress(null);
-    }
-    return result;
+    });
   };
 
   const handleResetAttendance = async () => {
     if (!participant) return;
-    setActionInProgress('reset');
     setPageError(null);
     setIsResetConfirmationOpen(false);
 
-    try {
-      const participantRef = doc(db, 'participants', participant.id);
-      const updates = {
-        status: 'Absent' as AttendanceStatus,
-        attended: false,
-        checkInTime: null,
-        updatedAt: serverTimestamp(),
-      };
-      await updateDoc(participantRef, updates);
-
-      const updatedSnap = await getDoc(participantRef);
-      if (updatedSnap.exists()) {
-        const data = updatedSnap.data();
-        const updatedParticipant: Participant = {
-          id: updatedSnap.id,
-          name: data.name || '',
-          school: data.school || '',
-          committee: data.committee || '',
-          status: data.status || 'Absent',
-          imageUrl: data.imageUrl,
-          attended: data.attended || false,
-          checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : data.checkInTime,
-          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        };
-        setParticipant(updatedParticipant);
-        toast({
-          title: 'Attendance Reset',
-          description: `Attendance for ${updatedParticipant.name} has been reset.`,
-          className: 'bg-blue-100 dark:bg-blue-900 border-blue-500',
-        });
-      } else {
-        throw new Error("Failed to re-fetch participant after reset.");
-      }
-    } catch (error: any) {
-      console.error(`[Client-Side Error] Resetting attendance for ${participant.id}:`, error);
-      setPageError(error.message || "An error occurred during reset.");
-      toast({ title: "Reset Failed", description: error.message, variant: "destructive" });
-      if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId); // Refresh data on error
-    } finally {
-      setActionInProgress(null);
-    }
+    startTransition(async () => {
+        const result = await resetParticipantAttendanceAction(participant.id);
+        if (result.success && result.participant) {
+            setParticipant(result.participant);
+            toast({
+                title: 'Attendance Reset',
+                description: `Attendance for ${result.participant.name} has been reset.`,
+                className: 'bg-blue-100 dark:bg-blue-900 border-blue-500',
+            });
+        } else {
+            setPageError(result.message);
+            toast({ title: "Reset Failed", description: result.message, variant: "destructive" });
+            if (effectiveParticipantId) fetchParticipantData(effectiveParticipantId); // Refresh data on error
+        }
+    });
   };
 
   const handleManualLookup = () => {
@@ -293,7 +189,7 @@ function CheckinPageContent() {
           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
             <p className="text-xl text-muted-foreground">Loading Participant Data...</p>
-            {effectiveParticipantId && actionInProgress === 'initial_load' && <p className="text-sm text-muted-foreground">ID: {effectiveParticipantId}</p>}
+            {effectiveParticipantId && <p className="text-sm text-muted-foreground">ID: {effectiveParticipantId}</p>}
           </CardContent>
           <CardFooter className="flex-col gap-3 pb-8">
              <Button asChild className="w-full" variant="outline" disabled><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
@@ -335,7 +231,7 @@ function CheckinPageContent() {
           </CardContent>
           <CardFooter className="flex-col items-center gap-3 pb-8 text-sm">
             <p className="text-muted-foreground">
-              Alternatively, scan a participant's QR code or <Link href="/scan" className="font-medium text-primary hover:underline">use the scanner page</Link>.
+              Alternatively, scan a participant's QR code.
             </p>
             <Button asChild className="w-full mt-2" variant="outline">
               <Link href="/">
@@ -361,7 +257,7 @@ function CheckinPageContent() {
             {effectiveParticipantId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveParticipantId}</p>}
             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
             <div className="flex flex-col gap-2 w-full mt-4">
-              <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading || !!actionInProgress && actionInProgress !== 'initial_load'}>
+              <Button variant="outline" onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} disabled={isLoading || isPending}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveParticipantId}
               </Button>
               <Button variant="secondary" onClick={() => router.push('/checkin')}>
@@ -370,25 +266,6 @@ function CheckinPageContent() {
             </div>
           </CardContent>
           <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
-            <Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!participant && effectiveParticipantId) { 
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-        <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
-          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
-            <AlertTriangle className="h-16 w-16 text-yellow-500" />
-            <p className="text-xl text-muted-foreground">Participant data unavailable for ID: {effectiveParticipantId}.</p>
-             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
-            <Button variant="outline" onClick={() => router.push('/checkin')} className="mt-4"> <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup </Button>
-          </CardContent>
-           <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
             <Button asChild className="w-full" variant="outline"><Link href="/"><Home className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
           </CardFooter>
         </Card>
@@ -454,28 +331,28 @@ function CheckinPageContent() {
             )}
             <Button
                 onClick={() => handleStatusUpdate('Present', true)}
-                disabled={!!actionInProgress || participant.status === 'Present'}
+                disabled={isPending || participant.status === 'Present'}
                 className="w-full bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'Present' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <CheckCircle className="mr-2 h-5 w-5" />}
+                {isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <CheckCircle className="mr-2 h-5 w-5" />}
                 Check In (Mark Present)
             </Button>
             <Button
                 onClick={() => handleStatusUpdate('Absent')}
-                disabled={!!actionInProgress || participant.status === 'Absent'}
+                disabled={isPending || participant.status === 'Absent'}
                 variant="destructive"
                 className="w-full text-md py-5"
                 size="lg"
             >
-                {actionInProgress === 'Absent' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <LogOutIcon className="mr-2 h-5 w-5" />}
+                {isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <LogOutIcon className="mr-2 h-5 w-5" />}
                 Check Out (Mark as Absent)
             </Button>
 
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full text-md py-5" size="lg" disabled={!!actionInProgress}>
-                        {actionInProgress && actionInProgress !== 'initial_load' && actionInProgress !== 'Present' && actionInProgress !== 'Absent' && actionInProgress !== 'reset'
+                    <Button variant="outline" className="w-full text-md py-5" size="lg" disabled={isPending}>
+                        {isPending
                           ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
                           : <ListRestart className="mr-2 h-5 w-5" />}
                         Update Other Status...
@@ -486,7 +363,7 @@ function CheckinPageContent() {
                         <DropdownMenuItem
                             key={opt.status}
                             onClick={() => handleStatusUpdate(opt.status, opt.status === 'Present')}
-                            disabled={!!actionInProgress || participant.status === opt.status}
+                            disabled={isPending || participant.status === opt.status}
                             className={cn("text-md py-3", participant.status === opt.status && "bg-accent text-accent-foreground focus:bg-accent focus:text-accent-foreground")}
                         >
                             <opt.icon className="mr-3 h-5 w-5" />
@@ -497,17 +374,17 @@ function CheckinPageContent() {
             </DropdownMenu>
             <Button
                 onClick={() => setIsResetConfirmationOpen(true)}
-                disabled={!!actionInProgress}
+                disabled={isPending}
                 variant="ghost"
                 className="w-full text-md py-5 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 size="lg"
             >
-                {actionInProgress === 'reset' ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <ListRestart className="mr-2 h-5 w-5" />}
+                {isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <ListRestart className="mr-2 h-5 w-5" />}
                 Reset Full Attendance
             </Button>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6 px-6 border-t pt-6 mt-2">
-            <Button onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={!!actionInProgress}>
+            <Button onClick={() => effectiveParticipantId && fetchParticipantData(effectiveParticipantId)} variant="ghost" className="w-full text-muted-foreground hover:text-primary" disabled={isPending}>
                 <RefreshCw className="mr-2 h-4 w-4"/> Refresh Participant Data
             </Button>
              <Button variant="secondary" onClick={() => router.push('/checkin')} className="w-full">
@@ -536,13 +413,13 @@ function CheckinPageContent() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionInProgress === 'reset'}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleResetAttendance}
-              disabled={actionInProgress === 'reset'}
+              disabled={isPending}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {actionInProgress === 'reset' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Yes, Reset Attendance
             </AlertDialogAction>
           </AlertDialogFooter>
