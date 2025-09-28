@@ -68,19 +68,19 @@ export default function QrManagementPage() {
 
   const participantSchools = [
     'All Schools',
-    ...new Set(participants.map(p => p.school).filter(Boolean).sort()),
+    ...new Set(participants.map(p => p.school).filter((s): s is string => !!s).sort()),
   ];
   const participantCommittees = [
     'All Committees',
-    ...new Set(participants.map(p => p.committee).filter(Boolean).sort()),
+    ...new Set(participants.map(p => p.committee).filter((c): c is string => !!c).sort()),
   ];
   const staffRoles = [
     'All Roles',
-    ...new Set(staffForQr.map(s => s.role).filter(Boolean).sort()),
+    ...new Set(staffForQr.map(s => s.role).filter((r): r is string => !!r).sort()),
   ];
   const staffTeams = [
     'All Teams',
-    ...new Set(staffForQr.map(s => s.team).filter(Boolean).sort()),
+    ...new Set(staffForQr.map(s => s.team).filter((t): t is string => !!t).sort()),
   ];
 
   useEffect(() => {
@@ -162,7 +162,7 @@ export default function QrManagementPage() {
           id: docSnap.id,
           name: data.name || '',
           role: data.role || '',
-          team: data.team,
+          team: data.team || '',
           imageUrl: data.imageUrl,
           status: data.status || 'Off Duty',
         } as StaffMember;
@@ -511,7 +511,6 @@ export default function QrManagementPage() {
                       <DropdownMenuLabel>Filter by Team</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {staffTeams
-                        .filter(team => team !== undefined) // Filter out undefined values
                         .map(team => (
                         <DropdownMenuItem key={team} onClick={() => setSelectedStaffTeam(team)}>
                           {team}

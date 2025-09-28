@@ -28,8 +28,8 @@ export interface Participant {
   phone?: string;
   attended?: boolean;
   checkInTime?: string | FieldValueType | null | undefined;
-  createdAt?: string | FieldValueType | undefined;
-  updatedAt?: string | FieldValueType | undefined;
+  createdAt?: string | FieldValueType | null | undefined;
+  updatedAt?: string | FieldValueType | null | undefined;
 }
 
 export type StaffAttendanceStatus =
@@ -50,8 +50,8 @@ export interface StaffMember {
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
-  createdAt?: string | FieldValueType | undefined;
-  updatedAt?: string | FieldValueType | undefined;
+  createdAt?: string | FieldValueType | null | undefined;
+  updatedAt?: string | FieldValueType | null | undefined;
 }
 
 export interface School {
@@ -118,4 +118,15 @@ export interface ActionResultStaff {
   message: string;
   staffMember?: StaffMember;
   errorType?: string;
+}
+
+export interface AnalyticsData {
+  totalParticipants: number;
+  totalStaff: number;
+  totalSchools: number;
+  totalCommittees: number;
+  participantsByCommittee: { committee: string; count: number }[];
+  statusDistribution: { status: string; count: number }[];
+  staffStatusDistribution: { status: string; count: number }[];
+  staffByTeam: { team: string; count: number }[];
 }

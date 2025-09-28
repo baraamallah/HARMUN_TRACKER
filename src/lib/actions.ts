@@ -20,7 +20,7 @@ import {
   addDoc,
   getCountFromServer,
 } from 'firebase/firestore';
-import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff } from '@/types';
+import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff, AnalyticsData } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
 const PARTICIPANTS_COLLECTION = 'participants';
@@ -301,6 +301,60 @@ export async function getSystemStaffTeams(): Promise<string[]> {
   }
 }
 
+export async function addSystemItems(items: { newSchools: string[], newCommittees: string[], newTeams: string[] }): Promise<{ success: boolean; message?: string }> {
+  console.log("[Server Action: addSystemItems] Attempting to add new system items.", items);
+  const batch = writeBatch(db);
+  const { newSchools, newCommittees, newTeams } = items;
+
+  try {
+    // Handle new schools
+    if (newSchools.length > 0) {
+      const schoolsRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
+      const existingSchools = (await getDocs(schoolsRef)).docs.map(d => d.data().name);
+      newSchools.forEach(schoolName => {
+        if (!existingSchools.includes(schoolName)) {
+          const docRef = doc(schoolsRef);
+          batch.set(docRef, { name: schoolName, createdAt: fsServerTimestamp() });
+        }
+      });
+    }
+
+    // Handle new committees
+    if (newCommittees.length > 0) {
+      const committeesRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
+      const existingCommittees = (await getDocs(committeesRef)).docs.map(d => d.data().name);
+      newCommittees.forEach(committeeName => {
+        if (!existingCommittees.includes(committeeName)) {
+          const docRef = doc(committeesRef);
+          batch.set(docRef, { name: committeeName, createdAt: fsServerTimestamp() });
+        }
+      });
+    }
+
+    // Handle new staff teams
+    if (newTeams.length > 0) {
+      const teamsRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
+      const existingTeams = (await getDocs(teamsRef)).docs.map(d => d.data().name);
+      newTeams.forEach(teamName => {
+        if (!existingTeams.includes(teamName)) {
+          const docRef = doc(teamsRef);
+          batch.set(docRef, { name: teamName, createdAt: fsServerTimestamp() });
+        }
+      });
+    }
+
+    await batch.commit();
+    console.log("[Server Action: addSystemItems] Successfully added new system items.");
+    revalidatePath('/'); // Revalidate relevant paths
+    revalidatePath('/staff');
+    return { success: true };
+
+  } catch (error: any) {
+    console.error("[Server Action: addSystemItems] Error adding new system items: ", error);
+    return { success: false, message: `Failed to add new system items. Server error: ${error.message}` };
+  }
+}
+
 
 // --- Import Validation Actions ---
 
@@ -540,16 +594,9 @@ export async function quickSetStaffStatusAction(
   }
 }
 
-// --- Analytics Actions ---
-export interface AnalyticsData {
-  totalParticipants: number;
-  totalStaff: number;
-  totalSchools: number;
-  totalCommittees: number;
-  participantsByCommittee: { committee: string; count: number }[];
-  statusDistribution: { status: string; count: number }[];
-}
 
+
+// --- Analytics Actions ---
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
     const participantsSnapshot = await getDocs(collection(db, PARTICIPANTS_COLLECTION));
@@ -568,12 +615,26 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       }
     });
 
+    const staffSnapshot = await getDocs(collection(db, STAFF_MEMBERS_COLLECTION));
+    const totalStaff = staffSnapshot.size;
+
+    const staffStatusCounts: { [key: string]: number } = {};
+    const staffTeamCounts: { [key: string]: number } = {};
+
+    staffSnapshot.docs.forEach(doc => {
+      const s = doc.data();
+      if (s.status) {
+        staffStatusCounts[s.status] = (staffStatusCounts[s.status] || 0) + 1;
+      }
+      if (s.team) {
+        staffTeamCounts[s.team] = (staffTeamCounts[s.team] || 0) + 1;
+      }
+    });
+
     const [
-      totalStaff,
       totalSchools,
       totalCommittees,
     ] = await Promise.all([
-      getCountFromServer(collection(db, STAFF_MEMBERS_COLLECTION)).then(snap => snap.data().count),
       getCountFromServer(collection(db, SYSTEM_SCHOOLS_COLLECTION)).then(snap => snap.data().count),
       getCountFromServer(collection(db, SYSTEM_COMMITTEES_COLLECTION)).then(snap => snap.data().count),
     ]);
@@ -585,6 +646,8 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       totalCommittees,
       participantsByCommittee: Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count })).sort((a, b) => b.count - a.count),
       statusDistribution: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
+      staffStatusDistribution: Object.entries(staffStatusCounts).map(([status, count]) => ({ status, count })),
+      staffByTeam: Object.entries(staffTeamCounts).map(([team, count]) => ({ team, count })).sort((a, b) => b.count - a.count),
     };
   } catch (error) {
     console.error("[Server Action - getAllAnalyticsData] Error fetching comprehensive analytics: ", error);

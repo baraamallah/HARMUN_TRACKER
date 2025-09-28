@@ -20,51 +20,57 @@ export function ExportStaffCsvButton({ staffMembers, fileName = 'staff_export.cs
       return;
     }
 
-    const headers = [
-      'ID', 
-      'Name', 
-      'Role', 
-      'Department', 
-      'Team', 
-      'Email',
-      'Phone',
-      'ContactInfo', // Consistent with import field 'contactinfo'
-      'Status',
-      'Notes'
-    ];
-    
-    const csvRows = staffMembers.map(s => [
-      s.id || '', // Ensure ID is exported
-      `"${(s.name || '').replace(/"/g, '""')}"`,
-      `"${(s.role || '').replace(/"/g, '""')}"`,
-      `"${(s.department || '').replace(/"/g, '""')}"`,
-      `"${(s.team || '').replace(/"/g, '""')}"`,
-      `"${(s.email || '').replace(/"/g, '""')}"`,
-      `"${(s.phone || '').replace(/"/g, '""')}"`,
-      `"${(s.contactInfo || '').replace(/"/g, '""')}"`,
-      s.status || 'Off Duty',
-      `"${(s.notes || '').replace(/"/g, '""')}"`
-    ].join(','));
+    const loadingToast = toast({
+      title: 'Exporting Staff CSV',
+      description: 'Generating CSV file... Please wait.',
+      variant: 'default',
+    });
 
-    const csvContent = [
-      headers.join(','),
-      ...csvRows,
-    ].join('\n');
+    try {
+      const headers = [
+        'name', 
+        'role', 
+        'department', 
+        'team', 
+        'email',
+        'phone',
+        'contactinfo',
+        'notes'
+      ];
+      
+      const csvRows = staffMembers.map(s => [
+        `"${(s.name || '').replace(/"/g, '""')}"`,
+        `"${(s.role || '').replace(/"/g, '""')}"`,
+        `"${(s.department || '').replace(/"/g, '""')}"`,
+        `"${(s.team || '').replace(/"/g, '""')}"`,
+        `"${(s.email || '').replace(/"/g, '""')}"`,
+        `"${(s.phone || '').replace(/"/g, '""')}"`,
+        `"${(s.contactInfo || '').replace(/"/g, '""')}"`,
+        `"${(s.notes || '').replace(/"/g, '""')}"`
+      ].join(','));
 
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast({ title: 'Export Successful', description: `Data exported to ${fileName}` });
-    } else {
-      toast({ title: 'Export Failed', description: 'Your browser does not support direct CSV download.', variant: 'destructive' });
+      const csvContent = [
+        headers.join(','),
+        ...csvRows,
+      ].join('\n');
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        loadingToast.update({ id: loadingToast.id, title: 'Export Successful', description: `Data exported to ${fileName}` });
+      } else {
+        throw new Error('Your browser does not support direct CSV download.');
+      }
+    } catch (error: any) {
+      loadingToast.update({ id: loadingToast.id, title: 'Export Failed', description: error.message, variant: 'destructive' });
     }
   };
 
