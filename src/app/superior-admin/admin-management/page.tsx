@@ -1,8 +1,8 @@
-
 'use client';
 
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -25,11 +25,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore'; // Ensured getDoc is here
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { AddAdminDialog } from '@/components/superior-admin/AddAdminDialog';
 import type { AdminManagedUser } from '@/types';
 import {
@@ -47,8 +48,8 @@ import { format, parseISO } from 'date-fns';
 const USERS_COLLECTION = 'users';
 
 export default function AdminManagementPage() {
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const pathname = usePathname();
+  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth } = useAuth();
   const { toast } = useToast();
   
   const [adminUsers, setAdminUsers] = useState<AdminManagedUser[]>([]);
@@ -93,15 +94,10 @@ export default function AdminManagementPage() {
   }, [toast, currentUser]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsLoadingAuth(false);
-      if (user && user.uid === OWNER_UID) {
-        fetchAdmins();
-      }
-    });
-    return () => unsubscribe();
-  }, [fetchAdmins]);
+    if (currentUser && currentUser.uid === OWNER_UID) {
+      fetchAdmins();
+    }
+  }, [currentUser, fetchAdmins]);
 
   const handleLogout = async () => {
     try {
@@ -202,7 +198,7 @@ export default function AdminManagementPage() {
             )}
             {!currentUser && (
               <p className="text-sm text-muted-foreground mt-4">
-                Please <Link href="/auth/login" className="text-primary hover:underline">log in</Link> with the superior admin account.
+                Please <Link href={`/auth/login?redirect=${pathname}`} className="text-primary hover:underline">log in</Link> with the superior admin account.
               </p>
             )}
           </CardContent>
@@ -362,5 +358,3 @@ export default function AdminManagementPage() {
     </div>
   );
 }
-
-    

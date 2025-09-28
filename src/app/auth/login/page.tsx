@@ -1,8 +1,8 @@
-
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth'; // User type not directly needed here
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -22,9 +22,10 @@ import { AlertCircle, LogIn } from 'lucide-react';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-
-export default function LoginPage() {
+function LoginPageInternal() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get('redirect');
   const { toast } = useToast();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -48,7 +49,7 @@ export default function LoginPage() {
         title: 'Login Successful',
         description: 'Welcome back! Redirecting to dashboard...',
       });
-      router.push('/'); 
+      router.push(redirect || '/');
     } catch (e: any) {
       let errorMessage = 'An unexpected error occurred during login. Please try again.';
 
@@ -174,5 +175,13 @@ export default function LoginPage() {
         </p>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginPageInternal />
+    </Suspense>
   );
 }

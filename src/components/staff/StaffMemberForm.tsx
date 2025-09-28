@@ -38,6 +38,8 @@ import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getDefaultStaffStatusSetting } from '@/lib/actions';
+import { getGoogleDriveImageSrc } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
 
 const staffMemberFormSchema = z.object({
@@ -50,6 +52,12 @@ const staffMemberFormSchema = z.object({
   contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''),
   imageUrl: z.string().url({ message: "Please enter a valid URL or upload an image." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
+  permissions: z.object({
+    canEditParticipants: z.boolean().default(false),
+    canEditParticipantStatus: z.boolean().default(false),
+    canEditStaff: z.boolean().default(false),
+    canEditStaffStatus: z.boolean().default(false),
+  }).default({}),
 });
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
@@ -109,12 +117,24 @@ export function StaffMemberForm({
           contactInfo: staffMemberToEdit.contactInfo || '',
           imageUrl: staffMemberToEdit.imageUrl || '',
           notes: staffMemberToEdit.notes || '',
+          permissions: {
+            canEditParticipants: staffMemberToEdit.permissions?.canEditParticipants || false,
+            canEditParticipantStatus: staffMemberToEdit.permissions?.canEditParticipantStatus || false,
+            canEditStaff: staffMemberToEdit.permissions?.canEditStaff || false,
+            canEditStaffStatus: staffMemberToEdit.permissions?.canEditStaffStatus || false,
+          },
         });
-        setImagePreview(staffMemberToEdit.imageUrl || null);
+        setImagePreview(staffMemberToEdit.imageUrl ? getGoogleDriveImageSrc(staffMemberToEdit.imageUrl) : null);
       } else {
         form.reset({
           name: '', role: '', department: '', team: '', email: '',
           phone: '', contactInfo: '', imageUrl: '', notes: '',
+          permissions: {
+            canEditParticipants: false,
+            canEditParticipantStatus: false,
+            canEditStaff: false,
+            canEditStaffStatus: false,
+          },
         });
         setImagePreview(null);
       }
@@ -142,7 +162,7 @@ export function StaffMemberForm({
   useEffect(() => {
      if (currentImageUrl && currentImageUrl !== imagePreview) {
       if (currentImageUrl.startsWith('http://') || currentImageUrl.startsWith('https://')) {
-         setImagePreview(currentImageUrl);
+         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
       }
@@ -161,6 +181,7 @@ export function StaffMemberForm({
           phone: data.phone?.trim() || '',
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
+          permissions: data.permissions,
           updatedAt: serverTimestamp(),
         };
         
@@ -355,7 +376,7 @@ export function StaffMemberForm({
                             disabled={isPending} 
                             onChange={(e) => {
                                 field.onChange(e);
-                                setImagePreview(e.target.value);
+                                setImagePreview(e.target.value ? getGoogleDriveImageSrc(e.target.value) : null);
                             }}
                             data-ai-hint="image url"
                           />
@@ -397,6 +418,81 @@ export function StaffMemberForm({
                 </FormItem>
               )}
             />
+
+            <div className="space-y-2 rounded-md border p-4">
+              <FormLabel>Permissions</FormLabel>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="permissions.canEditParticipants"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Edit Participants</FormLabel>
+                      </div>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="permissions.canEditParticipantStatus"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Edit Participant Status</FormLabel>
+                      </div>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="permissions.canEditStaff"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Edit Staff</FormLabel>
+                      </div>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="permissions.canEditStaffStatus"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Edit Staff Status</FormLabel>
+                      </div>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
             <DialogFooter className="pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isPending} onClick={handleDialogClose}> Cancel </Button>

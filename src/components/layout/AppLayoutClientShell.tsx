@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -42,12 +41,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
-import { auth, db } from '@/lib/firebase'; 
-import { onAuthStateChanged, signOut, User } from 'firebase/auth'; 
-import { doc, getDoc } from 'firebase/firestore';
-import { OWNER_UID } from '@/lib/constants'; 
+import { useAuth } from '@/hooks/use-auth';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import type { AdminManagedUser } from '@/types';
 
 interface NavItem {
   href: string;
@@ -82,43 +79,7 @@ const publicNavItems: NavItem[] = [
 export function AppLayoutClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { toast } = useToast();
-  const [loggedInUser, setLoggedInUser] = React.useState<User | null>(null);
-  const [userAppRole, setUserAppRole] = React.useState<'owner' | 'admin' | 'user' | null>(null);
-  const [authSessionLoading, setAuthSessionLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoggedInUser(user);
-      if (user) {
-        if (user.uid === OWNER_UID) {
-          setUserAppRole('owner');
-        } else {
-          try {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data() as AdminManagedUser;
-              if (userData.role === 'admin') {
-                setUserAppRole('admin');
-              } else {
-                setUserAppRole('user');
-              }
-            } else {
-              setUserAppRole('user'); // Not in users collection, treat as regular user
-            }
-          } catch (error) {
-            console.error("Error fetching user role for sidebar:", error);
-            setUserAppRole('user'); // Default on error
-          }
-        }
-      } else {
-        setUserAppRole(null);
-      }
-      setAuthSessionLoading(false);
-    });
-    
-    return () => unsubscribe();
-  }, []);
+  const { loggedInUser, userAppRole, authSessionLoading } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -196,7 +157,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               <span>Logout</span>
             </Button>
           ) : (
-            <Link href="/auth/login" legacyBehavior passHref>
+            <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
               <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent/50">
                 <LogIn className="h-5 w-5" />
                 <span>Login</span>
@@ -238,7 +199,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-             <Link href="/auth/login" legacyBehavior passHref>
+             <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
                 <Button variant="outline">
                   <LogIn className="mr-2 h-4 w-4" /> Sign In
                 </Button>

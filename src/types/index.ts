@@ -38,6 +38,13 @@ export type StaffAttendanceStatus =
   | "On Break"
   | "Away";
 
+export interface StaffPermissions {
+  canEditParticipants: boolean;
+  canEditParticipantStatus: boolean;
+  canEditStaff: boolean;
+  canEditStaffStatus: boolean;
+}
+
 export interface StaffMember {
   id: string;
   name: string;
@@ -50,6 +57,7 @@ export interface StaffMember {
   status: StaffAttendanceStatus;
   notes?: string;
   imageUrl?: string;
+  permissions?: StaffPermissions;
   createdAt?: string | FieldValueType | null | undefined;
   updatedAt?: string | FieldValueType | null | undefined;
 }

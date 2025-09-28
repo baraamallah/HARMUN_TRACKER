@@ -22,10 +22,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
 import { 
@@ -59,7 +59,7 @@ const STAFF_MEMBERS_COLLECTION = 'staff_members';
 
 
 export default function SuperiorAdminPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -505,6 +505,44 @@ export default function SuperiorAdminPage() {
           {renderSystemListManagementCard("Manage Schools", Landmark, "text-primary", newSchoolName, setNewSchoolName, isLoadingSchools, systemSchools, "school", "School")}
           {renderSystemListManagementCard("Manage Committees", BookOpenText, "text-accent", newCommitteeName, setNewCommitteeName, isLoadingCommittees, systemCommittees, "committee", "Committee")}
           {renderSystemListManagementCard("Manage Staff Teams", Network, "text-orange-500", newStaffTeamName, setNewStaffTeamName, isLoadingStaffTeams, systemStaffTeams, "staffTeam", "Staff Team")}
+
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-yellow-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">My Profile</CardTitle>
+              <User className="h-7 w-7 text-yellow-500" />
+            </CardHeader>
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                Update your personal information, such as your display name and avatar.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Link href="/superior-admin/profile" passHref legacyBehavior>
+                <Button className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
+                    <Settings className="mr-2 h-4 w-4" /> Go to My Profile
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
+
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-red-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
+              <CardTitle className="text-xl font-semibold">Staff Control</CardTitle>
+              <StaffIcon className="h-7 w-7 text-red-500" />
+            </CardHeader>
+            <CardContent className="pt-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                Manage all staff members, their roles, and permissions.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Link href="/superior-admin/staff-management" passHref legacyBehavior>
+                <Button className="w-full bg-red-500 hover:bg-red-600 text-white">
+                    <Users className="mr-2 h-4 w-4" /> Manage Staff
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
 
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-green-500 md:col-span-3 lg:col-span-3">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">

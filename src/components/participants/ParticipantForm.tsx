@@ -39,6 +39,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { getDefaultAttendanceStatusSetting } from '@/lib/actions';
+import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
 
 const participantFormSchema = z.object({
@@ -127,7 +128,7 @@ export function ParticipantForm({
           notes: participantToEdit.notes || '',
           additionalDetails: participantToEdit.additionalDetails || '',
         });
-        setImagePreview(participantToEdit.imageUrl || null);
+        setImagePreview(participantToEdit.imageUrl ? getGoogleDriveImageSrc(participantToEdit.imageUrl) : null);
       } else {
         form.reset({
           id: '',
@@ -170,7 +171,7 @@ export function ParticipantForm({
       // Only update preview from URL field if it's a valid URL and not a data URI already set by file upload
       // This simple check might need refinement if data URIs can be manually pasted and are very long.
       if (currentImageUrl.startsWith('http://') || currentImageUrl.startsWith('https://')) {
-         setImagePreview(currentImageUrl);
+         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
       }
@@ -438,7 +439,7 @@ export function ParticipantForm({
                             disabled={isPending}
                             onChange={(e) => {
                                 field.onChange(e);
-                                setImagePreview(e.target.value);
+                                setImagePreview(e.target.value ? getGoogleDriveImageSrc(e.target.value) : null);
                             }}
                             data-ai-hint="image url"
                           />

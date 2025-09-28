@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 // Removed: import { deleteParticipant } from '@/lib/actions'; 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore'; // Added deleteDoc
 
@@ -45,6 +46,7 @@ interface ParticipantActionsProps {
 
 export function ParticipantActions({ participant, onEdit }: ParticipantActionsProps) {
   const { toast } = useToast();
+  const { staffMember, userAppRole } = useAuth();
   const router = useRouter();
   const [isUpdatingStatus, startStatusUpdateTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
@@ -116,7 +118,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
           <DropdownMenuLabel>Actions for {participant.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={isUpdatingStatus || isDeleting}>
+            <DropdownMenuSubTrigger disabled={isUpdatingStatus || isDeleting || !(userAppRole === 'owner' || userAppRole === 'admin' || staffMember?.permissions?.canEditParticipantStatus)}>
               <ChevronDown className="mr-2 h-4 w-4" />
               <span>Mark Attendance</span>
             </DropdownMenuSubTrigger>
@@ -137,7 +139,7 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             </DropdownMenuPortal>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isUpdatingStatus || isDeleting}>
+          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isUpdatingStatus || isDeleting || !(userAppRole === 'owner' || userAppRole === 'admin' || staffMember?.permissions?.canEditParticipants)}>
             <Edit3 className="mr-2 h-4 w-4" />
             Edit Details
           </DropdownMenuItem>
