@@ -40,7 +40,7 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/fi
 import { getDefaultStaffStatusSetting } from '@/lib/actions';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
+import { Upload, Link as LinkIcon } from 'lucide-react';
 
 const staffMemberFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -57,7 +57,12 @@ const staffMemberFormSchema = z.object({
     canEditParticipantStatus: z.boolean().default(false),
     canEditStaff: z.boolean().default(false),
     canEditStaffStatus: z.boolean().default(false),
-  }).default({}),
+  }).optional().default({
+    canEditParticipants: false,
+    canEditParticipantStatus: false,
+    canEditStaff: false,
+    canEditStaffStatus: false,
+  }),
 });
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
@@ -101,6 +106,12 @@ export function StaffMemberForm({
     defaultValues: {
       name: '', role: '', department: '', team: '', email: '',
       phone: '', contactInfo: '', imageUrl: '', notes: '',
+      permissions: {
+        canEditParticipants: false,
+        canEditParticipantStatus: false,
+        canEditStaff: false,
+        canEditStaffStatus: false,
+      },
     },
   });
 
@@ -434,6 +445,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -451,6 +463,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -468,6 +481,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -485,6 +499,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
