@@ -81,6 +81,8 @@ export default function SuperiorAdminPage() {
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
   const [isStaffFormOpen, setIsStaffFormOpen] = useState(false);
+  const [staffToEdit, setStaffToEdit] = useState<StaffMember | null>(null);
+
 
   // Removed state related to Participant and Staff QR Codes
   // const [participants, setParticipants] = useState<Participant[]>([]);
@@ -164,6 +166,7 @@ export default function SuperiorAdminPage() {
           status: data.status || 'Off Duty',
           imageUrl: data.imageUrl,
           notes: data.notes,
+          permissions: data.permissions,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as StaffMember;
@@ -334,6 +337,12 @@ export default function SuperiorAdminPage() {
       toast({ title: 'Unauthorized', description: 'Only the owner can add staff.', variant: 'destructive' });
       return;
     }
+    setStaffToEdit(null);
+    setIsStaffFormOpen(true);
+  };
+  
+  const handleOpenEditStaffForm = (staff: StaffMember) => {
+    setStaffToEdit(staff);
     setIsStaffFormOpen(true);
   };
 
@@ -341,6 +350,7 @@ export default function SuperiorAdminPage() {
     fetchStaff();
     // Removed fetchStaffForQrData();
     setIsStaffFormOpen(false);
+    setStaffToEdit(null);
   };
 
   // Removed filteredParticipantsForQr and filteredStaffForQr
@@ -527,18 +537,18 @@ export default function SuperiorAdminPage() {
 
           <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-red-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">Staff Control</CardTitle>
-              <StaffIcon className="h-7 w-7 text-red-500" />
+              <CardTitle className="text-xl font-semibold">Admin Accounts</CardTitle>
+              <UserPlus className="h-7 w-7 text-red-500" />
             </CardHeader>
             <CardContent className="pt-2">
               <p className="text-sm text-muted-foreground mb-4">
-                Manage all staff members, their roles, and permissions.
+                Grant or revoke admin privileges for application users.
               </p>
             </CardContent>
             <CardFooter>
-              <Link href="/superior-admin/staff-management" passHref legacyBehavior>
+              <Link href="/superior-admin/admin-management" passHref legacyBehavior>
                 <Button className="w-full bg-red-500 hover:bg-red-600 text-white">
-                    <Users className="mr-2 h-4 w-4" /> Manage Staff
+                    <Users className="mr-2 h-4 w-4" /> Manage Admins
                 </Button>
               </Link>
             </CardFooter>
@@ -586,11 +596,9 @@ export default function SuperiorAdminPage() {
                           <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{staff.team || 'N/A'}</TableCell>
                           <TableCell><StaffMemberStatusBadge status={staff.status} /></TableCell>
                           <TableCell className="text-right space-x-1">
-                            <Button variant="ghost" size="icon" asChild className="text-blue-500 hover:text-blue-600 h-8 w-8">
-                              <Link href={`/staff/${staff.id}`} title={`Edit ${staff.name}`}>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenEditStaffForm(staff)} className="text-blue-500 hover:text-blue-600 h-8 w-8" title={`Edit ${staff.name}`}>
                                 <Edit className="h-4 w-4" />
                                 <span className="sr-only">Edit</span>
-                              </Link>
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)} className="text-destructive hover:text-destructive/80 h-8 w-8" title={`Delete ${staff.name}`} disabled={isPending}>
                               {isPending && itemToDelete?.id === staff.id && itemToDelete?.type === 'staffMember' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -645,25 +653,6 @@ export default function SuperiorAdminPage() {
               </Link>
             </CardFooter>
           </Card>
-
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-teal-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">Admin Account Management</CardTitle>
-              <UserPlus className="h-7 w-7 text-teal-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                Grant or revoke admin privileges for existing application users.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Link href="/superior-admin/admin-management" passHref legacyBehavior>
-                <Button className="w-full bg-teal-500 hover:bg-teal-600 text-white">
-                    <Users className="mr-2 h-4 w-4" /> Manage Admin Accounts
-                </Button>
-              </Link>
-            </CardFooter>
-          </Card>
         </div>
 
         <div className="mt-12 p-6 bg-green-600/10 border border-green-700/30 rounded-xl text-center">
@@ -689,8 +678,11 @@ export default function SuperiorAdminPage() {
 
       <StaffMemberForm
         isOpen={isStaffFormOpen}
-        onOpenChange={setIsStaffFormOpen}
-        staffMemberToEdit={null}
+        onOpenChange={(isOpen) => {
+          setIsStaffFormOpen(isOpen);
+          if (!isOpen) setStaffToEdit(null);
+        }}
+        staffMemberToEdit={staffToEdit}
         onFormSubmitSuccess={handleStaffFormSuccess}
         staffTeams={systemStaffTeams.filter(t => t !== 'All Teams')}
       />
