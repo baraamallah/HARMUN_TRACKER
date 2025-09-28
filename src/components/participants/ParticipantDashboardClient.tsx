@@ -80,7 +80,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
 
   React.useEffect(() => {
     if (!isAuthLoading && !user) {
-      router.push('/auth/login');
+      router.push('/auth/login?redirect=/');
     }
   }, [isAuthLoading, user, router]);
 
