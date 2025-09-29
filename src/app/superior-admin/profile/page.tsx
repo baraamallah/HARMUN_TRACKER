@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -20,7 +21,7 @@ import { ProfileForm } from '@/components/superior-admin/ProfileForm';
 
 export default function ProfilePage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading } = useAuth();
+  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading, userAppRole } = useAuth();
 
   if (isLoading) {
     return (
@@ -67,10 +68,22 @@ export default function ProfilePage() {
     );
   }
 
+  // If the user is the owner, create a virtual adminUser object for them.
+  // The owner's permissions are inherent and don't require a DB record.
+  const effectiveAdminUser = userAppRole === 'owner' && currentUser ? {
+      id: currentUser.uid,
+      email: currentUser.email || 'owner@system.local',
+      displayName: currentUser.displayName || 'System Owner',
+      role: 'owner' as const,
+      avatarUrl: currentUser.photoURL || adminUser?.avatarUrl || '', // Prefer Firebase Auth photo, fallback to DB if exists
+      createdAt: currentUser.metadata.creationTime,
+      updatedAt: currentUser.metadata.lastSignInTime,
+  } as AdminManagedUser : adminUser;
+
+
   // After loading and confirming a currentUser exists, check for the adminUser object.
-  // The useAuth hook ensures adminUser is fetched if a currentUser is present.
   // A null adminUser for a logged-in user means they don't have a record in the 'users' collection.
-  if (!adminUser) {
+  if (!effectiveAdminUser) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-yellow-500">
@@ -126,7 +139,7 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm adminUser={adminUser} />
+            <ProfileForm adminUser={effectiveAdminUser} />
           </CardContent>
         </Card>
       </main>
