@@ -46,7 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } else {
               setUserAppRole('user');
-              setAdminUser(null);
+              // Create a placeholder for a new user
+              setAdminUser({
+                id: user.uid,
+                displayName: '',
+                avatarUrl: '',
+                role: 'user',
+                email: user.email || '',
+              });
             }
 
             const staffDocRef = doc(db, 'staff_members', user.uid);

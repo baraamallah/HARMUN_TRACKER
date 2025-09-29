@@ -79,7 +79,7 @@ service cloud.firestore {
 
     // Allow Owner only to list all users
     match /users {
-      allow list: if isOwner();
+      allow list: if isOwner() || isAdmin();
     }
 
     // MONOSPACES ANALYTICS SUBCOLLECTION (nested)

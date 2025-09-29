@@ -193,6 +193,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                 </DropdownMenuLabel>
                 {userAppRole && <DropdownMenuLabel className="text-xs text-muted-foreground -mt-2 capitalize">Role: {userAppRole}</DropdownMenuLabel> }
                 <DropdownMenuSeparator />
+                <Link href={userAppRole === 'admin' || userAppRole === 'owner' ? '/superior-admin/profile' : '/staff/profile'} passHref legacyBehavior>
+                  <DropdownMenuItem>
+                    <User className="mr-2 h-4 w-4" /> My Profile
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
                 </DropdownMenuItem>
