@@ -85,11 +85,11 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     startTransition(async () => {
       try {
         const userDocRef = doc(db, 'users', adminUser.id);
-        await setDoc(userDocRef, {
+        await updateDoc(userDocRef, {
           displayName: data.displayName.trim(),
           avatarUrl: data.avatarUrl?.trim() || '',
           updatedAt: serverTimestamp(),
-        }, { merge: true });
+        });
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
       } catch (error: any) {
         console.error("Error updating profile:", error);

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -11,30 +11,68 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowLeft, Home, User } from 'lucide-react';
+import { ArrowLeft, Users } from 'lucide-react';
+import { db, auth } from '@/lib/firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import type { StaffMember } from '@/types';
+import { StaffManagementTable } from '@/components/superior-admin/StaffManagementTable';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/hooks/use-auth';
-import type { AdminManagedUser } from '@/types';
-import { ProfileForm } from '@/components/shared/ProfileForm';
 
-interface ProfilePageProps {
-  backLink: string;
-}
+const STAFF_COLLECTION = 'staff_members';
 
-export function ProfilePage({ backLink }: ProfilePageProps) {
+export default function StaffManagementPage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading } = useAuth();
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  if (isLoading) {
+  const fetchStaffMembers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const staffColRef = collection(db, STAFF_COLLECTION);
+      const q = query(staffColRef, orderBy('name'));
+      const querySnapshot = await getDocs(q);
+      const members = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as StaffMember[];
+      setStaffMembers(members);
+    } catch (error) {
+      console.error("Error fetching staff members:", error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch staff members.',
+        variant: 'destructive',
+      });
+    }
+    setIsLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsLoadingAuth(false);
+      if (user) {
+        fetchStaffMembers();
+      }
+    });
+    return () => unsubscribe();
+  }, [fetchStaffMembers]);
+
+  if (isLoadingAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-lg shadow-2xl">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <User size={32} />
+              <Users size={32} />
             </div>
-            <CardTitle className="text-2xl font-bold">My Profile</CardTitle>
-            <CardDescription>Loading your profile...</CardDescription>
+            <CardTitle className="text-2xl font-bold">Staff Management</CardTitle>
+            <CardDescription>Verifying your credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -45,7 +83,7 @@ export function ProfilePage({ backLink }: ProfilePageProps) {
     );
   }
 
-  if (!currentUser || !adminUser) {
+  if (!currentUser) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
@@ -72,15 +110,15 @@ export function ProfilePage({ backLink }: ProfilePageProps) {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
         <div className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <User className="h-8 w-8 text-primary" />
+            <Users className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              My Profile
+              Staff Management
             </h1>
           </div>
-          <Link href={backLink} passHref legacyBehavior>
+          <Link href="/superior-admin" passHref legacyBehavior>
             <Button variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              Back to Superior Admin
             </Button>
           </Link>
         </div>
@@ -89,13 +127,13 @@ export function ProfilePage({ backLink }: ProfilePageProps) {
       <main className="flex-1 container mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Edit Your Profile</CardTitle>
+            <CardTitle className="text-2xl">Manage Staff Authorities</CardTitle>
             <CardDescription>
-              Update your display name and avatar.
+              Easily edit staff roles and other details in place.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm adminUser={adminUser} />
+            <StaffManagementTable staffMembers={staffMembers} isLoading={isLoading} onStaffUpdate={fetchStaffMembers} />
           </CardContent>
         </Card>
       </main>
