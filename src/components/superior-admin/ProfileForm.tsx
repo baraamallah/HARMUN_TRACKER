@@ -21,7 +21,7 @@ import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
-import { Upload, Link as LinkIcon } from 'lucide-react';
+import { Link as LinkIcon } from 'lucide-react';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -57,23 +57,10 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     }
   }, [adminUser, form]);
 
-  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        form.setValue('avatarUrl', result, { shouldValidate: true, shouldDirty: true });
-        setImagePreview(result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const currentImageUrl = form.watch('avatarUrl');
   useEffect(() => {
     if (currentImageUrl && currentImageUrl !== imagePreview) {
-      if (currentImageUrl.startsWith('http') || currentImageUrl.startsWith('data:')) {
+      if (currentImageUrl.startsWith('http')) {
         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
@@ -141,21 +128,6 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
                   </FormItem>
                 )}
               />
-              <FormItem className="space-y-1">
-                <FormLabel htmlFor="form-imageUpload" className="text-xs text-muted-foreground flex items-center">
-                  <Upload className="mr-1.5 h-3.5 w-3.5"/> Or Upload Image (Optional)
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    id="form-imageUpload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileChange}
-                    disabled={isPending}
-                    className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </FormControl>
-              </FormItem>
             </div>
           </div>
         </div>
