@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowLeft, Home, User, TriangleAlert, LogOut } from 'lucide-react';
+import { ArrowLeft, Home, User, TriangleAlert, LogOut, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import type { AdminManagedUser } from '@/types';
@@ -29,7 +29,7 @@ export default function ProfilePage() {
         <Card className="w-full max-w-lg shadow-2xl">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <User size={32} />
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
             <CardTitle className="text-2xl font-bold">My Profile</CardTitle>
             <CardDescription>Loading your profile and verifying credentials...</CardDescription>
@@ -43,7 +43,8 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) {
+  // The useAuth hook now handles creating the owner's virtual profile, so we only need to check if you are NOT the owner.
+  if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
@@ -53,49 +54,38 @@ export default function ProfilePage() {
             </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You must be logged in to view this page.
+              Only the Superior Admin can access this profile page.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
-              <Button variant="destructive" size="lg" className="w-full">
-                Log In
+          <CardFooter className="flex-col gap-4 mt-4">
+             <Link href="/superior-admin" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin
               </Button>
             </Link>
-          </CardContent>
+             <Link href="/" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              </Button>
+            </Link>
+          </CardFooter>
         </Card>
       </div>
     );
   }
-
-  // If the user is the owner, create a virtual adminUser object for them.
-  // The owner's permissions are inherent and don't require a DB record.
-  const effectiveAdminUser = userAppRole === 'owner' && currentUser ? {
-      id: currentUser.uid,
-      email: currentUser.email || 'owner@system.local',
-      displayName: currentUser.displayName || 'System Owner',
-      role: 'owner' as const,
-      avatarUrl: currentUser.photoURL || adminUser?.avatarUrl || '', // Prefer Firebase Auth photo, fallback to DB if exists
-      createdAt: currentUser.metadata.creationTime,
-      updatedAt: currentUser.metadata.lastSignInTime,
-  } as AdminManagedUser : adminUser;
-
-
-  // After loading and confirming a currentUser exists, check for the adminUser object.
-  // A null adminUser for a logged-in user means they don't have a record in the 'users' collection.
-  if (!effectiveAdminUser) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
+  
+  // By this point, if you are the owner, `adminUser` is guaranteed to be populated by the useAuth hook.
+  if (!adminUser) {
+     return (
+       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-yellow-500">
           <CardHeader>
              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-500">
               <TriangleAlert size={48} />
             </div>
-            <CardTitle className="text-3xl font-bold text-yellow-600">Profile Not Found</CardTitle>
+            <CardTitle className="text-3xl font-bold text-yellow-600">Profile Data Missing</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              Your authentication is valid, but your application profile could not be found. 
-              This may be because your user record hasn't been created in the database yet.
-              Please contact the Superior Admin if this persists.
+              An unexpected error occurred and your profile data could not be loaded. Please try refreshing the page.
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex-col gap-4 mt-4">
@@ -107,7 +97,7 @@ export default function ProfilePage() {
           </CardFooter>
         </Card>
       </div>
-    );
+     )
   }
 
 
@@ -135,11 +125,11 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="text-2xl">Edit Your Profile</CardTitle>
             <CardDescription>
-              Update your display name and avatar.
+              Update your display name and avatar. Changes will be reflected across the application.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm adminUser={effectiveAdminUser} />
+            <ProfileForm adminUser={adminUser} />
           </CardContent>
         </Card>
       </main>

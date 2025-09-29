@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { OWNER_UID } from '@/lib/constants';
 import type { AdminManagedUser, StaffMember } from '@/types';
@@ -29,40 +29,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoggedInUser(user);
+      setAuthSessionLoading(true); // Start loading on any auth state change
       if (user) {
-        if (user.uid === OWNER_UID) {
-          setUserAppRole('owner');
-           try {
-            const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-            if (userDocSnap.exists()) {
-              setAdminUser(userDocSnap.data() as AdminManagedUser);
+        setLoggedInUser(user);
+        try {
+          if (user.uid === OWNER_UID) {
+            setUserAppRole('owner');
+            // For the owner, we create a virtual adminUser object, but also try to load their profile from the DB.
+            let ownerProfile: AdminManagedUser | null = null;
+            try {
+              const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+              if (userDocSnap.exists()) {
+                ownerProfile = userDocSnap.data() as AdminManagedUser;
+              }
+            } catch (e) {
+              console.error("Could not fetch owner's user document, will proceed without it.", e);
             }
-          } catch (error) {
-            console.error("Error fetching owner's user doc:", error);
-          } finally {
-            setAuthSessionLoading(false);
-          }
-        } else {
-          try {
+            
+            // Construct the definitive owner user object for the app to use.
+            setAdminUser({
+              id: user.uid,
+              email: user.email || 'owner@system.local',
+              role: 'owner',
+              // Use displayName from DB if it exists, otherwise from Firebase Auth, else a default.
+              displayName: ownerProfile?.displayName || user.displayName || 'System Owner',
+              // Use avatarUrl from DB if it exists, otherwise from Firebase Auth, else empty.
+              avatarUrl: ownerProfile?.avatarUrl ? getGoogleDriveImageSrc(ownerProfile.avatarUrl) : (user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : ''),
+              createdAt: ownerProfile?.createdAt || user.metadata.creationTime,
+              updatedAt: ownerProfile?.updatedAt || user.metadata.lastSignInTime,
+            });
+
+            // Owner cannot be a staff member.
+            setStaffMember(null);
+
+          } else {
+            // This is a regular user (could be admin, staff, or just user)
+            let finalUserRole: 'admin' | 'user' = 'user';
+            
             const userDocRef = doc(db, 'users', user.uid);
             const userDocSnap = await getDoc(userDocRef);
+
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data() as AdminManagedUser;
-               if (userData.avatarUrl) {
+              if (userData.avatarUrl) {
                 userData.avatarUrl = getGoogleDriveImageSrc(userData.avatarUrl);
               }
-              setAdminUser(userData);
+              setAdminUser(userData); // Set their application user profile
               if (userData.role === 'admin') {
-                setUserAppRole('admin');
-              } else {
-                setUserAppRole('user');
+                finalUserRole = 'admin';
               }
             } else {
-              setUserAppRole('user');
-              setAdminUser(null);
+              setAdminUser(null); // No specific app profile for this user
             }
+            setUserAppRole(finalUserRole);
 
+            // Separately, check if they are also a staff member
             const staffDocRef = doc(db, 'staff_members', user.uid);
             const staffDocSnap = await getDoc(staffDocRef);
             if (staffDocSnap.exists()) {
@@ -71,16 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
               }
               setStaffMember(staffData);
+            } else {
+              setStaffMember(null);
             }
-
-          } catch (error) {
-            console.error("Error fetching user role and data:", error);
-            setUserAppRole('user');
-          } finally {
-            setAuthSessionLoading(false);
           }
+        } catch (error) {
+          console.error("Critical error during user data fetch:", error);
+          // Reset to a known safe state on error
+          setUserAppRole('user');
+          setAdminUser(null);
+          setStaffMember(null);
+        } finally {
+          setAuthSessionLoading(false);
         }
       } else {
+        // User is logged out
+        setLoggedInUser(null);
         setUserAppRole(null);
         setStaffMember(null);
         setAdminUser(null);

@@ -59,8 +59,8 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
 
   const currentImageUrl = form.watch('avatarUrl');
   useEffect(() => {
-    if (currentImageUrl && currentImageUrl !== imagePreview) {
-      if (currentImageUrl.startsWith('http')) {
+    if (currentImageUrl !== imagePreview) { // Check if it's different to avoid loops
+      if (currentImageUrl && (currentImageUrl.startsWith('http') || currentImageUrl.startsWith('https'))) {
         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
@@ -84,6 +84,9 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
         }, { merge: true });
 
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
+        // Manually mark the form as not dirty to disable the save button
+        form.reset(data);
+
       } catch (error: any) {
         console.error("Error updating profile:", error);
         toast({
@@ -126,7 +129,6 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
                         disabled={isPending}
                         onChange={(e) => {
                             field.onChange(e);
-                            setImagePreview(e.target.value ? getGoogleDriveImageSrc(e.target.value) : null);
                         }}
                       />
                     </FormControl>
