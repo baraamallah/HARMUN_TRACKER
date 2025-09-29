@@ -101,6 +101,7 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | string;
+  canAccessSuperiorAdmin?: boolean; // New permission flag
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;
   avatarUrl?: string;

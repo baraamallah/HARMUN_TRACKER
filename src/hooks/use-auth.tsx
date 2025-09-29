@@ -3,12 +3,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { OWNER_UID } from '@/lib/constants';
 import type { AdminManagedUser, StaffMember } from '@/types';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
-
 
 interface AuthContextType {
   loggedInUser: User | null;
@@ -33,57 +32,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         setLoggedInUser(user);
         try {
+          let userProfile: AdminManagedUser | null = null;
+          let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
+
+          // First, fetch the user's application-specific profile from Firestore
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            userProfile = userDocSnap.data() as AdminManagedUser;
+            if (userProfile.avatarUrl) {
+              userProfile.avatarUrl = getGoogleDriveImageSrc(userProfile.avatarUrl);
+            }
+          }
+          setAdminUser(userProfile);
+
+          // Now determine the application role based on multiple factors
           if (user.uid === OWNER_UID) {
-            setUserAppRole('owner');
-            // For the owner, we create a virtual adminUser object, but also try to load their profile from the DB.
-            let ownerProfile: AdminManagedUser | null = null;
-            try {
-              const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-              if (userDocSnap.exists()) {
-                ownerProfile = userDocSnap.data() as AdminManagedUser;
-              }
-            } catch (e) {
-              console.error("Could not fetch owner's user document, will proceed without it.", e);
+            finalUserRole = 'owner';
+            // For the owner, ensure their virtual profile is correctly constructed if it's missing from DB
+            if (!userProfile) {
+              setAdminUser({
+                id: user.uid,
+                email: user.email || 'owner@system.local',
+                role: 'owner',
+                displayName: user.displayName || 'System Owner',
+                avatarUrl: user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : '',
+                createdAt: user.metadata.creationTime,
+                updatedAt: user.metadata.lastSignInTime,
+                canAccessSuperiorAdmin: true,
+              });
             }
-            
-            // Construct the definitive owner user object for the app to use.
-            setAdminUser({
-              id: user.uid,
-              email: user.email || 'owner@system.local',
-              role: 'owner',
-              // Use displayName from DB if it exists, otherwise from Firebase Auth, else a default.
-              displayName: ownerProfile?.displayName || user.displayName || 'System Owner',
-              // Use avatarUrl from DB if it exists, otherwise from Firebase Auth, else empty.
-              avatarUrl: ownerProfile?.avatarUrl ? getGoogleDriveImageSrc(ownerProfile.avatarUrl) : (user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : ''),
-              createdAt: ownerProfile?.createdAt || user.metadata.creationTime,
-              updatedAt: ownerProfile?.updatedAt || user.metadata.lastSignInTime,
-            });
+          } else if (userProfile?.role === 'admin') {
+            finalUserRole = 'admin';
+            // An admin can be elevated to 'owner' role if they have the flag
+            if (userProfile.canAccessSuperiorAdmin) {
+              finalUserRole = 'owner';
+            }
+          }
+          
+          setUserAppRole(finalUserRole);
 
-            // Owner cannot be a staff member.
-            setStaffMember(null);
-
+          // If the user is the owner, they can't also be a staff member.
+          if (finalUserRole === 'owner') {
+             setStaffMember(null);
           } else {
-            // This is a regular user (could be admin, staff, or just user)
-            let finalUserRole: 'admin' | 'user' = 'user';
-            
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data() as AdminManagedUser;
-              if (userData.avatarUrl) {
-                userData.avatarUrl = getGoogleDriveImageSrc(userData.avatarUrl);
-              }
-              setAdminUser(userData); // Set their application user profile
-              if (userData.role === 'admin') {
-                finalUserRole = 'admin';
-              }
-            } else {
-              setAdminUser(null); // No specific app profile for this user
-            }
-            setUserAppRole(finalUserRole);
-
-            // Separately, check if they are also a staff member
+            // Separately, check if they are a staff member
             const staffDocRef = doc(db, 'staff_members', user.uid);
             const staffDocSnap = await getDoc(staffDocRef);
             if (staffDocSnap.exists()) {

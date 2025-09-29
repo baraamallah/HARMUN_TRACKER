@@ -26,11 +26,12 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-// import { grantAdminRole } from '@/lib/actions'; // Server action removed
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import type { AdminManagedUser } from '@/types';
 import { UserPlus } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
+import { Separator } from '../ui/separator';
 
 const USERS_COLLECTION = 'users';
 
@@ -38,12 +39,13 @@ const addAdminSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   displayName: z.string().optional(),
   authUid: z.string().min(1, { message: 'Firebase Auth UID is required.' }),
+  canAccessSuperiorAdmin: z.boolean().default(false),
 });
 
 type AddAdminFormData = z.infer<typeof addAdminSchema>;
 
 interface AddAdminDialogProps {
-  onAdminAdded?: () => void; 
+  onAdminAdded?: () => void;
 }
 
 export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
@@ -57,19 +59,20 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
       email: '',
       displayName: '',
       authUid: '',
+      canAccessSuperiorAdmin: false,
     },
   });
 
   const onSubmit = (data: AddAdminFormData) => {
     startTransition(async () => {
-      const { email, displayName, authUid } = data;
+      const { email, displayName, authUid, canAccessSuperiorAdmin } = data;
       if (!email || !authUid) {
-        toast({ title: 'Error', description: 'Email and Auth UID are required.', variant: 'destructive'});
+        toast({ title: 'Error', description: 'Email and Auth UID are required.', variant: 'destructive' });
         return;
       }
       const trimmedAuthUid = authUid.trim();
       if (!trimmedAuthUid) {
-        toast({ title: 'Error', description: 'Auth UID cannot be empty.', variant: 'destructive'});
+        toast({ title: 'Error', description: 'Auth UID cannot be empty.', variant: 'destructive' });
         return;
       }
 
@@ -80,67 +83,52 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
         const currentEmail = email.toLowerCase().trim();
         const currentDisplayName = displayName?.trim() || null;
 
+        const updates: Partial<AdminManagedUser> = {
+          email: currentEmail,
+          displayName: currentDisplayName,
+          canAccessSuperiorAdmin: canAccessSuperiorAdmin,
+          role: 'admin',
+          updatedAt: serverTimestamp()
+        };
+
         if (userDocSnap.exists()) {
-          const existingData = userDocSnap.data() as AdminManagedUser;
-          if (existingData.role === 'admin') {
-            const updates: Partial<AdminManagedUser> = {};
-            let changed = false;
-            if (currentEmail !== existingData.email) { updates.email = currentEmail; changed = true; }
-            if (currentDisplayName !== existingData.displayName) { updates.displayName = currentDisplayName; changed = true; }
-            
-            if (changed) {
-              if (updates.email) { // Check if email is being changed and if it conflicts
-                const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', updates.email), where('role', '==', 'admin'));
-                const emailConflictSnapshot = await getDocs(emailConflictQuery);
-                if (!emailConflictSnapshot.empty && emailConflictSnapshot.docs[0].id !== trimmedAuthUid) {
-                  toast({ title: 'Error', description: `Email ${updates.email} is already associated with another admin (UID: ${emailConflictSnapshot.docs[0].id}).`, variant: 'destructive' });
-                  return;
-                }
-              }
-              await updateDoc(userDocRef, {...updates, updatedAt: serverTimestamp()});
-              toast({ title: 'Admin Updated', description: `User ${trimmedAuthUid} is already an admin. Details updated.`});
-            } else {
-              toast({ title: 'Info', description: `User ${trimmedAuthUid} is already an admin. No changes made.`});
+          // If email is being changed, check for conflicts
+          if (currentEmail !== userDocSnap.data().email) {
+            const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
+            const emailConflictSnapshot = await getDocs(emailConflictQuery);
+            if (!emailConflictSnapshot.empty && emailConflictSnapshot.docs[0].id !== trimmedAuthUid) {
+              toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
+              return;
             }
-          } else { // User exists but not admin
-            const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-            const updatedFields = { 
-              email: currentEmail, 
-              displayName: currentDisplayName, 
-              role: 'admin' as const, 
-              avatarUrl: existingData.avatarUrl || `https://placehold.co/40x40.png?text=${firstLetter}`, 
-              updatedAt: serverTimestamp() 
-            };
-            await updateDoc(userDocRef, updatedFields);
-            toast({ title: 'Admin Role Granted', description: `Admin role granted to user ${trimmedAuthUid}.` });
           }
-        } else { // User document does not exist, create new admin
+          await updateDoc(userDocRef, updates);
+          toast({ title: 'Admin Updated', description: `Details for user ${trimmedAuthUid} have been updated.` });
+
+        } else { // Document does not exist, create it
+          // Check for email conflict before creating
           const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
           const emailConflictSnapshot = await getDocs(emailConflictQuery);
           if (!emailConflictSnapshot.empty) {
-            toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin (UID: ${emailConflictSnapshot.docs[0].id}). Please use a unique email or resolve the conflict.`, variant: 'destructive'});
+            toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
             return;
           }
 
           const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
-          const newAdminData = { 
-            email: currentEmail, 
-            displayName: currentDisplayName, 
-            role: 'admin' as const, 
-            avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`, 
-            createdAt: serverTimestamp(), 
-            updatedAt: serverTimestamp() 
+          const newAdminData = {
+            ...updates,
+            avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`,
+            createdAt: serverTimestamp(),
           };
           await setDoc(userDocRef, newAdminData);
           toast({ title: 'Admin Role Granted', description: `User ${trimmedAuthUid} granted admin role and user record created.` });
         }
-        
+
         form.reset();
         setIsOpen(false);
         onAdminAdded?.();
 
       } catch (error: any) {
-        console.error(`Client-side Error granting admin role to UID ${trimmedAuthUid}:`, error);
+        console.error(`Client-side Error granting/updating admin role to UID ${trimmedAuthUid}:`, error);
         toast({
           title: 'Operation Failed',
           description: error.message || 'Could not grant admin role. Check permissions and console.',
@@ -152,8 +140,8 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) form.reset();
-        setIsOpen(open);
+      if (!open) form.reset();
+      setIsOpen(open);
     }}>
       <DialogTrigger asChild>
         <Button>
@@ -165,7 +153,6 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
           <DialogTitle>Grant Admin Role</DialogTitle>
           <DialogDescription>
             Enter the email and Firebase Auth UID of an existing Firebase Authentication user to grant them admin privileges.
-            This does NOT create a new Firebase Authentication user account. It manages their role within this application.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -175,7 +162,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>User&apos;s Email</FormLabel>
+                  <FormLabel>User's Email</FormLabel>
                   <FormControl>
                     <Input placeholder="user@example.com" {...field} disabled={isPending} />
                   </FormControl>
@@ -196,7 +183,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
                 </FormItem>
               )}
             />
-             <FormField
+            <FormField
               control={form.control}
               name="authUid"
               render={({ field }) => (
@@ -209,6 +196,31 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
                 </FormItem>
               )}
             />
+
+            <Separator />
+            
+            <FormField
+              control={form.control}
+              name="canAccessSuperiorAdmin"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-yellow-500/10 p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base text-yellow-800 dark:text-yellow-300">Grant Superior Admin Access</FormLabel>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                      Allows this user to access the Superior Admin panel and manage system settings.
+                    </p>
+                  </div>
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={isPending}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            
             <DialogFooter className="pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isPending}>
@@ -216,7 +228,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isPending}>
-                {isPending ? 'Granting Role...' : 'Grant Admin Role'}
+                {isPending ? 'Saving Role...' : 'Save Admin Role'}
               </Button>
             </DialogFooter>
           </form>
@@ -225,5 +237,3 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
     </Dialog>
   );
 }
-
-    
