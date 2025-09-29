@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Link as LinkIcon } from 'lucide-react';
 
@@ -72,11 +72,17 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     startTransition(async () => {
       try {
         const userDocRef = doc(db, 'users', adminUser.id);
-        await updateDoc(userDocRef, {
+        // Use setDoc with merge:true to create the doc if it doesn't exist, or update it if it does.
+        // This is crucial for the owner account which may not have a user doc initially.
+        await setDoc(userDocRef, {
           displayName: data.displayName.trim(),
           avatarUrl: data.avatarUrl?.trim() || '',
           updatedAt: serverTimestamp(),
-        });
+          // Ensure email and role are not overwritten if the doc already exists
+          email: adminUser.email,
+          role: adminUser.role,
+        }, { merge: true });
+
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
       } catch (error: any) {
         console.error("Error updating profile:", error);
@@ -99,7 +105,7 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
           <FormLabel>Avatar</FormLabel>
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20 border">
-              <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" />
+              <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" data-ai-hint="profile preview"/>
               <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
             </Avatar>
             <div className="flex-grow space-y-3">
