@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -24,8 +25,8 @@ import { Input } from '@/components/ui/input';
 import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, Image as ImageIcon, Workflow } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; 
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { OWNER_UID } from '@/lib/constants';
+import { signOut } from 'firebase/auth';
+import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -48,8 +49,8 @@ const SYSTEM_CONFIG_COLLECTION = 'system_config';
 const APP_SETTINGS_DOC_ID = 'main_settings';
 
 export default function SystemSettingsPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const pathname = usePathname();
+  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth, userAppRole } = useAuth();
   const { toast } = useToast();
   
   const [currentDefaultParticipantStatus, setCurrentDefaultParticipantStatus] = useState<AttendanceStatus | null>(null);
@@ -58,18 +59,6 @@ export default function SystemSettingsPage() {
   
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isUpdatingSetting, startUpdateTransition] = useTransition();
-
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsLoadingAuth(false);
-      if (user && user.uid === OWNER_UID) {
-        fetchAllSettings();
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   const fetchAllSettings = async () => {
     setIsLoadingSettings(true);
@@ -88,6 +77,12 @@ export default function SystemSettingsPage() {
       setIsLoadingSettings(false);
     }
   };
+
+  useEffect(() => {
+    if (!isLoadingAuth && userAppRole === 'owner') {
+      fetchAllSettings();
+    }
+  }, [isLoadingAuth, userAppRole]);
 
   const handleLogout = async () => {
     try {
@@ -121,7 +116,7 @@ export default function SystemSettingsPage() {
     });
   };
 
-  if (isLoadingAuth || (currentUser && currentUser.uid === OWNER_UID && isLoadingSettings)) { 
+  if (isLoadingAuth || (userAppRole === 'owner' && isLoadingSettings)) { 
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-6">
         <Card className="w-full max-w-lg shadow-2xl">
@@ -142,7 +137,7 @@ export default function SystemSettingsPage() {
     );
   }
 
-  if (!currentUser || currentUser.uid !== OWNER_UID) {
+  if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
@@ -152,18 +147,17 @@ export default function SystemSettingsPage() {
             </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You do not have permission to access system settings.
+              You do not have permission to access system settings. This page is for the designated Superior Admin only.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {currentUser && (
+            {currentUser ? (
               <Button onClick={handleLogout} variant="destructive" size="lg" className="w-full">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Wrong User'})
               </Button>
-            )}
-            {!currentUser && (
+            ) : (
               <p className="text-sm text-muted-foreground mt-4">
-                Please <Link href="/auth/login" className="text-primary hover:underline">log in</Link> with the superior admin account.
+                Please <Link href={`/auth/login?redirect=${pathname}`} className="text-primary hover:underline">log in</Link> with the superior admin account.
               </p>
             )}
           </CardContent>

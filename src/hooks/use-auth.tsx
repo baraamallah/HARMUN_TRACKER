@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { OWNER_UID } from '@/lib/constants';
 import type { AdminManagedUser, StaffMember } from '@/types';
+import { getGoogleDriveImageSrc } from '@/lib/utils';
 
 interface AuthContextType {
   loggedInUser: User | null;
@@ -27,42 +28,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoggedInUser(user);
+      setAuthSessionLoading(true); // Start loading on any auth state change
       if (user) {
-        if (user.uid === OWNER_UID) {
-          setUserAppRole('owner');
-          setAuthSessionLoading(false);
-        } else {
-          try {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data() as AdminManagedUser;
-              setAdminUser(userData);
-              if (userData.role === 'admin') {
-                setUserAppRole('admin');
-              } else {
-                setUserAppRole('user');
-              }
-            } else {
-              setUserAppRole('user');
-              setAdminUser(null);
-            }
+        setLoggedInUser(user);
+        try {
+          let userProfile: AdminManagedUser | null = null;
+          let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
 
+          // First, fetch the user's application-specific profile from Firestore
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            userProfile = userDocSnap.data() as AdminManagedUser;
+            if (userProfile.avatarUrl) {
+              userProfile.avatarUrl = getGoogleDriveImageSrc(userProfile.avatarUrl);
+            }
+          }
+          setAdminUser(userProfile);
+
+          // Now determine the application role based on multiple factors
+          if (user.uid === OWNER_UID) {
+            finalUserRole = 'owner';
+            // For the owner, ensure their virtual profile is correctly constructed if it's missing from DB
+            if (!userProfile) {
+              setAdminUser({
+                id: user.uid,
+                email: user.email || 'owner@system.local',
+                role: 'owner',
+                displayName: user.displayName || 'System Owner',
+                avatarUrl: user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : '',
+                createdAt: user.metadata.creationTime,
+                updatedAt: user.metadata.lastSignInTime,
+                canAccessSuperiorAdmin: true,
+              });
+            }
+          } else if (userProfile?.role === 'admin') {
+            finalUserRole = 'admin';
+            // An admin can be elevated to 'owner' role if they have the flag
+            if (userProfile.canAccessSuperiorAdmin) {
+              finalUserRole = 'owner';
+            }
+          }
+          
+          setUserAppRole(finalUserRole);
+
+          // If the user is the owner, they can't also be a staff member.
+          if (finalUserRole === 'owner') {
+             setStaffMember(null);
+          } else {
+            // Separately, check if they are a staff member
             const staffDocRef = doc(db, 'staff_members', user.uid);
             const staffDocSnap = await getDoc(staffDocRef);
             if (staffDocSnap.exists()) {
-              setStaffMember(staffDocSnap.data() as StaffMember);
+              const staffData = staffDocSnap.data() as StaffMember;
+              if (staffData.imageUrl) {
+                staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
+              }
+              setStaffMember(staffData);
+            } else {
+              setStaffMember(null);
             }
-
-          } catch (error) {
-            console.error("Error fetching user role and data:", error);
-            setUserAppRole('user');
-          } finally {
-            setAuthSessionLoading(false);
           }
+        } catch (error) {
+          console.error("Critical error during user data fetch:", error);
+          // Reset to a known safe state on error
+          setUserAppRole('user');
+          setAdminUser(null);
+          setStaffMember(null);
+        } finally {
+          setAuthSessionLoading(false);
         }
       } else {
+        // User is logged out
+        setLoggedInUser(null);
         setUserAppRole(null);
         setStaffMember(null);
         setAdminUser(null);

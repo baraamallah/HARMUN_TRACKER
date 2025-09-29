@@ -3,8 +3,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { useAuth } from '@/hooks/use-auth';
 import { PlusCircle, Loader2, Users2 as UsersIcon, Layers, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
 import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
 
 interface StaffDashboardClientProps {
@@ -52,9 +52,8 @@ interface StaffDashboardClientProps {
 export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: StaffDashboardClientProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { loggedInUser: user, authSessionLoading: isAuthLoading } = useAuth();
   
-  const [user, setUser] = React.useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>(initialStaffMembers);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -78,16 +77,10 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
-        router.push('/auth/login');
-      } else {
-        setUser(currentUser);
-      }
-      setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router]);
+    if (!isAuthLoading && !user) {
+      router.push('/auth/login?redirect=/staff');
+    }
+  }, [isAuthLoading, user, router]);
   
   const fetchData = React.useCallback(async () => {
     if (isAuthLoading || !user) return;
@@ -178,7 +171,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     }
   };
 
-  if (isAuthLoading) {
+  if (isAuthLoading || !user) {
      return (
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <Loader2 className="h-16 w-16 animate-spin text-primary" />

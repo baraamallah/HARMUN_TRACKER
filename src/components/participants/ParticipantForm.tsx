@@ -40,7 +40,7 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } f
 import { v4 as uuidv4 } from 'uuid';
 import { getDefaultAttendanceStatusSetting } from '@/lib/actions';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
-import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
+import { Link as LinkIcon } from 'lucide-react';
 
 const participantFormSchema = z.object({
   id: z.string()
@@ -55,7 +55,7 @@ const participantFormSchema = z.object({
   classGrade: z.string().max(50, 'Class/Grade must be at most 50 characters.').optional().default(''),
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
-  imageUrl: z.string().url({ message: "Please enter a valid URL or upload an image." }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   additionalDetails: z.string().max(1000, 'Details must be at most 1000 characters.').optional().default(''),
 });
@@ -148,28 +148,9 @@ export function ParticipantForm({
     }
   }, [participantToEdit, form, isOpen]);
 
-  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        form.setValue('imageUrl', result, { shouldValidate: true, shouldDirty: true });
-        setImagePreview(result);
-      };
-      reader.onerror = () => {
-        toast({ title: 'Error Reading File', description: 'Could not read the selected image file.', variant: 'destructive'});
-        setImagePreview(form.getValues('imageUrl') || null); // revert to whatever was in form
-      }
-      reader.readAsDataURL(file);
-    }
-  };
-  
   const currentImageUrl = form.watch('imageUrl');
   useEffect(() => {
     if (currentImageUrl && currentImageUrl !== imagePreview) {
-      // Only update preview from URL field if it's a valid URL and not a data URI already set by file upload
-      // This simple check might need refinement if data URIs can be manually pasted and are very long.
       if (currentImageUrl.startsWith('http://') || currentImageUrl.startsWith('https://')) {
          setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
@@ -196,12 +177,11 @@ export function ParticipantForm({
         };
 
         const formImageUrl = data.imageUrl?.trim();
-        if (!formImageUrl || (formImageUrl.startsWith('https://placehold.co') && !imagePreview?.startsWith('data:image'))) {
-          // If no image URL, or it's a placeholder AND no file was uploaded (preview isn't a data URI)
+        if (!formImageUrl) {
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-          submissionData.imageUrl = formImageUrl; // This will be either user's URL or data URI from upload
+          submissionData.imageUrl = formImageUrl;
         }
 
         if (participantToEdit) {
@@ -448,22 +428,6 @@ export function ParticipantForm({
                       </FormItem>
                     )}
                   />
-                  <FormItem className="space-y-1">
-                    <FormLabel htmlFor="form-imageUpload" className="text-xs text-muted-foreground flex items-center">
-                      <Upload className="mr-1.5 h-3.5 w-3.5"/> Or Upload Image (Optional)
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        id="form-imageUpload" 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleImageFileChange} 
-                        disabled={isPending}
-                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                      />
-                    </FormControl>
-                     <p className="text-xs text-muted-foreground pt-1">Max 1MB. JPG, PNG, WEBP recommended.</p>
-                  </FormItem>
                 </div>
               </div>
             </div>

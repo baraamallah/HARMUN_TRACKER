@@ -3,8 +3,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/hooks/use-auth';
 import { PlusCircle, Layers, Trash2, Loader2, Users as UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,10 +42,10 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants'; // Using shared constants
+import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
 
 interface ParticipantDashboardClientProps {
-  initialParticipants: Participant[]; // Will be empty initially
+  initialParticipants: Participant[];
   systemSchools: string[];
   systemCommittees: string[];
 }
@@ -54,11 +53,10 @@ interface ParticipantDashboardClientProps {
 export function ParticipantDashboardClient({ initialParticipants, systemSchools, systemCommittees }: ParticipantDashboardClientProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { loggedInUser: user, authSessionLoading: isAuthLoading } = useAuth();
   
-  const [user, setUser] = React.useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [participants, setParticipants] = React.useState<Participant[]>(initialParticipants);
-  const [isLoading, setIsLoading] = React.useState(true); // Start true for initial fetch
+  const [isLoading, setIsLoading] = React.useState(true);
   
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
@@ -80,21 +78,13 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
   const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
 
-  // Authentication check
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
-        router.push('/auth/login');
-      } else {
-        setUser(currentUser);
-      }
-      setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router]);
+    if (!isAuthLoading && !user) {
+      router.push('/auth/login?redirect=/');
+    }
+  }, [isAuthLoading, user, router]);
 
   const fetchData = React.useCallback(async () => {
-    // Prevent fetching if auth is still loading or user is not set
     if (isAuthLoading || !user) return;
 
     setIsLoading(true);
@@ -184,7 +174,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     }
   };
   
-  if (isAuthLoading) {
+  if (isAuthLoading || !user) {
      return (
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <Loader2 className="h-16 w-16 animate-spin text-primary" />

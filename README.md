@@ -42,12 +42,12 @@ The MUN Attendance Tracker is a Next.js application designed to help manage and 
     *   Links to participant profile pages (profile pages themselves are not inherently public/private; access control to data within them would be a further step if required beyond general public read of basic list).
     *   Does not require login.
 *   **Superior Admin Panel (`/superior-admin`)**:
-    *   Restricted access to a designated Owner UID via Firebase Authentication.
+    *   Restricted access to the designated Owner UID or other designated admins via Firebase Authentication.
     *   Manage system-wide lists of Schools, Committees, and **Staff Teams** (add new ones).
     *   Manage staff members (add, view list, link to edit, delete).
-    *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID).
+    *   Manage administrator accounts (grant/revoke admin role for existing Firebase Auth users by providing their Auth UID, and grant/revoke superior admin access).
     *   Manage System Settings (e.g., Default Attendance Status for new participants).
-    *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner.
+    *   Accessible via direct navigation or a conditional link in the sidebar if logged in as the owner or a superior admin.
 *   **Theme Toggling**:
     *   User-selectable Light, Dark, or System theme preference.
 *   **Responsive Design**:
@@ -124,56 +124,60 @@ The `OWNER_UID` used in these rules is taken from `src/lib/constants.ts` (curren
         function isOwner() {
           return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // Replace with your Owner UID from src/lib/constants.ts
         }
+        
+        // Helper function to check for superior admin privileges (Owner or granted access)
+        function isSuperiorAdmin() {
+            return isOwner() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canAccessSuperiorAdmin == true);
+        }
 
         // Participants Collection
         match /participants/{participantId} {
           allow read: if true; // Public read for list and profiles
-          allow create, delete: if isOwner() || isAdmin();
-          allow update: if (isOwner() || isAdmin()) || 
-                           (request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'attended', 'checkInTime']));
+          allow create, delete, update: if isSuperiorAdmin() || isAdmin();
         }
 
         // Staff Members Collection
         match /staff_members/{staffMemberId} {
-          allow read, write: if isOwner() || isAdmin();
+          allow read, write: if isSuperiorAdmin() || isAdmin();
         }
 
         // System Schools Collection
         match /system_schools/{schoolId} {
           allow read: if true; // Public read for dropdowns, filters
-          allow write: if isOwner(); // Owner only for adding/deleting
+          allow write: if isSuperiorAdmin(); // Superior Admins only for adding/deleting
         }
 
         // System Committees Collection
         match /system_committees/{committeeId} {
           allow read: if true; // Public read for dropdowns, filters
-          allow write: if isOwner(); // Owner only for adding/deleting
+          allow write: if isSuperiorAdmin(); // Superior Admins only for adding/deleting
         }
 
         // System Staff Teams Collection
         match /system_staff_teams/{teamId} {
           allow read: if true; // Public read for dropdowns, filters
-          allow write: if isOwner(); // Owner only for adding/deleting
+          allow write: if isSuperiorAdmin(); // Superior Admins only for adding/deleting
         }
 
         // System Configuration Collection
         match /system_config/{settingId} {
           // Public read for settings like default attendance status.
-          // Write is restricted to Owner.
+          // Write is restricted to Superior Admins.
           allow read: if true; 
-          allow write: if isOwner();
+          allow write: if isSuperiorAdmin();
         }
 
         // Users Collection (for managing admin roles)
         match /users/{userId} {
-          allow write: if isOwner(); // Owner can write/manage roles
-          allow read: if isOwner() || (request.auth != null && request.auth.uid == userId); // Owner can read any, user can read own
+          // Superior Admins can manage all user role documents.
+          // Regular users can read their own document (to know their own role).
+          allow read, write: if isSuperiorAdmin();
+          allow get: if request.auth != null;
         }
 
-        // Allow Owner to list all user documents (for admin management page)
-        // This is necessary for the admin-management page to display existing admins.
+        // Allow Superior Admins to list all user documents (for admin management page)
         match /users {
-           allow list: if isOwner(); // Owner only
+           allow list: if isSuperiorAdmin(); 
         }
       }
     }

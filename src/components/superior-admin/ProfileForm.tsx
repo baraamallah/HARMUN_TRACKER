@@ -19,9 +19,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
-import { Upload, Link as LinkIcon } from 'lucide-react';
+import { Link as LinkIcon } from 'lucide-react';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -57,23 +57,10 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     }
   }, [adminUser, form]);
 
-  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        form.setValue('avatarUrl', result, { shouldValidate: true, shouldDirty: true });
-        setImagePreview(result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const currentImageUrl = form.watch('avatarUrl');
   useEffect(() => {
-    if (currentImageUrl && currentImageUrl !== imagePreview) {
-      if (currentImageUrl.startsWith('http') || currentImageUrl.startsWith('data:')) {
+    if (currentImageUrl !== imagePreview) { // Check if it's different to avoid loops
+      if (currentImageUrl && (currentImageUrl.startsWith('http') || currentImageUrl.startsWith('https'))) {
         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
@@ -85,12 +72,21 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     startTransition(async () => {
       try {
         const userDocRef = doc(db, 'users', adminUser.id);
-        await updateDoc(userDocRef, {
+        // Use setDoc with merge:true to create the doc if it doesn't exist, or update it if it does.
+        // This is crucial for the owner account which may not have a user doc initially.
+        await setDoc(userDocRef, {
           displayName: data.displayName.trim(),
           avatarUrl: data.avatarUrl?.trim() || '',
           updatedAt: serverTimestamp(),
-        });
+          // Ensure email and role are not overwritten if the doc already exists
+          email: adminUser.email,
+          role: adminUser.role,
+        }, { merge: true });
+
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
+        // Manually mark the form as not dirty to disable the save button
+        form.reset(data);
+
       } catch (error: any) {
         console.error("Error updating profile:", error);
         toast({
@@ -112,7 +108,7 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
           <FormLabel>Avatar</FormLabel>
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20 border">
-              <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" />
+              <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" data-ai-hint="profile preview"/>
               <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
             </Avatar>
             <div className="flex-grow space-y-3">
@@ -133,7 +129,6 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
                         disabled={isPending}
                         onChange={(e) => {
                             field.onChange(e);
-                            setImagePreview(e.target.value ? getGoogleDriveImageSrc(e.target.value) : null);
                         }}
                       />
                     </FormControl>
@@ -141,21 +136,6 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
                   </FormItem>
                 )}
               />
-              <FormItem className="space-y-1">
-                <FormLabel htmlFor="form-imageUpload" className="text-xs text-muted-foreground flex items-center">
-                  <Upload className="mr-1.5 h-3.5 w-3.5"/> Or Upload Image (Optional)
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    id="form-imageUpload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileChange}
-                    disabled={isPending}
-                    className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </FormControl>
-              </FormItem>
             </div>
           </div>
         </div>

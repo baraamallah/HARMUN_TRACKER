@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -13,6 +14,7 @@ import {
   QrCode, 
   Clipboard,
   BarChart,
+  User,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -92,11 +94,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   };
 
   const getAvatarFallback = () => {
-    if (loggedInUser?.email) {
-      return loggedInUser.email.substring(0, 2).toUpperCase();
-    }
     if (loggedInUser?.displayName) {
       return loggedInUser.displayName.substring(0, 2).toUpperCase();
+    }
+    if (loggedInUser?.email) {
+      return loggedInUser.email.substring(0, 2).toUpperCase();
     }
     return "U";
   }
@@ -182,17 +184,32 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={loggedInUser.photoURL || `https://placehold.co/40x40.png?text=${getAvatarFallback()}`} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} data-ai-hint="user avatar"/>
+                    <AvatarImage src={loggedInUser.photoURL || undefined} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} data-ai-hint="user avatar"/>
                     <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  {loggedInUser.displayName || loggedInUser.email || "My Account"}
+                <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                            {loggedInUser.displayName || "User"}
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                            {loggedInUser.email}
+                        </p>
+                    </div>
                 </DropdownMenuLabel>
-                {userAppRole && <DropdownMenuLabel className="text-xs text-muted-foreground -mt-2 capitalize">Role: {userAppRole}</DropdownMenuLabel> }
+                {userAppRole && <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground -mt-1 capitalize">Role: {userAppRole}</DropdownMenuLabel> }
                 <DropdownMenuSeparator />
+                {userAppRole === 'owner' && (
+                    <Link href="/superior-admin/profile" passHref legacyBehavior>
+                        <DropdownMenuItem>
+                            <User className="mr-2 h-4 w-4" />
+                            My Profile
+                        </DropdownMenuItem>
+                    </Link>
+                )}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
                 </DropdownMenuItem>

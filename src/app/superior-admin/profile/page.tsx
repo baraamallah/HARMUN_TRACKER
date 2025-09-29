@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -8,10 +9,11 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowLeft, Home, User } from 'lucide-react';
+import { ArrowLeft, Home, User, TriangleAlert, LogOut, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import type { AdminManagedUser } from '@/types';
@@ -19,7 +21,7 @@ import { ProfileForm } from '@/components/superior-admin/ProfileForm';
 
 export default function ProfilePage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading } = useAuth();
+  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading, userAppRole } = useAuth();
 
   if (isLoading) {
     return (
@@ -27,10 +29,10 @@ export default function ProfilePage() {
         <Card className="w-full max-w-lg shadow-2xl">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <User size={32} />
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
             <CardTitle className="text-2xl font-bold">My Profile</CardTitle>
-            <CardDescription>Loading your profile...</CardDescription>
+            <CardDescription>Loading your profile and verifying credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -41,27 +43,63 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser || !adminUser) {
+  // The useAuth hook now handles creating the owner's virtual profile, so we only need to check if you are NOT the owner.
+  if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
           <CardHeader>
+             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert size={48} />
+            </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You must be logged in to view this page.
+              Only the Superior Admin can access this profile page.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
-              <Button variant="destructive" size="lg" className="w-full">
-                Log In
+          <CardFooter className="flex-col gap-4 mt-4">
+             <Link href="/superior-admin" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin
               </Button>
             </Link>
-          </CardContent>
+             <Link href="/" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              </Button>
+            </Link>
+          </CardFooter>
         </Card>
       </div>
     );
   }
+  
+  // By this point, if you are the owner, `adminUser` is guaranteed to be populated by the useAuth hook.
+  if (!adminUser) {
+     return (
+       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
+        <Card className="w-full max-w-lg shadow-2xl border-yellow-500">
+          <CardHeader>
+             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-500">
+              <TriangleAlert size={48} />
+            </div>
+            <CardTitle className="text-3xl font-bold text-yellow-600">Profile Data Missing</CardTitle>
+            <CardDescription className="text-lg mt-2 text-muted-foreground">
+              An unexpected error occurred and your profile data could not be loaded. Please try refreshing the page.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex-col gap-4 mt-4">
+             <Link href="/" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+     )
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
@@ -87,7 +125,7 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="text-2xl">Edit Your Profile</CardTitle>
             <CardDescription>
-              Update your display name and avatar.
+              Update your display name and avatar. Changes will be reflected across the application.
             </CardDescription>
           </CardHeader>
           <CardContent>

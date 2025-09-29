@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2 } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2, Edit, UserPlus } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { signOut } from 'firebase/auth';
 import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore'; // Ensured getDoc is here
@@ -49,7 +49,7 @@ const USERS_COLLECTION = 'users';
 
 export default function AdminManagementPage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth } = useAuth();
+  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth, userAppRole } = useAuth();
   const { toast } = useToast();
   
   const [adminUsers, setAdminUsers] = useState<AdminManagedUser[]>([]);
@@ -59,8 +59,22 @@ export default function AdminManagementPage() {
   const [userToRevoke, setUserToRevoke] = useState<AdminManagedUser | null>(null);
   const [isRevokeDialogVisible, setIsRevokeDialogVisible] = useState(false);
 
+  const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
+  const [adminToEdit, setAdminToEdit] = useState<AdminManagedUser | null>(null);
+
+  const handleOpenAddDialog = () => {
+    setAdminToEdit(null);
+    setIsAddAdminDialogOpen(true);
+  };
+
+  const handleOpenEditDialog = (admin: AdminManagedUser) => {
+    setAdminToEdit(admin);
+    setIsAddAdminDialogOpen(true);
+  };
+
+
   const fetchAdmins = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
+    if (userAppRole !== 'owner') return;
     setIsLoadingAdmins(true);
     try {
       const usersColRef = collection(db, USERS_COLLECTION);
@@ -74,6 +88,7 @@ export default function AdminManagementPage() {
           displayName: data.displayName,
           role: data.role,
           avatarUrl: data.avatarUrl,
+          canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as AdminManagedUser;
@@ -91,13 +106,13 @@ export default function AdminManagementPage() {
     } finally {
       setIsLoadingAdmins(false);
     }
-  }, [toast, currentUser]);
+  }, [toast, userAppRole]);
 
   useEffect(() => {
-    if (currentUser && currentUser.uid === OWNER_UID) {
+    if (!isLoadingAuth && userAppRole === 'owner') {
       fetchAdmins();
     }
-  }, [currentUser, fetchAdmins]);
+  }, [isLoadingAuth, userAppRole, fetchAdmins]);
 
   const handleLogout = async () => {
     try {
@@ -177,7 +192,7 @@ export default function AdminManagementPage() {
     );
   }
 
-  if (!currentUser || currentUser.uid !== OWNER_UID) {
+  if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
@@ -187,16 +202,15 @@ export default function AdminManagementPage() {
             </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You do not have permission to manage admin accounts.
+              You do not have permission to manage admin accounts. This page is for the designated Superior Admin only.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {currentUser && (
+            {currentUser ? (
               <Button onClick={handleLogout} variant="destructive" size="lg" className="w-full">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Wrong User'})
               </Button>
-            )}
-            {!currentUser && (
+            ) : (
               <p className="text-sm text-muted-foreground mt-4">
                 Please <Link href={`/auth/login?redirect=${pathname}`} className="text-primary hover:underline">log in</Link> with the superior admin account.
               </p>
@@ -249,7 +263,9 @@ export default function AdminManagementPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex justify-end">
-              <AddAdminDialog onAdminAdded={fetchAdmins} />
+              <Button onClick={handleOpenAddDialog}>
+                <UserPlus className="mr-2 h-5 w-5" /> Grant Admin Role
+              </Button>
             </div>
             
             <Separator />
@@ -296,15 +312,31 @@ export default function AdminManagementPage() {
                             {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{admin.id}</TableCell>
-                          <TableCell><Badge variant="secondary">{admin.role}</Badge></TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge variant="secondary">{admin.role}</Badge>
+                              {admin.canAccessSuperiorAdmin && <Badge variant="destructive" className="w-fit">Superior</Badge>}
+                            </div>
+                          </TableCell>
                            <TableCell className="text-sm text-muted-foreground">
                             {formatDateString(admin.createdAt)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-blue-500 hover:text-blue-600 h-8 w-8"
+                              onClick={() => handleOpenEditDialog(admin)}
+                              disabled={isPendingAction}
+                              title="Edit Admin"
+                            >
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit Admin</span>
+                            </Button>
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="text-destructive hover:text-destructive/80" 
+                              className="text-destructive hover:text-destructive/80 h-8 w-8" 
                               onClick={() => confirmRevokeAdmin(admin)}
                               disabled={isPendingAction}
                               title="Revoke Admin Role"
@@ -333,6 +365,17 @@ export default function AdminManagementPage() {
           </CardContent>
         </Card>
       </main>
+      
+      <AddAdminDialog
+        isOpen={isAddAdminDialogOpen}
+        onOpenChange={setIsAddAdminDialogOpen}
+        adminToEdit={adminToEdit}
+        onAdminAdded={() => {
+          fetchAdmins();
+          setIsAddAdminDialogOpen(false);
+          setAdminToEdit(null);
+        }}
+      />
 
       <AlertDialog open={isRevokeDialogVisible} onOpenChange={setIsRevokeDialogVisible}>
         <AlertDialogContent>

@@ -40,7 +40,7 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/fi
 import { getDefaultStaffStatusSetting } from '@/lib/actions';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Link as LinkIcon } from 'lucide-react'; // Removed Sparkles, Loader2 for AI
+import { Link as LinkIcon } from 'lucide-react';
 
 const staffMemberFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
@@ -50,14 +50,19 @@ const staffMemberFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
   phone: z.string().max(25, 'Phone number seems too long.').optional().or(z.literal('')),
   contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''),
-  imageUrl: z.string().url({ message: "Please enter a valid URL or upload an image." }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
   permissions: z.object({
     canEditParticipants: z.boolean().default(false),
     canEditParticipantStatus: z.boolean().default(false),
     canEditStaff: z.boolean().default(false),
     canEditStaffStatus: z.boolean().default(false),
-  }).default({}),
+  }).optional().default({
+    canEditParticipants: false,
+    canEditParticipantStatus: false,
+    canEditStaff: false,
+    canEditStaffStatus: false,
+  }),
 });
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
@@ -101,6 +106,12 @@ export function StaffMemberForm({
     defaultValues: {
       name: '', role: '', department: '', team: '', email: '',
       phone: '', contactInfo: '', imageUrl: '', notes: '',
+      permissions: {
+        canEditParticipants: false,
+        canEditParticipantStatus: false,
+        canEditStaff: false,
+        canEditStaffStatus: false,
+      },
     },
   });
 
@@ -141,23 +152,6 @@ export function StaffMemberForm({
     }
   }, [staffMemberToEdit, form, isOpen]);
 
-  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        form.setValue('imageUrl', result, { shouldValidate: true, shouldDirty: true });
-        setImagePreview(result);
-      };
-      reader.onerror = () => {
-        toast({ title: 'Error Reading File', description: 'Could not read the selected image file.', variant: 'destructive'});
-        setImagePreview(form.getValues('imageUrl') || null);
-      }
-      reader.readAsDataURL(file);
-    }
-  };
-  
   const currentImageUrl = form.watch('imageUrl');
   useEffect(() => {
      if (currentImageUrl && currentImageUrl !== imagePreview) {
@@ -186,7 +180,7 @@ export function StaffMemberForm({
         };
         
         const formImageUrl = data.imageUrl?.trim();
-        if (!formImageUrl || (formImageUrl.startsWith('https://placehold.co') && !imagePreview?.startsWith('data:image'))) {
+        if (!formImageUrl) {
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
           submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
@@ -385,22 +379,6 @@ export function StaffMemberForm({
                       </FormItem>
                     )}
                   />
-                  <FormItem className="space-y-1">
-                    <FormLabel htmlFor="staff-form-imageUpload" className="text-xs text-muted-foreground flex items-center">
-                      <Upload className="mr-1.5 h-3.5 w-3.5"/> Or Upload Image (Optional)
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        id="staff-form-imageUpload" 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleImageFileChange} 
-                        disabled={isPending}
-                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground pt-1">Max 1MB. JPG, PNG, WEBP recommended.</p>
-                  </FormItem>
                 </div>
               </div>
             </div>
@@ -434,6 +412,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -451,6 +430,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -468,6 +448,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
@@ -485,6 +466,7 @@ export function StaffMemberForm({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isPending}
                         />
                       </FormControl>
                     </FormItem>
