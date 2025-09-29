@@ -7,6 +7,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { OWNER_UID } from '@/lib/constants';
 import type { AdminManagedUser, StaffMember } from '@/types';
+import { getGoogleDriveImageSrc } from '@/lib/utils';
+
 
 interface AuthContextType {
   loggedInUser: User | null;
@@ -38,6 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const userDocSnap = await getDoc(userDocRef);
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data() as AdminManagedUser;
+               if (userData.avatarUrl) {
+                userData.avatarUrl = getGoogleDriveImageSrc(userData.avatarUrl);
+              }
               setAdminUser(userData);
               if (userData.role === 'admin') {
                 setUserAppRole('admin');
@@ -52,7 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const staffDocRef = doc(db, 'staff_members', user.uid);
             const staffDocSnap = await getDoc(staffDocRef);
             if (staffDocSnap.exists()) {
-              setStaffMember(staffDocSnap.data() as StaffMember);
+              const staffData = staffDocSnap.data() as StaffMember;
+              if (staffData.imageUrl) {
+                staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
+              }
+              setStaffMember(staffData);
             }
 
           } catch (error) {
