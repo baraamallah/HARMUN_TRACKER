@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -45,11 +44,13 @@ const addAdminSchema = z.object({
 type AddAdminFormData = z.infer<typeof addAdminSchema>;
 
 interface AddAdminDialogProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  adminToEdit?: AdminManagedUser | null;
   onAdminAdded?: () => void;
 }
 
-export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded }: AddAdminDialogProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
@@ -62,6 +63,26 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
       canAccessSuperiorAdmin: false,
     },
   });
+  
+  useEffect(() => {
+    if (isOpen) {
+      if (adminToEdit) {
+        form.reset({
+          email: adminToEdit.email,
+          displayName: adminToEdit.displayName || '',
+          authUid: adminToEdit.id,
+          canAccessSuperiorAdmin: adminToEdit.canAccessSuperiorAdmin || false,
+        });
+      } else {
+        form.reset({
+          email: '',
+          displayName: '',
+          authUid: '',
+          canAccessSuperiorAdmin: false,
+        });
+      }
+    }
+  }, [adminToEdit, isOpen, form]);
 
   const onSubmit = (data: AddAdminFormData) => {
     startTransition(async () => {
@@ -124,7 +145,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
         }
 
         form.reset();
-        setIsOpen(false);
+        onOpenChange(false);
         onAdminAdded?.();
 
       } catch (error: any) {
@@ -141,18 +162,13 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) form.reset();
-      setIsOpen(open);
+      onOpenChange(open);
     }}>
-      <DialogTrigger asChild>
-        <Button>
-          <UserPlus className="mr-2 h-5 w-5" /> Grant Admin Role
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Grant Admin Role</DialogTitle>
+          <DialogTitle>{adminToEdit ? 'Edit Admin' : 'Grant Admin Role'}</DialogTitle>
           <DialogDescription>
-            Enter the email and Firebase Auth UID of an existing Firebase Authentication user to grant them admin privileges.
+            {adminToEdit ? 'Update the details and permissions for this administrator.' : 'Enter the email and Firebase Auth UID of an existing Firebase Authentication user to grant them admin privileges.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -177,7 +193,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
                 <FormItem>
                   <FormLabel>Display Name (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="User Name" {...field} disabled={isPending} />
+                    <Input placeholder="User Name" {...field} value={field.value || ''} disabled={isPending} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -190,7 +206,7 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
                 <FormItem>
                   <FormLabel>Firebase Auth UID</FormLabel>
                   <FormControl>
-                    <Input placeholder="User's Firebase Authentication UID" {...field} disabled={isPending} />
+                    <Input placeholder="User's Firebase Authentication UID" {...field} disabled={isPending || !!adminToEdit} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -222,13 +238,11 @@ export function AddAdminDialog({ onAdminAdded }: AddAdminDialogProps) {
             />
             
             <DialogFooter className="pt-4">
-              <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={isPending}>
-                  Cancel
-                </Button>
-              </DialogClose>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving Role...' : 'Save Admin Role'}
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending || !form.formState.isDirty}>
+                {isPending ? 'Saving...' : (adminToEdit ? 'Save Changes' : 'Grant Role')}
               </Button>
             </DialogFooter>
           </form>
