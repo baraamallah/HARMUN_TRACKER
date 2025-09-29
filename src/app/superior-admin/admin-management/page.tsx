@@ -49,7 +49,7 @@ const USERS_COLLECTION = 'users';
 
 export default function AdminManagementPage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth } = useAuth();
+  const { loggedInUser: currentUser, authSessionLoading: isLoadingAuth, userAppRole } = useAuth();
   const { toast } = useToast();
   
   const [adminUsers, setAdminUsers] = useState<AdminManagedUser[]>([]);
@@ -60,7 +60,7 @@ export default function AdminManagementPage() {
   const [isRevokeDialogVisible, setIsRevokeDialogVisible] = useState(false);
 
   const fetchAdmins = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
+    if (userAppRole !== 'owner') return;
     setIsLoadingAdmins(true);
     try {
       const usersColRef = collection(db, USERS_COLLECTION);
@@ -91,13 +91,13 @@ export default function AdminManagementPage() {
     } finally {
       setIsLoadingAdmins(false);
     }
-  }, [toast, currentUser]);
+  }, [toast, userAppRole]);
 
   useEffect(() => {
-    if (currentUser && currentUser.uid === OWNER_UID) {
+    if (!isLoadingAuth && userAppRole === 'owner') {
       fetchAdmins();
     }
-  }, [currentUser, fetchAdmins]);
+  }, [isLoadingAuth, userAppRole, fetchAdmins]);
 
   const handleLogout = async () => {
     try {
@@ -177,7 +177,7 @@ export default function AdminManagementPage() {
     );
   }
 
-  if (!currentUser || currentUser.uid !== OWNER_UID) {
+  if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
@@ -187,16 +187,15 @@ export default function AdminManagementPage() {
             </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
-              You do not have permission to manage admin accounts.
+              You do not have permission to manage admin accounts. This page is for the designated Superior Admin only.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {currentUser && (
+            {currentUser ? (
               <Button onClick={handleLogout} variant="destructive" size="lg" className="w-full">
                 <LogOut className="mr-2 h-5 w-5" /> Logout ({currentUser.email || 'Wrong User'})
               </Button>
-            )}
-            {!currentUser && (
+            ) : (
               <p className="text-sm text-muted-foreground mt-4">
                 Please <Link href={`/auth/login?redirect=${pathname}`} className="text-primary hover:underline">log in</Link> with the superior admin account.
               </p>

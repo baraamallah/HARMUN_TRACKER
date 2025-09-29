@@ -8,10 +8,11 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowLeft, Home, User } from 'lucide-react';
+import { ArrowLeft, Home, User, TriangleAlert, LogOut } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import type { AdminManagedUser } from '@/types';
@@ -30,7 +31,7 @@ export default function ProfilePage() {
               <User size={32} />
             </div>
             <CardTitle className="text-2xl font-bold">My Profile</CardTitle>
-            <CardDescription>Loading your profile...</CardDescription>
+            <CardDescription>Loading your profile and verifying credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -41,11 +42,14 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser || !adminUser) {
+  if (!currentUser) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-destructive">
           <CardHeader>
+             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert size={48} />
+            </div>
             <CardTitle className="text-3xl font-bold text-destructive">Access Denied</CardTitle>
             <CardDescription className="text-lg mt-2 text-muted-foreground">
               You must be logged in to view this page.
@@ -62,6 +66,37 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  // After loading and confirming a currentUser exists, check for the adminUser object.
+  // The useAuth hook ensures adminUser is fetched if a currentUser is present.
+  // A null adminUser for a logged-in user means they don't have a record in the 'users' collection.
+  if (!adminUser) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
+        <Card className="w-full max-w-lg shadow-2xl border-yellow-500">
+          <CardHeader>
+             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-500">
+              <TriangleAlert size={48} />
+            </div>
+            <CardTitle className="text-3xl font-bold text-yellow-600">Profile Not Found</CardTitle>
+            <CardDescription className="text-lg mt-2 text-muted-foreground">
+              Your authentication is valid, but your application profile could not be found. 
+              This may be because your user record hasn't been created in the database yet.
+              Please contact the Superior Admin if this persists.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex-col gap-4 mt-4">
+             <Link href="/" legacyBehavior passHref>
+              <Button variant="outline" className="w-full">
+                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
