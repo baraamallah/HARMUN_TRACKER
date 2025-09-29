@@ -33,7 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         if (user.uid === OWNER_UID) {
           setUserAppRole('owner');
-          setAuthSessionLoading(false);
+           try {
+            const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+            if (userDocSnap.exists()) {
+              setAdminUser(userDocSnap.data() as AdminManagedUser);
+            }
+          } catch (error) {
+            console.error("Error fetching owner's user doc:", error);
+          } finally {
+            setAuthSessionLoading(false);
+          }
         } else {
           try {
             const userDocRef = doc(db, 'users', user.uid);
