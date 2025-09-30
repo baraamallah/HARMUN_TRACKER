@@ -133,8 +133,9 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               </>
             ) : navItemsToRender.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href} legacyBehavior passHref>
+
                   <SidebarMenuButton
+                    asChild
                     isActive={pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))}
                     tooltip={item.tooltip}
                     className={cn(
@@ -142,10 +143,13 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                       (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
+                    <Link href={item.href}>
+                      <span>
+                        <item.icon className="h-5 w-5" />
+                        <span>{item.label}</span>
+                      </span>
+                    </Link>
                   </SidebarMenuButton>
-                </Link>
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
@@ -159,12 +163,14 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               <span>Logout</span>
             </Button>
           ) : (
-            <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
-              <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent/50">
-                <LogIn className="h-5 w-5" />
-                <span>Login</span>
-              </Button>
-            </Link>
+            <Button asChild variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent/50">
+              <Link href={`/auth/login?redirect=${pathname}`}>
+                <span>
+                  <LogIn className="h-5 w-5" />
+                  <span>Login</span>
+                </span>
+              </Link>
+            </Button>
           )}
         </SidebarFooter>
       </Sidebar>
@@ -203,12 +209,14 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
                 {userAppRole && <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground -mt-1 capitalize">Role: {userAppRole}</DropdownMenuLabel> }
                 <DropdownMenuSeparator />
                 {userAppRole === 'owner' && (
-                    <Link href="/superior-admin/profile" passHref legacyBehavior>
-                        <DropdownMenuItem>
-                            <User className="mr-2 h-4 w-4" />
-                            My Profile
-                        </DropdownMenuItem>
-                    </Link>
+                    <DropdownMenuItem asChild>
+                        <Link href="/superior-admin/profile">
+                            <span>
+                                <User className="mr-2 h-4 w-4" />
+                                My Profile
+                            </span>
+                        </Link>
+                    </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Logout
@@ -216,11 +224,11 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-             <Link href={`/auth/login?redirect=${pathname}`} legacyBehavior passHref>
-                <Button variant="outline">
-                  <LogIn className="mr-2 h-4 w-4" /> Sign In
-                </Button>
-             </Link>
+             <Button asChild variant="outline">
+                <Link href={`/auth/login?redirect=${pathname}`}>
+                  <span><LogIn className="mr-2 h-4 w-4" /> Sign In</span>
+                </Link>
+             </Button>
           )}
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

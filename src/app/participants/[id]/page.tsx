@@ -205,7 +205,7 @@ export default function ParticipantProfilePage() {
         <h1 className="text-2xl font-bold">Participant Not Found</h1>
         <p className="text-muted-foreground mb-6">The participant you are looking for does not exist or could not be loaded.</p>
         <Button asChild variant="outline">
-          <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</Link>
+          <Link href="/"><span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</span></Link>
         </Button>
       </div>
     );
@@ -213,10 +213,9 @@ export default function ParticipantProfilePage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
-       <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
-        <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</Link>
-      </Button>
-
+      <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
+       <Link href="/"><span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</span></Link>
+     </Button>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <section aria-labelledby="participant-info-heading" className="lg:col-span-1 space-y-6">
           <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
@@ -351,7 +350,6 @@ export default function ParticipantProfilePage() {
           </Card>
         </section>
       </div>
-
       <ParticipantForm
         isOpen={isParticipantFormOpen}
         onOpenChange={setIsParticipantFormOpen}

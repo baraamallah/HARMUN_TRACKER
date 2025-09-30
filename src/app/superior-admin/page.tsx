@@ -401,11 +401,11 @@ export default function SuperiorAdminPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col gap-4 p-6 pt-2">
-            <Link href="/" legacyBehavior passHref>
-              <Button variant="outline" className="w-full text-md py-3">
-                <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
-              </Button>
-            </Link>
+            <Button asChild variant="outline" className="w-full text-md py-3">
+              <Link href="/">
+                <span><Home className="mr-2 h-5 w-5" /> Go to Main Dashboard</span>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -527,11 +527,11 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Link href="/superior-admin/profile" passHref legacyBehavior>
-                <Button className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
-                    <Settings className="mr-2 h-4 w-4" /> Go to My Profile
-                </Button>
-              </Link>
+              <Button asChild className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
+                <Link href="/superior-admin/profile">
+                    <span><Settings className="mr-2 h-4 w-4" /> Go to My Profile</span>
+                </Link>
+              </Button>
             </CardFooter>
           </Card>
 
@@ -546,11 +546,11 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Link href="/superior-admin/admin-management" passHref legacyBehavior>
-                <Button className="w-full bg-red-500 hover:bg-red-600 text-white">
-                    <Users className="mr-2 h-4 w-4" /> Manage Admins
-                </Button>
-              </Link>
+              <Button asChild className="w-full bg-red-500 hover:bg-red-600 text-white">
+                <Link href="/superior-admin/admin-management">
+                    <span><Users className="mr-2 h-4 w-4" /> Manage Admins</span>
+                </Link>
+              </Button>
             </CardFooter>
           </Card>
 
@@ -627,11 +627,11 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Link href="/" passHref legacyBehavior>
-                <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white">
-                  <ExternalLink className="mr-2 h-4 w-4" /> Go to Participant Dashboard
-                </Button>
-              </Link>
+              <Button asChild className="w-full bg-blue-500 hover:bg-blue-600 text-white">
+                <Link href="/">
+                  <span><ExternalLink className="mr-2 h-4 w-4" /> Go to Participant Dashboard</span>
+                </Link>
+              </Button>
             </CardFooter>
           </Card>
 
@@ -646,11 +646,11 @@ export default function SuperiorAdminPage() {
               </p>
             </CardContent>
             <CardFooter>
-              <Link href="/superior-admin/system-settings" passHref legacyBehavior>
-                <Button className="w-full bg-purple-500 hover:bg-purple-600 text-white">
-                   <Settings className="mr-2 h-4 w-4" /> Configure System Settings
-                </Button>
-              </Link>
+              <Button asChild className="w-full bg-purple-500 hover:bg-purple-600 text-white">
+                <Link href="/superior-admin/system-settings">
+                   <span><Settings className="mr-2 h-4 w-4" /> Configure System Settings</span>
+                </Link>
+              </Button>
             </CardFooter>
           </Card>
         </div>

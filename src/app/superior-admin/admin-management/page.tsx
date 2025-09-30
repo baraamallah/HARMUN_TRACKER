@@ -217,16 +217,16 @@ export default function AdminManagementPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col gap-4 mt-4">
-             <Link href="/superior-admin" legacyBehavior passHref>
-              <Button variant="outline" className="w-full">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin
-              </Button>
-            </Link>
-            <Link href="/" legacyBehavior passHref>
-              <Button variant="outline" className="w-full">
-                <Home className="mr-2 h-4 w-4" /> Go to Main Dashboard
-              </Button>
-            </Link>
+             <Button asChild variant="outline" className="w-full">
+              <Link href="/superior-admin">
+                <span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/">
+                <span><Home className="mr-2 h-4 w-4" /> Go to Main Dashboard</span>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -243,12 +243,14 @@ export default function AdminManagementPage() {
               Admin Account Management
             </h1>
           </div>
-          <Link href="/superior-admin" passHref legacyBehavior>
-            <Button variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Superior Admin
-            </Button>
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/superior-admin">
+              <span>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Superior Admin
+              </span>
+            </Link>
+          </Button>
         </div>
       </header>
 

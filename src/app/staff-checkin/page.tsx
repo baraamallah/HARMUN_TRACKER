@@ -148,7 +148,7 @@ function StaffCheckinPageContent() {
             {effectiveStaffId && <p className="text-sm text-muted-foreground">ID: {effectiveStaffId}</p>}
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8">
-             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
+             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><span><Home className="mr-2 h-4 w-4"/>Staff Dashboard</span></Link></Button>
           </CardFooter>
         </Card>
       </div>
@@ -191,7 +191,7 @@ function StaffCheckinPageContent() {
             </p>
             <Button asChild className="w-full mt-2" variant="outline">
               <Link href="/staff">
-                <Home className="mr-2 h-4 w-4" /> Go to Staff Dashboard
+                <span><Home className="mr-2 h-4 w-4" /> Go to Staff Dashboard</span>
               </Link>
             </Button>
           </CardFooter>
@@ -202,30 +202,30 @@ function StaffCheckinPageContent() {
   
   if (pageError && !staffMember) {
      return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
-        <Card className="w-full max-w-md shadow-xl border-t-8 border-destructive">
-          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
-            <XCircle className="h-16 w-16 text-destructive" />
-            <p className="text-xl font-semibold text-destructive">Error</p>
-            <p className="text-md text-muted-foreground">{pageError}</p>
-            {effectiveStaffId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveStaffId}</p>}
-            <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
-            <div className="flex flex-col gap-2 w-full mt-4">
-              <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading || isPending}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveStaffId}
-              </Button>
-              <Button variant="secondary" onClick={() => router.push('/staff-checkin')}>
-                <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup
-              </Button>
-            </div>
-          </CardContent>
-          <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
-            <Button asChild className="w-full" variant="outline"><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
+       <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+         <Card className="w-full max-w-md shadow-xl border-t-8 border-destructive">
+           <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
+           <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
+             <XCircle className="h-16 w-16 text-destructive" />
+             <p className="text-xl font-semibold text-destructive">Error</p>
+             <p className="text-md text-muted-foreground">{pageError}</p>
+             {effectiveStaffId && <p className="text-sm text-muted-foreground">Attempted ID: {effectiveStaffId}</p>}
+             <p className="text-xs text-muted-foreground mt-2">{ownerContactInfo}</p>
+             <div className="flex flex-col gap-2 w-full mt-4">
+               <Button variant="outline" onClick={() => effectiveStaffId && fetchStaffMemberData(effectiveStaffId)} disabled={isLoading || isPending}>
+                 <RefreshCw className="mr-2 h-4 w-4" /> Retry Lookup for ID: {effectiveStaffId}
+               </Button>
+               <Button variant="secondary" onClick={() => router.push('/staff-checkin')}>
+                 <UserSearch className="mr-2 h-4 w-4" /> Try Manual Lookup
+               </Button>
+             </div>
+           </CardContent>
+           <CardFooter className="flex-col gap-3 pb-8 pt-4 border-t">
+             <Button asChild className="w-full" variant="outline"><Link href="/staff"><span><Home className="mr-2 h-4 w-4"/>Staff Dashboard</span></Link></Button>
+           </CardFooter>
+         </Card>
+       </div>
+     );
   }
 
   if (!staffMember) {
@@ -331,11 +331,11 @@ function StaffCheckinPageContent() {
             </Button>
             <div className="flex w-full gap-2">
                 <Button asChild className="flex-1" variant="outline">
-                    <Link href="/staff"> <Home className="mr-2 h-4 w-4"/> Staff Dashboard </Link>
+                    <Link href="/staff"> <span><Home className="mr-2 h-4 w-4"/> Staff Dashboard</span> </Link>
                 </Button>
                 {effectiveStaffId && (
                     <Button asChild className="flex-1" variant="outline">
-                        <Link href={`/staff/${effectiveStaffId}`}> <Edit3 className="mr-2 h-4 w-4"/> Full Profile </Link>
+                        <Link href={`/staff/${effectiveStaffId}`}> <span><Edit3 className="mr-2 h-4 w-4"/> Full Profile</span> </Link>
                     </Button>
                 )}
             </div>
@@ -357,7 +357,7 @@ export default function StaffCheckinPage() {
             <p className="text-xl text-muted-foreground">Loading Staff Status Page...</p>
           </CardContent>
            <CardFooter className="flex-col gap-3 pb-8">
-             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><Home className="mr-2 h-4 w-4"/>Staff Dashboard</Link></Button>
+             <Button asChild className="w-full" variant="outline" disabled><Link href="/staff"><span><Home className="mr-2 h-4 w-4"/>Staff Dashboard</span></Link></Button>
           </CardFooter>
         </Card>
       </div>

@@ -599,7 +599,13 @@ export async function quickSetStaffStatusAction(
 // --- Analytics Actions ---
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
-    const participantsSnapshot = await getDocs(collection(db, PARTICIPANTS_COLLECTION));
+    let participantsSnapshot;
+    try {
+      participantsSnapshot = await getDocs(collection(db, PARTICIPANTS_COLLECTION));
+    } catch (e: any) {
+      throw new Error(`Failed to fetch participants: ${e.message}`);
+    }
+
     const totalParticipants = participantsSnapshot.size;
 
     const committeeCounts: { [key: string]: number } = {};
@@ -615,7 +621,12 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       }
     });
 
-    const staffSnapshot = await getDocs(collection(db, STAFF_MEMBERS_COLLECTION));
+    let staffSnapshot;
+    try {
+      staffSnapshot = await getDocs(collection(db, STAFF_MEMBERS_COLLECTION));
+    } catch (e: any) {
+      throw new Error(`Failed to fetch staff members: ${e.message}`);
+    }
     const totalStaff = staffSnapshot.size;
 
     const staffStatusCounts: { [key: string]: number } = {};
@@ -631,13 +642,19 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       }
     });
 
-    const [
-      totalSchools,
-      totalCommittees,
-    ] = await Promise.all([
-      getCountFromServer(collection(db, SYSTEM_SCHOOLS_COLLECTION)).then(snap => snap.data().count),
-      getCountFromServer(collection(db, SYSTEM_COMMITTEES_COLLECTION)).then(snap => snap.data().count),
-    ]);
+    let totalSchools, totalCommittees;
+    try {
+      [
+        totalSchools,
+        totalCommittees,
+      ] = await Promise.all([
+        getCountFromServer(collection(db, SYSTEM_SCHOOLS_COLLECTION)).then(snap => snap.data().count),
+        getCountFromServer(collection(db, SYSTEM_COMMITTEES_COLLECTION)).then(snap => snap.data().count),
+      ]);
+    } catch (e: any) {
+      throw new Error(`Failed to fetch system counts (schools, committees): ${e.message}`);
+    }
+
 
     return {
       totalParticipants,
@@ -649,8 +666,8 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
       staffStatusDistribution: Object.entries(staffStatusCounts).map(([status, count]) => ({ status, count })),
       staffByTeam: Object.entries(staffTeamCounts).map(([team, count]) => ({ team, count })).sort((a, b) => b.count - a.count),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Server Action - getAllAnalyticsData] Error fetching comprehensive analytics: ", error);
-    throw new Error("Failed to fetch analytics data. Check server logs for details.");
+    throw new Error(`Failed to fetch analytics data. Check server logs for details. Original error: ${error.message}`);
   }
 }

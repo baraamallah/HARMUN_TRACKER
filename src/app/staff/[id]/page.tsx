@@ -188,7 +188,7 @@ export default function StaffMemberProfilePage() {
         <h1 className="text-2xl font-bold">Staff Member Not Found</h1>
         <p className="text-muted-foreground mb-6">The staff member you are looking for does not exist.</p>
         <Button asChild variant="outline">
-          <Link href="/staff"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff List</Link>
+          <Link href="/staff"><span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff List</span></Link>
         </Button>
       </div>
     );
@@ -196,10 +196,9 @@ export default function StaffMemberProfilePage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-5xl">
-       <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
-        <Link href="/staff"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff List</Link>
-      </Button>
-
+      <Button asChild variant="outline" className="mb-6 hover:bg-accent transition-colors">
+       <Link href="/staff"><span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff List</span></Link>
+     </Button>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <section aria-labelledby="staff-member-info-heading" className="lg:col-span-1 space-y-6">
           <Card className="shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
@@ -316,7 +315,6 @@ export default function StaffMemberProfilePage() {
           </Card>
         </section>
       </div>
-
       <StaffMemberForm
         isOpen={isStaffFormOpen}
         onOpenChange={setIsStaffFormOpen}

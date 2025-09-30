@@ -40,7 +40,41 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
-import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { writeBatch, doc, serverTimestamp, query, collection, where, getDocs, Timestamp } from 'firebase/firestore';
+
+// Helper function to transform Firestore data into a StaffMember object
+function toISODateString(dateValue: any): string | null {
+  if (!dateValue) return null;
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate().toISOString();
+  }
+  if (typeof dateValue === 'string') {
+    if (!isNaN(Date.parse(dateValue))) {
+       return new Date(dateValue).toISOString();
+    }
+  }
+  return null;
+}
+
+function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMember {
+    const data = docSnap.data();
+    return {
+        id: docSnap.id,
+        name: data.name || '',
+        role: data.role || '',
+        department: data.department || '',
+        team: data.team || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        contactInfo: data.contactInfo || '',
+        status: data.status || 'Off Duty',
+        imageUrl: data.imageUrl,
+        notes: data.notes || '',
+        createdAt: toISODateString(data.createdAt),
+        updatedAt: toISODateString(data.updatedAt),
+    };
+}
+
 import { db } from '@/lib/firebase';
 import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
 
@@ -87,12 +121,32 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
     setIsLoading(true);
     try {
-        const fetchedStaff = await getStaffMembers({
-            team: selectedTeamFilter,
-            status: quickStatusFilter,
-            searchTerm: debouncedSearchTerm,
-        });
-        setStaffMembers(fetchedStaff);
+        const staffColRef = collection(db, "staff_members");
+        const queryConstraints = [];
+
+        if (selectedTeamFilter !== "All Teams") {
+            queryConstraints.push(where('team', '==', selectedTeamFilter));
+        }
+        if (quickStatusFilter !== 'All') {
+            queryConstraints.push(where('status', '==', quickStatusFilter));
+        }
+        
+        const q = query(staffColRef, ...queryConstraints);
+        const querySnapshot = await getDocs(q);
+
+        let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
+
+        if (debouncedSearchTerm) {
+            const term = debouncedSearchTerm.toLowerCase();
+            staffData = staffData.filter(s =>
+                s.name.toLowerCase().includes(term) ||
+                s.role.toLowerCase().includes(term) ||
+                (s.department && s.department.toLowerCase().includes(term)) ||
+                (s.team && s.team.toLowerCase().includes(term))
+            );
+        }
+        
+        setStaffMembers(staffData);
     } catch (error: any) {
         console.error("Failed to fetch filtered staff data:", error);
         toast({ title: "Error", description: error.message || "Could not load staff members.", variant: "destructive"});

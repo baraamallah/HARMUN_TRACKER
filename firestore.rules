@@ -20,13 +20,14 @@ service cloud.firestore {
 
     // Participants Collection: Public can read, Admins/Superiors can write.
     match /participants/{participantId} {
-      allow read: if true; 
+      allow read, list: if isSuperiorAdmin() || isAdmin();
       allow create, delete, update: if isSuperiorAdmin() || isAdmin();
     }
 
     // Staff Members Collection: Only Admins/Superiors can read or write.
     match /staff_members/{staffMemberId} {
-      allow read, write: if isSuperiorAdmin() || isAdmin();
+      allow read, list: if isSuperiorAdmin() || isAdmin();
+      allow write: if isSuperiorAdmin() || isAdmin();
     }
 
     // System Schools Collection: Public can read, only Superiors can write.

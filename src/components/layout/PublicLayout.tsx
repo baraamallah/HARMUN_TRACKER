@@ -33,10 +33,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           {isLoadingLogo ? (
             <Skeleton className="h-8 w-32" />
           ) : munLogoUrl ? (
-            <Link href="/" legacyBehavior passHref>
-                <a className="flex items-center gap-2 group">
-                    <img src={munLogoUrl} alt="Event Logo" className="h-8 object-contain" data-ai-hint="event logo organization"/>
-                </a>
+            <Link href="/" className="flex items-center gap-2 group">
+                <img src={munLogoUrl} alt="Event Logo" className="h-8 object-contain" data-ai-hint="event logo organization"/>
             </Link>
           ) : (
             <Logo />

@@ -195,7 +195,9 @@ export function StaffMemberTable({
               )}
               {visibleColumns.avatar && (
                 <TableCell className="pl-2 pr-2 md:pl-6">
-                   <Link href={`/staff/${staff.id}`} aria-label={`View profile of ${staff.name}`}>
+                   <Link
+                     href={`/staff/${staff.id}`}
+                     aria-label={`View profile of ${staff.name}`}>
                     <Avatar className="h-10 w-10 border hover:ring-2 hover:ring-primary transition-all">
                       <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
                       <AvatarFallback>{staff.name.substring(0, 2).toUpperCase()}</AvatarFallback>
@@ -205,7 +207,9 @@ export function StaffMemberTable({
               )}
               {visibleColumns.name && (
                 <TableCell className="font-medium text-foreground">
-                  <Link href={`/staff/${staff.id}`} className="hover:underline text-primary">
+                  <Link
+                    href={`/staff/${staff.id}`}
+                    className="hover:underline text-primary">
                     {staff.name}
                   </Link>
                 </TableCell>

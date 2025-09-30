@@ -320,11 +320,11 @@ export default function QrManagementPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col gap-4 p-6 pt-2">
-            <Link href="/" legacyBehavior passHref>
-              <Button variant="outline" className="w-full text-md py-3">
-                <Home className="mr-2 h-5 w-5" /> Go to Main Dashboard
-              </Button>
-            </Link>
+            <Button asChild variant="outline" className="w-full text-md py-3">
+              <Link href="/">
+                <span><Home className="mr-2 h-5 w-5" /> Go to Main Dashboard</span>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -348,11 +348,11 @@ export default function QrManagementPage() {
               )}
             </div>
           </div>
-          <Link href="/" legacyBehavior passHref>
-            <Button variant="outline" size="lg" className="text-md">
-              <Home className="mr-2 h-5 w-5" /> Dashboard
-            </Button>
-          </Link>
+          <Button asChild variant="outline" size="lg" className="text-md">
+            <Link href="/">
+              <span><Home className="mr-2 h-5 w-5" /> Dashboard</span>
+            </Link>
+          </Button>
         </div>
       </header>
 
