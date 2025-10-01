@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           setAdminUser(userProfile);
+          console.log('userProfile', userProfile);
 
           // Now determine the application role based on multiple factors
           if (user.uid === OWNER_UID) {
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           
           setUserAppRole(finalUserRole);
+          console.log('finalUserRole', finalUserRole);
 
           // If the user is the owner, they can't also be a staff member.
           if (finalUserRole === 'owner') {
