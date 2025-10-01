@@ -120,8 +120,8 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
   }, [userAppRole]);
 
   return (
-    <SidebarProvider defaultOpen>
-      <Sidebar>
+    <SidebarProvider defaultOpen={false}>
+      <Sidebar variant="floating" collapsible="icon">
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>

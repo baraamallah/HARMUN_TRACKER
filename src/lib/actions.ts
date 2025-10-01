@@ -596,12 +596,14 @@ export async function quickSetStaffStatusAction(
 
 
 
+import { adminDb } from './firebase-admin';
+
 // --- Analytics Actions ---
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
     let participantsSnapshot;
     try {
-      participantsSnapshot = await getDocs(collection(db, PARTICIPANTS_COLLECTION));
+      participantsSnapshot = await adminDb.collection(PARTICIPANTS_COLLECTION).get();
     } catch (e: any) {
       throw new Error(`Failed to fetch participants: ${e.message}`);
     }
@@ -623,7 +625,7 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
 
     let staffSnapshot;
     try {
-      staffSnapshot = await getDocs(collection(db, STAFF_MEMBERS_COLLECTION));
+      staffSnapshot = await adminDb.collection(STAFF_MEMBERS_COLLECTION).get();
     } catch (e: any) {
       throw new Error(`Failed to fetch staff members: ${e.message}`);
     }
@@ -648,8 +650,8 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
         totalSchools,
         totalCommittees,
       ] = await Promise.all([
-        getCountFromServer(collection(db, SYSTEM_SCHOOLS_COLLECTION)).then(snap => snap.data().count),
-        getCountFromServer(collection(db, SYSTEM_COMMITTEES_COLLECTION)).then(snap => snap.data().count),
+        adminDb.collection(SYSTEM_SCHOOLS_COLLECTION).get().then(snap => snap.size),
+        adminDb.collection(SYSTEM_COMMITTEES_COLLECTION).get().then(snap => snap.size),
       ]);
     } catch (e: any) {
       throw new Error(`Failed to fetch system counts (schools, committees): ${e.message}`);
