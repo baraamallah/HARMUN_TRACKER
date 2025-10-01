@@ -26,7 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2, Edit, UserPlus } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { signOut } from 'firebase/auth';
-import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore'; // Ensured getDoc is here
+import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -89,6 +89,7 @@ export default function AdminManagementPage() {
           role: data.role,
           avatarUrl: data.avatarUrl,
           canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
+          permissions: data.permissions,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as AdminManagedUser;
@@ -294,8 +295,7 @@ export default function AdminManagementPage() {
                       <TableRow>
                         <TableHead className="w-[60px]">Avatar</TableHead>
                         <TableHead>Name/Email</TableHead>
-                        <TableHead>Auth UID</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Permissions</TableHead>
                         <TableHead>Granted At</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -313,11 +313,16 @@ export default function AdminManagementPage() {
                             <div className="font-medium">{admin.displayName || admin.email}</div>
                             {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{admin.id}</TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <Badge variant="secondary">{admin.role}</Badge>
-                              {admin.canAccessSuperiorAdmin && <Badge variant="destructive" className="w-fit">Superior</Badge>}
+                            <div className="flex flex-wrap gap-1">
+                              {admin.canAccessSuperiorAdmin && <Badge variant="destructive">Superior</Badge>}
+                              {admin.permissions?.canEditParticipants && <Badge variant="secondary">Edit Participants</Badge>}
+                              {admin.permissions?.canDeleteParticipants && <Badge variant="secondary">Delete Participants</Badge>}
+                              {admin.permissions?.canCreateStaff && <Badge variant="secondary">Create Staff</Badge>}
+                              {admin.permissions?.canEditStaff && <Badge variant="secondary">Edit Staff</Badge>}
+                              {admin.permissions?.canDeleteStaff && <Badge variant="secondary">Delete Staff</Badge>}
+                              {admin.permissions?.canAccessAnalytics && <Badge variant="secondary">Analytics</Badge>}
+                              {admin.permissions?.canManageQRCodes && <Badge variant="secondary">QR Codes</Badge>}
                             </div>
                           </TableCell>
                            <TableCell className="text-sm text-muted-foreground">

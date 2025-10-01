@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -53,7 +52,7 @@ interface ParticipantDashboardClientProps {
 export function ParticipantDashboardClient({ initialParticipants, systemSchools, systemCommittees }: ParticipantDashboardClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { loggedInUser: user, authSessionLoading: isAuthLoading } = useAuth();
+  const { loggedInUser: user, permissions, authSessionLoading: isAuthLoading } = useAuth();
   
   const [participants, setParticipants] = React.useState<Participant[]>(initialParticipants);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -193,7 +192,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
         <div className="flex gap-2 flex-wrap">
           <ImportCsvDialog onImportSuccess={fetchData} />
           <ExportCsvButton participants={participants} />
-          <Button onClick={handleAddParticipant}>
+          <Button onClick={handleAddParticipant} disabled={!permissions?.canEditParticipants}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
           </Button>
         </div>
@@ -231,7 +230,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
              <span className="text-sm font-semibold text-muted-foreground">{selectedParticipantIds.length} selected</span>
              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={isBulkUpdating || isBulkDeleting}>
+                  <Button variant="outline" disabled={isBulkUpdating || isBulkDeleting || (!permissions?.canEditParticipants && !permissions?.canDeleteParticipants)}>
                     <Layers className="mr-2 h-4 w-4" />
                     Bulk Actions
                     {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
@@ -240,12 +239,12 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
                 <DropdownMenuContent align="start">
                   <DropdownMenuLabel>Set status for selected to:</DropdownMenuLabel>
                   {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => (
-                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating}>
+                    <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating || !permissions?.canEditParticipants}>
                       <opt.icon className="mr-2 h-4 w-4" />{opt.label}
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={confirmBulkDelete} disabled={isBulkDeleting} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                  <DropdownMenuItem onClick={confirmBulkDelete} disabled={isBulkDeleting || !permissions?.canDeleteParticipants} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                     <Trash2 className="mr-2 h-4 w-4" />Delete Selected
                   </DropdownMenuItem>
                 </DropdownMenuContent>

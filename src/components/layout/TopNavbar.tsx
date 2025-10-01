@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -42,8 +41,6 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   tooltip: string;
-  adminOrOwnerOnly?: boolean;
-  ownerOnly?: boolean; 
 }
 
 const baseNavItems: NavItem[] = [
@@ -53,13 +50,13 @@ const baseNavItems: NavItem[] = [
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
 ];
 
-const adminAndOwnerNavItems: NavItem[] = [
-   { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes', adminOrOwnerOnly: true },
+const adminNavItems: NavItem[] = [
+   { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes' },
+   { href: '/superior-admin/analytics', icon: BarChart, label: 'Analytics', tooltip: 'Analytics Dashboard' },
 ];
 
 const ownerOnlyNavItems: NavItem[] = [
-  { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel', ownerOnly: true },
-  { href: '/superior-admin/analytics', icon: BarChart, label: 'Analytics', tooltip: 'Analytics Dashboard', ownerOnly: true },
+  { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel' },
 ];
 
 const publicNavItems: NavItem[] = [
@@ -69,7 +66,7 @@ const publicNavItems: NavItem[] = [
 export function TopNavbar() {
   const pathname = usePathname();
   const { toast } = useToast();
-  const { loggedInUser, userAppRole, authSessionLoading } = useAuth();
+  const { loggedInUser, userAppRole, permissions, authSessionLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const handleLogout = async () => {
@@ -94,11 +91,16 @@ export function TopNavbar() {
 
   const navItemsToRender = React.useMemo(() => {
     let items = [...baseNavItems];
-    if (userAppRole === 'owner' || userAppRole === 'admin') {
-      items.push(...adminAndOwnerNavItems);
-    }
     if (userAppRole === 'owner') {
+      items.push(...adminNavItems);
       items.push(...ownerOnlyNavItems);
+    } else if (userAppRole === 'admin') {
+      if (permissions?.canManageQRCodes) {
+        items.push(adminNavItems[0]);
+      }
+      if (permissions?.canAccessAnalytics) {
+        items.push(adminNavItems[1]);
+      }
     }
     items.push(...publicNavItems); 
     
@@ -106,7 +108,7 @@ export function TopNavbar() {
       index === self.findIndex((t) => t.href === item.href)
     );
     return uniqueItems;
-  }, [userAppRole]);
+  }, [userAppRole, permissions]);
 
   const NavLinks = ({ isMobile = false }) => (
     <nav className={cn('items-center space-x-4', isMobile ? 'flex flex-col space-y-2 space-x-0' : 'hidden md:flex')}>

@@ -1,68 +1,92 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check for admin role
-    function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Helper function to check if the user is the Owner
     function isOwner() {
-      return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2"; // This is the original Owner UID from src/lib/constants.ts
+      return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
-    
-    // Helper function to check for superior admin privileges (is the original Owner OR has been granted access in their user document)
+
     function isSuperiorAdmin() {
-        return isOwner() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canAccessSuperiorAdmin == true);
+      return isOwner() || (request.auth != null && getUserData().canAccessSuperiorAdmin == true);
     }
 
-    // Participants Collection: Public can read, Admins/Superiors can write.
+    function isAdmin() {
+      return request.auth != null && getUserData().role == "admin";
+    }
+
+    function canEditParticipants() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canEditParticipants == true);
+    }
+
+    function canDeleteParticipants() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canDeleteParticipants == true);
+    }
+
+    function canCreateStaff() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canCreateStaff == true);
+    }
+
+    function canEditStaff() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canEditStaff == true);
+    }
+
+    function canDeleteStaff() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canDeleteStaff == true);
+    }
+
+    function canAccessAnalytics() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canAccessAnalytics == true);
+    }
+
+    function canManageQRCodes() {
+      return isSuperiorAdmin() || (isAdmin() && getUserData().permissions.canManageQRCodes == true);
+    }
+
     match /participants/{participantId} {
-      allow read, list: if isSuperiorAdmin() || isAdmin();
-      allow create, delete, update: if isSuperiorAdmin() || isAdmin();
+      allow read, list: if true; // Public read access
+      allow create: if canEditParticipants();
+      allow update: if canEditParticipants();
+      allow delete: if canDeleteParticipants();
     }
 
-    // Staff Members Collection: Only Admins/Superiors can read or write.
     match /staff_members/{staffMemberId} {
-      allow read, list: if isSuperiorAdmin() || isAdmin();
-      allow write: if isSuperiorAdmin() || isAdmin();
+      allow read, list: if true; // Public read access
+      allow create: if canCreateStaff();
+      allow update: if canEditStaff();
+      allow delete: if canDeleteStaff();
     }
 
-    // System Schools Collection: Public can read, only Superiors can write.
     match /system_schools/{schoolId} {
-      allow read: if true; 
+      allow read: if true;
       allow write: if isSuperiorAdmin();
     }
 
-    // System Committees Collection: Public can read, only Superiors can write.
     match /system_committees/{committeeId} {
       allow read: if true;
       allow write: if isSuperiorAdmin();
     }
 
-    // System Staff Teams Collection: Public can read, only Superiors can write.
     match /system_staff_teams/{teamId} {
       allow read: if true;
       allow write: if isSuperiorAdmin();
     }
 
-    // System Configuration: Public can read settings, only Superiors can write.
     match /system_config/{settingId} {
-      allow read: if true; 
+      allow read: if true;
       allow write: if isSuperiorAdmin();
     }
 
-    // User Roles Collection:
     match /users/{userId} {
-      // Superiors can manage all user role documents.
       allow read, write: if isSuperiorAdmin();
-      // Regular users can only read their own user document (to check their own role).
       allow get: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow Superiors to list all user documents (for the admin management page).
     match /users {
        allow list: if isSuperiorAdmin(); 
     }

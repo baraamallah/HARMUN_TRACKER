@@ -102,6 +102,15 @@ export interface AdminManagedUser {
   displayName?: string | null;
   role: 'admin' | string;
   canAccessSuperiorAdmin?: boolean; // New permission flag
+  permissions?: {
+    canEditParticipants: boolean;
+    canDeleteParticipants: boolean;
+    canCreateStaff: boolean;
+    canEditStaff: boolean;
+    canDeleteStaff: boolean;
+    canAccessAnalytics: boolean;
+    canManageQRCodes: boolean;
+  };
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;
   avatarUrl?: string;

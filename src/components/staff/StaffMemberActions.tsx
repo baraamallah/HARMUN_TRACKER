@@ -44,7 +44,7 @@ interface StaffMemberActionsProps {
 
 export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsProps) {
   const { toast } = useToast();
-  const { staffMember: loggedInStaffMember, userAppRole } = useAuth();
+  const { staffMember: loggedInStaffMember, userAppRole, permissions } = useAuth();
   const router = useRouter();
   const [isPending, startTransition] = useTransition(); // For status updates
   const [isDeleting, startDeleteTransition] = useTransition(); // Specifically for delete
@@ -138,11 +138,11 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
             </DropdownMenuPortal>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(staffMember)} disabled={isPending || isDeleting || !(userAppRole === 'owner' || userAppRole === 'admin' || loggedInStaffMember?.permissions?.canEditStaff)}>
+          <DropdownMenuItem onClick={() => onEdit(staffMember)} disabled={isPending || isDeleting || !(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canEditStaff) || loggedInStaffMember?.permissions?.canEditStaff)}>
             <Edit3 className="mr-2 h-4 w-4" />
             Edit Details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" disabled={isPending || isDeleting}>
+          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" disabled={isPending || isDeleting || !(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canDeleteStaff))}>
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Staff Member
           </DropdownMenuItem>

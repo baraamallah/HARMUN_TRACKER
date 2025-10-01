@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
@@ -13,7 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -28,7 +26,6 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import type { AdminManagedUser } from '@/types';
-import { UserPlus } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { Separator } from '../ui/separator';
 
@@ -39,6 +36,15 @@ const addAdminSchema = z.object({
   displayName: z.string().optional(),
   authUid: z.string().min(1, { message: 'Firebase Auth UID is required.' }),
   canAccessSuperiorAdmin: z.boolean().default(false),
+  permissions: z.object({
+    canEditParticipants: z.boolean().default(false),
+    canDeleteParticipants: z.boolean().default(false),
+    canCreateStaff: z.boolean().default(false),
+    canEditStaff: z.boolean().default(false),
+    canDeleteStaff: z.boolean().default(false),
+    canAccessAnalytics: z.boolean().default(false),
+    canManageQRCodes: z.boolean().default(false),
+  }).default({}),
 });
 
 type AddAdminFormData = z.infer<typeof addAdminSchema>;
@@ -61,6 +67,15 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
       displayName: '',
       authUid: '',
       canAccessSuperiorAdmin: false,
+      permissions: {
+        canEditParticipants: false,
+        canDeleteParticipants: false,
+        canCreateStaff: false,
+        canEditStaff: false,
+        canDeleteStaff: false,
+        canAccessAnalytics: false,
+        canManageQRCodes: false,
+      },
     },
   });
   
@@ -72,6 +87,15 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           displayName: adminToEdit.displayName || '',
           authUid: adminToEdit.id,
           canAccessSuperiorAdmin: adminToEdit.canAccessSuperiorAdmin || false,
+          permissions: {
+            canEditParticipants: adminToEdit.permissions?.canEditParticipants || false,
+            canDeleteParticipants: adminToEdit.permissions?.canDeleteParticipants || false,
+            canCreateStaff: adminToEdit.permissions?.canCreateStaff || false,
+            canEditStaff: adminToEdit.permissions?.canEditStaff || false,
+            canDeleteStaff: adminToEdit.permissions?.canDeleteStaff || false,
+            canAccessAnalytics: adminToEdit.permissions?.canAccessAnalytics || false,
+            canManageQRCodes: adminToEdit.permissions?.canManageQRCodes || false,
+          },
         });
       } else {
         form.reset({
@@ -79,6 +103,15 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           displayName: '',
           authUid: '',
           canAccessSuperiorAdmin: false,
+          permissions: {
+            canEditParticipants: false,
+            canDeleteParticipants: false,
+            canCreateStaff: false,
+            canEditStaff: false,
+            canDeleteStaff: false,
+            canAccessAnalytics: false,
+            canManageQRCodes: false,
+          },
         });
       }
     }
@@ -86,7 +119,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
 
   const onSubmit = (data: AddAdminFormData) => {
     startTransition(async () => {
-      const { email, displayName, authUid, canAccessSuperiorAdmin } = data;
+      const { email, displayName, authUid, canAccessSuperiorAdmin, permissions } = data;
       if (!email || !authUid) {
         toast({ title: 'Error', description: 'Email and Auth UID are required.', variant: 'destructive' });
         return;
@@ -108,6 +141,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           email: currentEmail,
           displayName: currentDisplayName,
           canAccessSuperiorAdmin: canAccessSuperiorAdmin,
+          permissions: permissions,
           role: 'admin',
           updatedAt: serverTimestamp()
         };
@@ -212,6 +246,110 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                 </FormItem>
               )}
             />
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="text-md font-medium">Permissions</h4>
+              <FormField
+                control={form.control}
+                name="permissions.canEditParticipants"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Edit Participants</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canDeleteParticipants"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Delete Participants</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canCreateStaff"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Create Staff</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canEditStaff"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Edit Staff</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canDeleteStaff"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Delete Staff</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canAccessAnalytics"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Access Analytics</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="permissions.canManageQRCodes"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Manage QR Codes</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <Separator />
             

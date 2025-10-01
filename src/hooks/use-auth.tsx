@@ -15,6 +15,7 @@ interface AuthContextType {
   staffMember: StaffMember | null;
   adminUser: AdminManagedUser | null;
   authSessionLoading: boolean;
+  permissions: AdminManagedUser['permissions'];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const value = { loggedInUser, userAppRole, staffMember, adminUser, authSessionLoading };
+  const value = { loggedInUser, userAppRole, staffMember, adminUser, authSessionLoading, permissions: adminUser?.permissions };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

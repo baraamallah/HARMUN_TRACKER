@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "harmun-tracker"
-  }
+    "default": "harmun-tracker",
+    "harmun_tracker": "harmun-tracker"
+  },
+  "targets": {},
+  "etags": {}
 }

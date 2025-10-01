@@ -46,7 +46,7 @@ interface ParticipantActionsProps {
 
 export function ParticipantActions({ participant, onEdit }: ParticipantActionsProps) {
   const { toast } = useToast();
-  const { staffMember, userAppRole } = useAuth();
+  const { staffMember, userAppRole, permissions } = useAuth();
   const router = useRouter();
   const [isUpdatingStatus, startStatusUpdateTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
@@ -139,14 +139,14 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
             </DropdownMenuPortal>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isUpdatingStatus || isDeleting || !(userAppRole === 'owner' || userAppRole === 'admin' || staffMember?.permissions?.canEditParticipants)}>
+          <DropdownMenuItem onClick={() => onEdit(participant)} disabled={isUpdatingStatus || isDeleting || !(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canEditParticipants) || staffMember?.permissions?.canEditParticipants)}>
             <Edit3 className="mr-2 h-4 w-4" />
             Edit Details
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={() => setIsDeleteDialogOpen(true)} 
             className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10" 
-            disabled={isUpdatingStatus || isDeleting}
+            disabled={isUpdatingStatus || isDeleting || !(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canDeleteParticipants))}
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Participant

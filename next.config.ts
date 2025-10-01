@@ -2,6 +2,9 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  serverRuntimeConfig: {
+    FIREBASE_SERVICE_ACCOUNT_KEY: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+  },
   /* config options here */
 
   typescript: {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -86,7 +85,7 @@ interface StaffDashboardClientProps {
 export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: StaffDashboardClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { loggedInUser: user, authSessionLoading: isAuthLoading } = useAuth();
+  const { loggedInUser: user, permissions, authSessionLoading: isAuthLoading } = useAuth();
   
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>(initialStaffMembers);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -244,7 +243,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
         <div className="flex gap-2 flex-wrap">
           <ImportStaffCsvDialog onImportSuccess={fetchData} />
           <ExportStaffCsvButton staffMembers={staffMembers} />
-          <Button onClick={handleAddStaffMember}>
+          <Button onClick={handleAddStaffMember} disabled={!permissions?.canCreateStaff}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add Staff Member
           </Button>
         </div>
@@ -279,7 +278,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
                 <span className="text-sm font-semibold text-muted-foreground">{selectedStaffMemberIds.length} selected</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={isBulkUpdating || isBulkDeleting}>
+                    <Button variant="outline" disabled={isBulkUpdating || isBulkDeleting || (!permissions?.canEditStaff && !permissions?.canDeleteStaff)}>
                       <Layers className="mr-2 h-4 w-4" /> Bulk Actions
                       {(isBulkUpdating || isBulkDeleting) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                     </Button>
@@ -287,12 +286,12 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
                   <DropdownMenuContent align="start">
                     <DropdownMenuLabel>Set status for selected to:</DropdownMenuLabel>
                     {STAFF_BULK_STATUS_OPTIONS.map(opt => (
-                      <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating}>
+                      <DropdownMenuItem key={opt.status} onClick={() => handleBulkStatusUpdate(opt.status)} disabled={isBulkUpdating || !permissions?.canEditStaff}>
                         <opt.icon className="mr-2 h-4 w-4" /> {opt.label}
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={confirmBulkDelete} disabled={isBulkDeleting} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    <DropdownMenuItem onClick={confirmBulkDelete} disabled={isBulkDeleting || !permissions?.canDeleteStaff} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                       <Trash2 className="mr-2 h-4 w-4" /> Delete Selected
                     </DropdownMenuItem>
                   </DropdownMenuContent>
