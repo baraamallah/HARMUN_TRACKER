@@ -62,6 +62,7 @@ export default function ProfilePage() {
               <Link href="/superior-admin">
                 <span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin</span>
               </Link>
+            </Button>
              <Button asChild variant="outline" className="w-full">
               <Link href="/">
                 <span><Home className="mr-2 h-4 w-4" /> Go to Main Dashboard</span>
