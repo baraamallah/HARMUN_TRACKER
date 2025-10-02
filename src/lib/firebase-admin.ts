@@ -1,3 +1,4 @@
+
 import * as admin from 'firebase-admin';
 
 function getServiceAccount() {
@@ -7,7 +8,8 @@ function getServiceAccount() {
     }
     // The key is expected to be a base64 encoded string.
     const decodedKey = Buffer.from(key, 'base64').toString('utf-8');
-    return JSON.parse(decodedKey);
+    const correctedKey = decodedKey.replace(/\\n/g, '\n');
+    return JSON.parse(correctedKey);
 }
 
 if (!admin.apps.length) {
