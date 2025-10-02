@@ -1,20 +1,31 @@
 
 import * as admin from 'firebase-admin';
-import { serviceAccount } from './service-account';
 
-// WARNING: This is not a secure way to handle secrets. 
-// The service account key is stored in a file that is committed to version control.
-// It is recommended to use environment variables instead.
+let adminDb: admin.firestore.Firestore;
 
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount as any),
-    });
-  } catch (error) {
-    console.error('Firebase admin initialization error', error);
-  }
+function getServiceAccount() {
+    const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (!key) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set.');
+    }
+    // The key is expected to be a base64 encoded string.
+    const decodedKey = Buffer.from(key, 'base64').toString('utf-8');
+    return JSON.parse(decodedKey);
 }
 
-const adminDb = admin.firestore();
-export { adminDb };
+export function getAdminDb() {
+  if (!admin.apps.length) {
+    try {
+      const serviceAccount = getServiceAccount();
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } catch (error) {
+      console.error('Firebase admin initialization error', error);
+    }
+  }
+  if (!adminDb) {
+    adminDb = admin.firestore();
+  }
+  return adminDb;
+}
