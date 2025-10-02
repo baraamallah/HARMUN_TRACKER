@@ -1,4 +1,3 @@
-
 import * as admin from 'firebase-admin';
 
 function getServiceAccount() {
@@ -13,9 +12,8 @@ function getServiceAccount() {
 
 if (!admin.apps.length) {
   try {
-    const serviceAccount = getServiceAccount();
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert(getServiceAccount()),
     });
   } catch (error) {
     console.error('Firebase admin initialization error', error);
