@@ -1,6 +1,5 @@
-import * as admin from 'firebase-admin';
 
-let adminDb: admin.firestore.Firestore;
+import * as admin from 'firebase-admin';
 
 function getServiceAccount() {
     const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -12,19 +11,16 @@ function getServiceAccount() {
     return JSON.parse(decodedKey);
 }
 
-export function getAdminDb() {
-  if (!admin.apps.length) {
-    try {
-      const serviceAccount = getServiceAccount();
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-    } catch (error) {
-      console.error('Firebase admin initialization error', error);
-    }
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = getServiceAccount();
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch (error) {
+    console.error('Firebase admin initialization error', error);
   }
-  if (!adminDb) {
-    adminDb = admin.firestore();
-  }
-  return adminDb;
 }
+
+const adminDb = admin.firestore();
+export { adminDb };
