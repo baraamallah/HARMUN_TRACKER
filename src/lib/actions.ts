@@ -596,14 +596,19 @@ export async function quickSetStaffStatusAction(
 
 
 
-import { adminDb } from './firebase-admin';
+import { getCountFromServer, collection, getDocs } from 'firebase/firestore';
 
 // --- Analytics Actions ---
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
+    const participantsCollectionRef = collection(db, PARTICIPANTS_COLLECTION);
+    const staffCollectionRef = collection(db, STAFF_MEMBERS_COLLECTION);
+    const schoolsCollectionRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
+    const committeesCollectionRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
+
     let participantsSnapshot;
     try {
-      participantsSnapshot = await adminDb.collection(PARTICIPANTS_COLLECTION).get();
+      participantsSnapshot = await getDocs(participantsCollectionRef);
     } catch (e: any) {
       throw new Error(`Failed to fetch participants: ${e.message}`);
     }
@@ -625,7 +630,7 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
 
     let staffSnapshot;
     try {
-      staffSnapshot = await adminDb.collection(STAFF_MEMBERS_COLLECTION).get();
+      staffSnapshot = await getDocs(staffCollectionRef);
     } catch (e: any) {
       throw new Error(`Failed to fetch staff members: ${e.message}`);
     }
@@ -646,13 +651,12 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
 
     let totalSchools, totalCommittees;
     try {
-      [
-        totalSchools,
-        totalCommittees,
-      ] = await Promise.all([
-        adminDb.collection(SYSTEM_SCHOOLS_COLLECTION).get().then(snap => snap.size),
-        adminDb.collection(SYSTEM_COMMITTEES_COLLECTION).get().then(snap => snap.size),
+      const [schoolsSnap, committeesSnap] = await Promise.all([
+        getCountFromServer(schoolsCollectionRef),
+        getCountFromServer(committeesCollectionRef),
       ]);
+      totalSchools = schoolsSnap.data().count;
+      totalCommittees = committeesSnap.data().count;
     } catch (e: any) {
       throw new Error(`Failed to fetch system counts (schools, committees): ${e.message}`);
     }
