@@ -3,6 +3,8 @@ import * as React from 'react';
 import { getAllAnalyticsData } from '@/lib/actions';
 import { AnalyticsClientPage } from '@/components/superior-admin/AnalyticsClientPage';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AnalyticsPage() {
   try {
     const analyticsData = await getAllAnalyticsData();
