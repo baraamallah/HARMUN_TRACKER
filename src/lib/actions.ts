@@ -596,10 +596,11 @@ export async function quickSetStaffStatusAction(
 
 
 
-import { adminDb } from './firebase-admin';
+import { getAdminDb } from './firebase-admin';
 
 // --- Analytics Actions ---
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
+  const adminDb = getAdminDb();
   try {
     let participantsSnapshot;
     try {
