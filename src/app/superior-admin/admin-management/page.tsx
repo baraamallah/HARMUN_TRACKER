@@ -87,7 +87,7 @@ export default function AdminManagementPage() {
           email: data.email,
           displayName: data.displayName,
           role: data.role,
-          avatarUrl: data.avatarUrl,
+          imageUrl: data.imageUrl,
           canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
           permissions: data.permissions,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
