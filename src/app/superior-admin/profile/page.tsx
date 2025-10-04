@@ -1,7 +1,6 @@
-
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -13,15 +12,22 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowLeft, Home, User, TriangleAlert, LogOut, Loader2 } from 'lucide-react';
+import { ArrowLeft, Home, User, TriangleAlert, Loader2, Edit, Mail, Shield } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import type { AdminManagedUser } from '@/types';
 import { ProfileForm } from '@/components/superior-admin/ProfileForm';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function ProfilePage() {
   const pathname = usePathname();
-  const { loggedInUser: currentUser, adminUser, authSessionLoading: isLoading, userAppRole } = useAuth();
+  const { adminUser, authSessionLoading: isLoading, userAppRole, refreshAuth } = useAuth();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  const handleFormSubmitSuccess = () => {
+    refreshAuth(); // Re-fetch user data to show updated info
+    setIsFormOpen(false);
+  };
 
   if (isLoading) {
     return (
@@ -35,15 +41,14 @@ export default function ProfilePage() {
             <CardDescription>Loading your profile and verifying credentials...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-10 w-full" />
             <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-10 w-full" />
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // The useAuth hook now handles creating the owner's virtual profile, so we only need to check if you are NOT the owner.
   if (userAppRole !== 'owner') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-red-500/10 via-background to-background p-6 text-center">
@@ -74,7 +79,6 @@ export default function ProfilePage() {
     );
   }
   
-  // By this point, if you are the owner, `adminUser` is guaranteed to be populated by the useAuth hook.
   if (!adminUser) {
      return (
        <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-500/10 via-background to-background p-6 text-center">
@@ -100,41 +104,45 @@ export default function ProfilePage() {
      )
   }
 
-
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
-        <div className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <User className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              My Profile
-            </h1>
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-2xl">
+      <Button asChild variant="outline" className="mb-6">
+       <Link href="/superior-admin"><span><ArrowLeft className="mr-2 h-4 w-4" /> Back to Superior Admin</span></Link>
+     </Button>
+      <Card className="shadow-lg">
+        <CardHeader className="items-center text-center p-6 bg-gradient-to-br from-primary/10 via-background to-background">
+          <Avatar className="h-32 w-32 border-4 border-primary mb-4 ring-2 ring-primary/30 ring-offset-2 ring-offset-background">
+            <AvatarImage src={adminUser.imageUrl} alt={`${adminUser.displayName}'s avatar`} />
+            <AvatarFallback className="text-4xl">{(adminUser.displayName || 'A').substring(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <CardTitle className="text-3xl font-bold">{adminUser.displayName}</CardTitle>
+          <CardDescription className="flex items-center gap-2 text-muted-foreground">
+            <Shield className="h-4 w-4 text-primary" /> Superior Admin
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm space-y-3 px-6 pb-6 pt-6">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-muted-foreground flex items-center"><Mail className="mr-2 h-4 w-4 text-primary/70" />Email:</span>
+            <span className="text-right break-all">{adminUser.email}</span>
           </div>
-          <Button asChild variant="outline">
-            <Link href="/superior-admin">
-              <span>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Superior Admin
-              </span>
-            </Link>
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-muted-foreground flex items-center"><User className="mr-2 h-4 w-4 text-primary/70" />User ID:</span>
+            <span className="text-right font-mono text-xs bg-muted p-1 rounded">{adminUser.id}</span>
+          </div>
+        </CardContent>
+        <CardFooter className="p-4 border-t">
+          <Button onClick={() => setIsFormOpen(true)} className="w-full">
+            <Edit className="mr-2 h-4 w-4" /> Edit Profile
           </Button>
-        </div>
-      </header>
+        </CardFooter>
+      </Card>
 
-      <main className="flex-1 container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl">Edit Your Profile</CardTitle>
-            <CardDescription>
-              Update your display name and avatar. Changes will be reflected across the application.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ProfileForm adminUser={adminUser} />
-          </CardContent>
-        </Card>
-      </main>
+      <ProfileForm
+        isOpen={isFormOpen}
+        onOpenChange={setIsFormOpen}
+        adminUser={adminUser}
+        onFormSubmitSuccess={handleFormSubmitSuccess}
+      />
     </div>
   );
 }

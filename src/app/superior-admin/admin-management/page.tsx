@@ -305,7 +305,7 @@ export default function AdminManagementPage() {
                         <TableRow key={admin.id}>
                           <TableCell>
                             <Avatar className="h-9 w-9">
-                              <AvatarImage src={admin.avatarUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
+                              <AvatarImage src={admin.imageUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
                               <AvatarFallback>{(admin.displayName?.[0] || admin.email?.[0] || 'A').toUpperCase()}</AvatarFallback>
                             </Avatar>
                           </TableCell>

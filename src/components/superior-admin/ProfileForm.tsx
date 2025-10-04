@@ -7,6 +7,15 @@ import * as z from 'zod';
 import type { AdminManagedUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -25,16 +34,19 @@ import { Link as LinkIcon } from 'lucide-react';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters.').max(50, 'Name must be at most 50 characters.'),
-  avatarUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
 
 interface ProfileFormProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   adminUser: AdminManagedUser;
+  onFormSubmitSuccess?: () => void;
 }
 
-export function ProfileForm({ adminUser }: ProfileFormProps) {
+export function ProfileForm({ isOpen, onOpenChange, adminUser, onFormSubmitSuccess }: ProfileFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -42,50 +54,49 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
-      displayName: adminUser.displayName || '',
-      avatarUrl: adminUser.avatarUrl || '',
+      displayName: '',
+      imageUrl: '',
     },
   });
 
   useEffect(() => {
-    if (adminUser) {
+    if (isOpen && adminUser) {
       form.reset({
         displayName: adminUser.displayName || '',
-        avatarUrl: adminUser.avatarUrl || '',
+        imageUrl: adminUser.imageUrl || '',
       });
-      setImagePreview(adminUser.avatarUrl ? getGoogleDriveImageSrc(adminUser.avatarUrl) : null);
+      setImagePreview(adminUser.imageUrl ? getGoogleDriveImageSrc(adminUser.imageUrl) : null);
+    } else if (!isOpen) {
+        form.reset({ displayName: '', imageUrl: '' });
+        setImagePreview(null);
     }
-  }, [adminUser, form]);
+  }, [adminUser, form, isOpen]);
 
-  const currentImageUrl = form.watch('avatarUrl');
+  const currentImageUrl = form.watch('imageUrl');
   useEffect(() => {
-    if (currentImageUrl !== imagePreview) { // Check if it's different to avoid loops
-      if (currentImageUrl && (currentImageUrl.startsWith('http') || currentImageUrl.startsWith('https'))) {
-        setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
+    if (currentImageUrl && currentImageUrl !== imagePreview) {
+      if (currentImageUrl.startsWith('http://') || currentImageUrl.startsWith('https://')) {
+         setImagePreview(getGoogleDriveImageSrc(currentImageUrl));
       } else if (currentImageUrl === '') {
         setImagePreview(null);
       }
     }
   }, [currentImageUrl, imagePreview]);
 
+
   const onSubmit = (data: ProfileFormData) => {
     startTransition(async () => {
       try {
         const userDocRef = doc(db, 'users', adminUser.id);
-        // Use setDoc with merge:true to create the doc if it doesn't exist, or update it if it does.
-        // This is crucial for the owner account which may not have a user doc initially.
         await setDoc(userDocRef, {
           displayName: data.displayName.trim(),
-          avatarUrl: data.avatarUrl?.trim() || '',
+          imageUrl: data.imageUrl?.trim() || '',
           updatedAt: serverTimestamp(),
-          // Ensure email and role are not overwritten if the doc already exists
-          email: adminUser.email,
-          role: adminUser.role,
         }, { merge: true });
 
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
-        // Manually mark the form as not dirty to disable the save button
-        form.reset(data);
+        onFormSubmitSuccess?.();
+        onOpenChange(false);
 
       } catch (error: any) {
         console.error("Error updating profile:", error);
@@ -98,66 +109,85 @@ export function ProfileForm({ adminUser }: ProfileFormProps) {
     });
   };
 
-  const nameForFallback = form.watch('displayName') || 'A';
+  const handleDialogClose = () => {
+    onOpenChange(false);
+  }
+
+  const nameForFallback = form.watch('displayName') || adminUser.displayName || 'A';
   const fallbackAvatarText = nameForFallback.substring(0, 2).toUpperCase();
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-2 rounded-md border p-4">
-          <FormLabel>Avatar</FormLabel>
-          <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20 border">
-              <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" data-ai-hint="profile preview"/>
-              <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
-            </Avatar>
-            <div className="flex-grow space-y-3">
-              <FormField
-                control={form.control}
-                name="avatarUrl"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel htmlFor="form-avatarUrl" className="text-xs text-muted-foreground flex items-center">
-                      <LinkIcon className="mr-1.5 h-3.5 w-3.5"/> Image URL (Optional)
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        id="form-avatarUrl"
-                        placeholder="https://example.com/image.png"
-                        {...field}
-                        value={field.value ?? ''}
-                        disabled={isPending}
-                        onChange={(e) => {
-                            field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit Your Profile</DialogTitle>
+          <DialogDescription>
+            Update your display name and avatar. Click save when you're done.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+            <div className="space-y-2 rounded-md border p-4">
+              <FormLabel>Avatar</FormLabel>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-20 w-20 border">
+                  <AvatarImage src={imagePreview || undefined} alt="Avatar Preview" />
+                  <AvatarFallback className="text-2xl">{fallbackAvatarText}</AvatarFallback>
+                </Avatar>
+                <div className="flex-grow space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <FormLabel htmlFor="form-imageUrl" className="text-xs text-muted-foreground flex items-center">
+                          <LinkIcon className="mr-1.5 h-3.5 w-3.5"/> Image URL (Optional)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            id="form-imageUrl"
+                            placeholder="https://example.com/image.png"
+                            {...field}
+                            value={field.value ?? ''}
+                            disabled={isPending}
+                            onChange={(e) => {
+                                field.onChange(e);
+                                setImagePreview(e.target.value ? getGoogleDriveImageSrc(e.target.value) : null);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <FormField
-          control={form.control}
-          name="displayName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Display Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Your Name" {...field} disabled={isPending} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" disabled={isPending || !form.formState.isDirty}>
-          {isPending ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </form>
-    </Form>
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Your Name" {...field} disabled={isPending} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter className="pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isPending} onClick={handleDialogClose}> Cancel </Button>
+              </DialogClose>
+              <Button type="submit" disabled={isPending || !form.formState.isDirty}>
+                {isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

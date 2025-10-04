@@ -113,7 +113,7 @@ export interface AdminManagedUser {
   };
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;
-  avatarUrl?: string;
+  imageUrl?: string;
 }
 
 export interface CheckinResult {

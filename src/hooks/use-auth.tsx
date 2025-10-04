@@ -16,6 +16,7 @@ interface AuthContextType {
   adminUser: AdminManagedUser | null;
   authSessionLoading: boolean;
   permissions: AdminManagedUser['permissions'];
+  refreshAuth: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,94 +28,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminManagedUser | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setAuthSessionLoading(true); // Start loading on any auth state change
-      if (user) {
-        setLoggedInUser(user);
-        try {
-          let userProfile: AdminManagedUser | null = null;
-          let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
+  const fetchUserData = async (user: User | null) => {
+    setAuthSessionLoading(true); // Start loading on any auth state change
+    if (user) {
+      setLoggedInUser(user);
+      try {
+        let userProfile: AdminManagedUser | null = null;
+        let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
 
-          // First, fetch the user's application-specific profile from Firestore
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            userProfile = userDocSnap.data() as AdminManagedUser;
-            if (userProfile.avatarUrl) {
-              userProfile.avatarUrl = getGoogleDriveImageSrc(userProfile.avatarUrl);
-            }
+        // First, fetch the user's application-specific profile from Firestore
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          userProfile = { ...userDocSnap.data(), id: userDocSnap.id } as AdminManagedUser;
+          if (userProfile.imageUrl) {
+            userProfile.imageUrl = getGoogleDriveImageSrc(userProfile.imageUrl);
           }
-          setAdminUser(userProfile);
-          console.log('userProfile', userProfile);
-
-          // Now determine the application role based on multiple factors
-          if (user.uid === OWNER_UID) {
-            finalUserRole = 'owner';
-            // For the owner, ensure their virtual profile is correctly constructed if it's missing from DB
-            if (!userProfile) {
-              setAdminUser({
-                id: user.uid,
-                email: user.email || 'owner@system.local',
-                role: 'owner',
-                displayName: user.displayName || 'System Owner',
-                avatarUrl: user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : '',
-                createdAt: user.metadata.creationTime,
-                updatedAt: user.metadata.lastSignInTime,
-                canAccessSuperiorAdmin: true,
-              });
-            }
-          } else if (userProfile?.role === 'admin') {
-            finalUserRole = 'admin';
-            // An admin can be elevated to 'owner' role if they have the flag
-            if (userProfile.canAccessSuperiorAdmin) {
-              finalUserRole = 'owner';
-            }
-          }
-          
-          setUserAppRole(finalUserRole);
-          console.log('finalUserRole', finalUserRole);
-
-          // If the user is the owner, they can't also be a staff member.
-          if (finalUserRole === 'owner') {
-             setStaffMember(null);
-          } else {
-            // Separately, check if they are a staff member
-            const staffDocRef = doc(db, 'staff_members', user.uid);
-            const staffDocSnap = await getDoc(staffDocRef);
-            if (staffDocSnap.exists()) {
-              const staffData = staffDocSnap.data() as StaffMember;
-              if (staffData.imageUrl) {
-                staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
-              }
-              setStaffMember(staffData);
-            } else {
-              setStaffMember(null);
-            }
-          }
-        } catch (error) {
-          console.error("Critical error during user data fetch:", error);
-          // Reset to a known safe state on error
-          setUserAppRole('user');
-          setAdminUser(null);
-          setStaffMember(null);
-        } finally {
-          setAuthSessionLoading(false);
         }
-      } else {
-        // User is logged out
-        setLoggedInUser(null);
-        setUserAppRole(null);
-        setStaffMember(null);
+        setAdminUser(userProfile);
+        console.log('userProfile', userProfile);
+
+        // Now determine the application role based on multiple factors
+        if (user.uid === OWNER_UID) {
+          finalUserRole = 'owner';
+          // For the owner, ensure their virtual profile is correctly constructed if it's missing from DB
+          if (!userProfile) {
+            setAdminUser({
+              id: user.uid,
+              email: user.email || 'owner@system.local',
+              role: 'owner',
+              displayName: user.displayName || 'System Owner',
+              imageUrl: user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : '',
+              createdAt: user.metadata.creationTime,
+              updatedAt: user.metadata.lastSignInTime,
+              canAccessSuperiorAdmin: true,
+            });
+          }
+        } else if (userProfile?.role === 'admin') {
+          finalUserRole = 'admin';
+          // An admin can be elevated to 'owner' role if they have the flag
+          if (userProfile.canAccessSuperiorAdmin) {
+            finalUserRole = 'owner';
+          }
+        }
+        
+        setUserAppRole(finalUserRole);
+        console.log('finalUserRole', finalUserRole);
+
+        // If the user is the owner, they can't also be a staff member.
+        if (finalUserRole === 'owner') {
+           setStaffMember(null);
+        } else {
+          // Separately, check if they are a staff member
+          const staffDocRef = doc(db, 'staff_members', user.uid);
+          const staffDocSnap = await getDoc(staffDocRef);
+          if (staffDocSnap.exists()) {
+            const staffData = staffDocSnap.data() as StaffMember;
+            if (staffData.imageUrl) {
+              staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
+            }
+            setStaffMember(staffData);
+          } else {
+            setStaffMember(null);
+          }
+        }
+      } catch (error) {
+        console.error("Critical error during user data fetch:", error);
+        // Reset to a known safe state on error
+        setUserAppRole('user');
         setAdminUser(null);
+        setStaffMember(null);
+      } finally {
         setAuthSessionLoading(false);
       }
-    });
+    } else {
+      // User is logged out
+      setLoggedInUser(null);
+      setUserAppRole(null);
+      setStaffMember(null);
+      setAdminUser(null);
+      setAuthSessionLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, fetchUserData);
     return () => unsubscribe();
   }, []);
 
-  const value = { loggedInUser, userAppRole, staffMember, adminUser, authSessionLoading, permissions: adminUser?.permissions };
+  const refreshAuth = () => {
+    const user = auth.currentUser;
+    fetchUserData(user);
+  };
+
+  const value = { loggedInUser, userAppRole, staffMember, adminUser, authSessionLoading, permissions: adminUser?.permissions, refreshAuth };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

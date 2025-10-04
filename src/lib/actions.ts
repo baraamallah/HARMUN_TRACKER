@@ -64,7 +64,7 @@ function toISODateString(dateValue: any): string | null {
 function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Participant {
     const data = docSnap.data();
     return {
-        id: docSnap.id,
+        id: String(docSnap.id),
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
@@ -91,7 +91,7 @@ function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Par
 function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMember {
     const data = docSnap.data();
     return {
-        id: docSnap.id,
+        id: String(docSnap.id),
         name: data.name || '',
         role: data.role || '',
         department: data.department || '',
