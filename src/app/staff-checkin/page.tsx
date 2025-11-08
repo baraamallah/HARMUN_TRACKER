@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, RefreshCw, ListRestart, Edit3, UserSearch, Plane, Coffee, UserX, UserCheck } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Home, RefreshCw, ListRestart, Edit3, UserSearch, Plane, Coffee, UserX, UserCheck, AlertCircle, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/use-auth';
 import { quickSetStaffStatusAction, getStaffMemberById } from '@/lib/actions';
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ function StaffCheckinPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { loggedInUser, authSessionLoading } = useAuth();
   const [isPending, startTransition] = React.useTransition();
   
   const [effectiveStaffId, setEffectiveStaffId] = React.useState<string | null>(null);
@@ -135,6 +137,52 @@ function StaffCheckinPageContent() {
                           staffMember?.status === 'On Break' ? 'border-yellow-500' : 
                           staffMember?.status === 'Away' ? 'border-blue-500' : 
                           'border-primary';
+
+  if (authSessionLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-t-8 border-primary">
+          <CardHeader className="text-center pt-8"><div className="mb-4"><Logo size="lg"/></div></CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6 text-center py-10">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <p className="text-xl text-muted-foreground">Verifying Authentication...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!loggedInUser) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-t-8 border-yellow-500">
+          <CardHeader className="text-center pt-8">
+            <div className="mb-6 flex justify-center"><Logo size="lg" /></div>
+            <CardTitle className="text-3xl font-bold tracking-tight">Authentication Required</CardTitle>
+            <CardDescription className="text-md text-muted-foreground">
+              Please log in to access staff check-in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-6 py-8">
+            <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+            <p className="text-center text-muted-foreground mb-6">
+              Secure staff attendance tracking requires authentication.
+            </p>
+            <Button asChild className="w-full" size="lg">
+              <Link href={`/auth/login?redirect=/staff-checkin${effectiveStaffId ? `?id=${effectiveStaffId}` : ''}`}>
+                <span><LogIn className="mr-2 h-4 w-4" /> Login to Continue</span>
+              </Link>
+            </Button>
+          </CardContent>
+          <CardFooter className="flex-col gap-3 pb-8">
+            <Button asChild className="w-full" variant="outline">
+              <Link href="/"><span><Home className="mr-2 h-4 w-4"/>Go to Dashboard</span></Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
 
   if (isLoading) {
