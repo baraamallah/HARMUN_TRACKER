@@ -214,6 +214,10 @@ export default function StaffMemberProfilePage() {
             </CardHeader>
             <CardContent className="text-sm space-y-3 px-6 pb-6">
               <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Info className="mr-2 h-4 w-4 text-primary/70" />Staff ID:</span>
+                <span className="text-right font-mono text-xs">{staffMember.id}</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><Briefcase className="mr-2 h-4 w-4 text-primary/70" />Role:</span>
                 <span className="text-right">{staffMember.role}</span>
               </div>

@@ -478,7 +478,6 @@ export async function quickSetParticipantStatusAction(
     revalidatePath('/public');
     revalidatePath('/superior-admin/analytics');
 
-
     return {
       success: true,
       message: `Status for ${participantData.name} updated to ${newStatus}.`,
@@ -488,11 +487,11 @@ export async function quickSetParticipantStatusAction(
     console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
     let message = 'An error occurred while updating participant status. Please try again.';
     let errorType = 'generic_error';
-     if (error.code === 'permission-denied') {
-      message = `Permission Denied on '${PARTICIPANTS_COLLECTION}' collection: Could not update participant status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
+    if (error.code === 'permission-denied') {
+      message = `Permission Denied: Could not update participant status. Please ensure you are logged in.`;
       errorType = 'permission_denied';
     } else if (error.code) {
-      message = `Update failed on '${PARTICIPANTS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
+      message = `Update failed. Error: ${error.code}. Please try again.`;
       errorType = error.code;
     }
     return { success: false, message, errorType };

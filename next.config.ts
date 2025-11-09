@@ -8,13 +8,22 @@ const nextConfig: NextConfig = {
   serverRuntimeConfig: {
     FIREBASE_SERVICE_ACCOUNT_KEY: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'firebase-admin': false,
+      };
+    }
+    return config;
+  },
   /* config options here */
 
   typescript: {
-    ignoreBuildErrors: false, // Changed to false for production readiness
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: false, // Changed to false for production readiness
+    ignoreDuringBuilds: false,
   },
   images: {
     remotePatterns: [
@@ -27,6 +36,18 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'drive.google.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
         port: '',
         pathname: '/**',
       },

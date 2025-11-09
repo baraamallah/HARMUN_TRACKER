@@ -61,7 +61,7 @@ service cloud.firestore {
     match /participants/{participantId} {
       allow read, list: if true;
       
-      allow update: if request.auth != null;
+      allow update: if true;
       
       allow create: if canEditParticipants();
       allow delete: if canDeleteParticipants();
@@ -70,7 +70,7 @@ service cloud.firestore {
     match /staff_members/{staffMemberId} {
       allow read, list: if true;
       
-      allow update: if request.auth != null;
+      allow update: if true;
       
       allow create: if canCreateStaff();
       allow delete: if canDeleteStaff();

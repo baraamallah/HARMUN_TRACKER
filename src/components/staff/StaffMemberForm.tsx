@@ -52,17 +52,6 @@ const staffMemberFormSchema = z.object({
   contactInfo: z.string().max(100, 'Other contact info must be at most 100 characters.').optional().default(''),
   imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters.').optional().default(''),
-  permissions: z.object({
-    canEditParticipants: z.boolean().default(false),
-    canEditParticipantStatus: z.boolean().default(false),
-    canEditStaff: z.boolean().default(false),
-    canEditStaffStatus: z.boolean().default(false),
-  }).optional().default({
-    canEditParticipants: false,
-    canEditParticipantStatus: false,
-    canEditStaff: false,
-    canEditStaffStatus: false,
-  }),
 });
 
 type StaffMemberFormData = z.infer<typeof staffMemberFormSchema>;
@@ -106,12 +95,6 @@ export function StaffMemberForm({
     defaultValues: {
       name: '', role: '', department: '', team: '', email: '',
       phone: '', contactInfo: '', imageUrl: '', notes: '',
-      permissions: {
-        canEditParticipants: false,
-        canEditParticipantStatus: false,
-        canEditStaff: false,
-        canEditStaffStatus: false,
-      },
     },
   });
 
@@ -128,24 +111,12 @@ export function StaffMemberForm({
           contactInfo: staffMemberToEdit.contactInfo || '',
           imageUrl: staffMemberToEdit.imageUrl || '',
           notes: staffMemberToEdit.notes || '',
-          permissions: {
-            canEditParticipants: staffMemberToEdit.permissions?.canEditParticipants || false,
-            canEditParticipantStatus: staffMemberToEdit.permissions?.canEditParticipantStatus || false,
-            canEditStaff: staffMemberToEdit.permissions?.canEditStaff || false,
-            canEditStaffStatus: staffMemberToEdit.permissions?.canEditStaffStatus || false,
-          },
         });
         setImagePreview(staffMemberToEdit.imageUrl ? getGoogleDriveImageSrc(staffMemberToEdit.imageUrl) : null);
       } else {
         form.reset({
           name: '', role: '', department: '', team: '', email: '',
           phone: '', contactInfo: '', imageUrl: '', notes: '',
-          permissions: {
-            canEditParticipants: false,
-            canEditParticipantStatus: false,
-            canEditStaff: false,
-            canEditStaffStatus: false,
-          },
         });
         setImagePreview(null);
       }
@@ -175,7 +146,6 @@ export function StaffMemberForm({
           phone: data.phone?.trim() || '',
           contactInfo: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
-          permissions: data.permissions,
           updatedAt: serverTimestamp(),
         };
         
@@ -396,84 +366,6 @@ export function StaffMemberForm({
                 </FormItem>
               )}
             />
-
-            <div className="space-y-2 rounded-md border p-4">
-              <FormLabel>Permissions</FormLabel>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="permissions.canEditParticipants"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel>Edit Participants</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isPending}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="permissions.canEditParticipantStatus"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel>Edit Participant Status</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isPending}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="permissions.canEditStaff"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel>Edit Staff</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isPending}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="permissions.canEditStaffStatus"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel>Edit Staff Status</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isPending}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
 
             <DialogFooter className="pt-4">
               <DialogClose asChild>

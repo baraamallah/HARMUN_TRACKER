@@ -231,6 +231,10 @@ export default function ParticipantProfilePage() {
             </CardHeader>
             <CardContent className="text-sm space-y-3 px-6 pb-6">
               <div className="flex justify-between items-center">
+                <span className="font-medium text-muted-foreground flex items-center"><Info className="mr-2 h-4 w-4 text-primary/70" />Participant ID:</span>
+                <span className="text-right font-mono text-xs">{participant.id}</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="font-medium text-muted-foreground flex items-center"><Landmark className="mr-2 h-4 w-4 text-primary/70" />School:</span>
                 <span className="text-right">{participant.school}</span>
               </div>

@@ -501,77 +501,143 @@ export default function SuperiorAdminPage() {
       </header>
 
       <main className="flex-1 container mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 p-8 bg-card border border-primary/20 rounded-xl shadow-lg">
-          <h2 className="text-4xl font-semibold mb-3 text-foreground">Welcome, System Owner!</h2>
-          <p className="text-xl text-muted-foreground">
-            You have master control over the MUN Attendance Tracker. Manage system lists, user access, and global settings.
+        <div className="mb-10 p-6 sm:p-8 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl shadow-md">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-3 text-foreground">Welcome, System Owner!</h2>
+          <p className="text-lg sm:text-xl text-muted-foreground">
+            Master control panel for the MUN Attendance Tracker. Manage system configuration, users, and global settings.
           </p>
         </div>
         
-        {/* QR Code Sections Removed */}
-        <Separator className="my-10" />
+        {/* Quick Actions */}
+        <section aria-labelledby="quick-actions-heading" className="mb-12">
+          <h3 id="quick-actions-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Settings className="h-6 w-6 text-primary" />
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-yellow-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <User className="h-5 w-5 text-yellow-500" />
+                  My Profile
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Update your display name and avatar
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
+                  <Link href="/superior-admin/profile">
+                    <Settings className="mr-2 h-4 w-4" /> Open Profile
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-red-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <UserPlus className="h-5 w-5 text-red-500" />
+                  Admin Accounts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Grant or revoke admin privileges
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-red-500 hover:bg-red-600 text-white">
+                  <Link href="/superior-admin/admin-management">
+                    <Users className="mr-2 h-4 w-4" /> Manage Admins
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-blue-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DatabaseZap className="h-5 w-5 text-blue-500" />
+                  Participants
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  View and manage all participants
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-blue-500 hover:bg-blue-600 text-white">
+                  <Link href="/">
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open Dashboard
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-purple-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Settings2 className="h-5 w-5 text-purple-500" />
+                  System Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Configure app-wide parameters
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-purple-500 hover:bg-purple-600 text-white">
+                  <Link href="/superior-admin/system-settings">
+                    <Settings className="mr-2 h-4 w-4" /> Open Settings
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </section>
+
+        {/* System Configuration */}
+        <section aria-labelledby="system-config-heading" className="mb-12">
+          <h3 id="system-config-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Settings2 className="h-6 w-6 text-primary" />
+            System Configuration
+          </h3>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {renderSystemListManagementCard("Manage Schools", Landmark, "text-primary", newSchoolName, setNewSchoolName, isLoadingSchools, systemSchools, "school", "School")}
           {renderSystemListManagementCard("Manage Committees", BookOpenText, "text-accent", newCommitteeName, setNewCommitteeName, isLoadingCommittees, systemCommittees, "committee", "Committee")}
           {renderSystemListManagementCard("Manage Staff Teams", Network, "text-orange-500", newStaffTeamName, setNewStaffTeamName, isLoadingStaffTeams, systemStaffTeams, "staffTeam", "Staff Team")}
 
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-yellow-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">My Profile</CardTitle>
-              <User className="h-7 w-7 text-yellow-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                Update your personal information, such as your display name and avatar.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button asChild className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
-                <Link href="/superior-admin/profile">
-                    <span><Settings className="mr-2 h-4 w-4" /> Go to My Profile</span>
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
+          </div>
+        </section>
 
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-red-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">Admin Accounts</CardTitle>
-              <UserPlus className="h-7 w-7 text-red-500" />
+        {/* Staff Management */}
+        <section aria-labelledby="staff-management-heading" className="mb-12">
+          <h3 id="staff-management-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <StaffIcon className="h-6 w-6 text-green-500" />
+            Staff Management
+          </h3>
+          <Card className="shadow-md border-l-4 border-green-500">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl font-semibold">Manage Staff Members</CardTitle>
+                <Button onClick={handleOpenAddStaffForm} className="bg-green-500 hover:bg-green-600 text-white" disabled={isPending} size="sm">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Staff
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                Grant or revoke admin privileges for application users.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button asChild className="w-full bg-red-500 hover:bg-red-600 text-white">
-                <Link href="/superior-admin/admin-management">
-                    <span><Users className="mr-2 h-4 w-4" /> Manage Admins</span>
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-green-500 md:col-span-3 lg:col-span-3">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">Manage Staff Members</CardTitle>
-              <StaffIcon className="h-7 w-7 text-green-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <Button onClick={handleOpenAddStaffForm} className="w-full sm:w-auto mb-4 bg-green-500 hover:bg-green-600 text-white" disabled={isPending}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Staff Member
-              </Button>
-              <Separator />
-              <h4 className="text-md font-medium text-muted-foreground mt-4 mb-2">Existing Staff:</h4>
+            <CardContent>
               {isLoadingStaff ? (
-                <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : staffMembers.length > 0 ? (
-                <ScrollArea className="h-80 w-full rounded-md border bg-muted/30 mt-2">
+                <ScrollArea className="h-96 w-full rounded-md border">
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="bg-muted/50">
                         <TableHead className="w-[50px]">Avatar</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Role</TableHead>
@@ -611,54 +677,20 @@ export default function SuperiorAdminPage() {
                   </Table>
                 </ScrollArea>
               ) : (
-                <p className="text-sm text-muted-foreground italic py-4 text-center mt-2">No staff members registered.</p>
+                <div className="text-center py-12 border rounded-md bg-muted/20">
+                  <StaffIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground font-medium">No staff members registered yet.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Click "Add Staff" to create your first staff member.</p>
+                </div>
               )}
             </CardContent>
           </Card>
+        </section>
 
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">Global Participant Data</CardTitle>
-              <DatabaseZap className="h-7 w-7 text-blue-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                View, edit, and manage all participant records directly from the main admin dashboard.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button asChild className="w-full bg-blue-500 hover:bg-blue-600 text-white">
-                <Link href="/">
-                  <span><ExternalLink className="mr-2 h-4 w-4" /> Go to Participant Dashboard</span>
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-4 border-purple-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-5">
-              <CardTitle className="text-xl font-semibold">System Settings</CardTitle>
-              <Settings2 className="h-7 w-7 text-purple-500" />
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground mb-4">
-                Configure application-wide settings and operational parameters, like default attendance status.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button asChild className="w-full bg-purple-500 hover:bg-purple-600 text-white">
-                <Link href="/superior-admin/system-settings">
-                   <span><Settings className="mr-2 h-4 w-4" /> Configure System Settings</span>
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        <div className="mt-12 p-6 bg-green-600/10 border border-green-700/30 rounded-xl text-center">
-          <p className="font-medium text-lg text-green-700 dark:text-green-400">
-            <ShieldAlert className="inline-block mr-2 h-6 w-6 align-middle" />
-            Security Notice: Access to this panel is restricted. Ensure your account credentials remain secure.
+        <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-xl text-center">
+          <p className="font-medium text-lg text-foreground flex items-center justify-center gap-2">
+            <ShieldAlert className="h-6 w-6 text-primary" />
+            Security Notice: Access to this panel is restricted. Keep your credentials secure.
           </p>
         </div>
       </main>

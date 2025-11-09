@@ -44,7 +44,6 @@
     "dotenv": "^16.6.1",
     "file-saver": "^2.0.5",
     "firebase": "^12.3.0",
-    "firebase-admin": "^13.5.0",
     "genkit": "^1.8.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^3.0.1",
