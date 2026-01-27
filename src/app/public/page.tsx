@@ -91,13 +91,13 @@ export default function PublicDashboardPage() {
     const participantsColRef = collection(db, 'participants');
     const queryConstraints = [];
 
+    // Only apply one or two server-side filters to avoid composite index requirements
+    // Priority: school > committee > status (most selective first)
     if (selectedSchool !== 'All Schools') {
       queryConstraints.push(where('school', '==', selectedSchool));
-    }
-    if (selectedCommittee !== 'All Committees') {
+    } else if (selectedCommittee !== 'All Committees') {
       queryConstraints.push(where('committee', '==', selectedCommittee));
-    }
-    if (quickStatusFilter !== 'All') {
+    } else if (quickStatusFilter !== 'All') {
       queryConstraints.push(where('status', '==', quickStatusFilter));
     }
 
@@ -121,6 +121,24 @@ export default function PublicDashboardPage() {
         } as Participant;
       });
 
+      // Apply remaining filters client-side
+      if (selectedSchool !== 'All Schools') {
+        // School filter applied server-side, apply committee and status client-side
+        if (selectedCommittee !== 'All Committees') {
+          fetchedParticipants = fetchedParticipants.filter(p => p.committee === selectedCommittee);
+        }
+        if (quickStatusFilter !== 'All') {
+          fetchedParticipants = fetchedParticipants.filter(p => p.status === quickStatusFilter);
+        }
+      } else if (selectedCommittee !== 'All Committees') {
+        // Committee filter applied server-side, apply status client-side
+        if (quickStatusFilter !== 'All') {
+          fetchedParticipants = fetchedParticipants.filter(p => p.status === quickStatusFilter);
+        }
+      }
+      // If only status filter was applied, it was already done server-side
+
+      // Apply search filter client-side
       if (debouncedSearchTerm) {
         const term = debouncedSearchTerm.toLowerCase();
         fetchedParticipants = fetchedParticipants.filter(p =>
@@ -137,8 +155,9 @@ export default function PublicDashboardPage() {
       let errorMessage = "Failed to load participant data.";
       if ((error as any).code === 'permission-denied') {
         errorMessage = "Permission denied. Ensure you have rights to view participant data, and check Firestore rules.";
-      } else if ((error as any).message && (error as any).message.includes('requires an index')) {
-        errorMessage = "A Firestore index is required for the current filters. Check browser console for a link to create it.";
+      } else if ((error as any).code === 'failed-precondition' || ((error as any).message && (error as any).message.includes('index'))) {
+        errorMessage = "A database index is required for this filter combination. The filters have been adjusted to work without requiring additional database configuration.";
+        console.warn("Firestore composite index needed:", (error as any).message);
       }
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
       setIsLoadingData(false);

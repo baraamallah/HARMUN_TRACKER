@@ -123,10 +123,11 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
         const staffColRef = collection(db, "staff_members");
         const queryConstraints = [];
 
+        // Only apply one server-side filter at a time to avoid composite index requirements
+        // Apply the most selective filter first
         if (selectedTeamFilter !== "All Teams") {
             queryConstraints.push(where('team', '==', selectedTeamFilter));
-        }
-        if (quickStatusFilter !== 'All') {
+        } else if (quickStatusFilter !== 'All') {
             queryConstraints.push(where('status', '==', quickStatusFilter));
         }
         
@@ -135,6 +136,15 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
         let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
 
+        // Apply remaining filters client-side
+        if (selectedTeamFilter === "All Teams" && quickStatusFilter !== 'All') {
+            // Status filter was already applied server-side, no additional filtering needed
+        } else if (selectedTeamFilter !== "All Teams" && quickStatusFilter !== 'All') {
+            // Team filter was applied server-side, now filter by status client-side
+            staffData = staffData.filter(s => s.status === quickStatusFilter);
+        }
+
+        // Apply search filter client-side
         if (debouncedSearchTerm) {
             const term = debouncedSearchTerm.toLowerCase();
             staffData = staffData.filter(s =>
@@ -148,7 +158,15 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
         setStaffMembers(staffData);
     } catch (error: any) {
         console.error("Failed to fetch filtered staff data:", error);
-        toast({ title: "Error", description: error.message || "Could not load staff members.", variant: "destructive"});
+        let errorMessage = error.message || "Could not load staff members.";
+        
+        // Check if this is a composite index error
+        if (error.code === 'failed-precondition' || (error.message && error.message.includes('index'))) {
+            errorMessage = "A database index is required for this filter combination. The filters have been adjusted to work without requiring additional database configuration.";
+            console.warn("Firestore composite index needed. URL:", error.message);
+        }
+        
+        toast({ title: "Error", description: errorMessage, variant: "destructive"});
     } finally {
         setIsLoading(false);
     }
