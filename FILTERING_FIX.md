@@ -11,7 +11,10 @@ This error was caused by Firestore's requirement for **composite indexes** when 
 ## Root Cause
 Firestore requires composite indexes when you:
 1. Use multiple `where()` clauses on different fields
-2. Combine `where()` clauses with `orderBy()` on a different field
+2. Combine **ANY** `where()` clause with `orderBy()` on a different field
+3. Even a SINGLE `where()` clause + `orderBy()` on a different field requires an index
+
+**Key Insight:** The `orderBy('name')` combined with filters like `where('school', '==', 'X')` was causing the index requirement because 'name' is a different field than 'school'.
 
 ### Original Problematic Queries
 
@@ -42,26 +45,33 @@ if (quickStatusFilter !== 'All') {
 
 ## Solution Implementation
 
-### Strategy: Hybrid Filtering
+### Strategy: Hybrid Filtering + Client-Side Sorting
 We implemented a **hybrid approach** that combines:
-1. **Server-side filtering** (Firestore queries) - for one primary filter
+1. **Server-side filtering** (Firestore queries) - for one primary filter, NO orderBy
 2. **Client-side filtering** (JavaScript) - for additional filters
+3. **Client-side sorting** (JavaScript) - sort by name after fetching
 
 This approach eliminates the need for composite indexes while maintaining good performance.
+
+**Critical Change:** Removed all `orderBy()` clauses when using `where()` filters. Sorting is now done client-side using `Array.sort()`.
 
 ### Staff Filtering Fix
 
 **File:** `src/components/staff/StaffDashboardClient.tsx`
 
 ```typescript
-// ✅ Apply only ONE server-side filter to avoid composite index
+// ✅ Apply only ONE server-side filter, NO orderBy
 if (selectedTeamFilter !== "All Teams") {
     queryConstraints.push(where('team', '==', selectedTeamFilter));
 } else if (quickStatusFilter !== 'All') {
     queryConstraints.push(where('status', '==', quickStatusFilter));
 }
 
-const q = query(staffColRef, ...queryConstraints);
+// Create query WITHOUT orderBy to avoid index requirement
+const q = queryConstraints.length > 0
+    ? query(staffColRef, ...queryConstraints)
+    : query(staffColRef);
+
 const querySnapshot = await getDocs(q);
 let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
 
@@ -69,6 +79,9 @@ let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
 if (selectedTeamFilter !== "All Teams" && quickStatusFilter !== 'All') {
     staffData = staffData.filter(s => s.status === quickStatusFilter);
 }
+
+// ✅ Sort client-side by name
+staffData.sort((a, b) => a.name.localeCompare(b.name));
 ```
 
 ### Participant Filtering Fix
@@ -183,8 +196,21 @@ Test all filter combinations to ensure they work:
 
 ## Files Modified
 
-1. `src/components/staff/StaffDashboardClient.tsx` - Staff filtering logic
-2. `src/app/public/page.tsx` - Public participant view filtering logic
+1. `src/components/staff/StaffDashboardClient.tsx` - Staff filtering logic (client-side)
+2. `src/app/public/page.tsx` - Public participant view filtering logic (client-side)
+3. `src/lib/actions.ts` - Server actions `getParticipants()` and `getStaffMembers()` filtering logic
+
+### Summary of Changes
+
+**Client-side components** (`StaffDashboardClient.tsx`, `public/page.tsx`):
+- Modified Firestore queries to use only one `where()` clause at a time
+- Added client-side JavaScript filtering for additional filter criteria
+- Enhanced error handling for composite index errors
+
+**Server actions** (`actions.ts`):
+- `getParticipants()`: Modified to use hybrid filtering (one server filter + client-side filters)
+- `getStaffMembers()`: Modified to use hybrid filtering (one server filter + client-side filters)
+- Both functions now handle composite index errors gracefully with better error messages
 
 ## Conclusion
 

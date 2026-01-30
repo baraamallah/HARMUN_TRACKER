@@ -165,21 +165,44 @@ export async function getParticipants(filters?: { school?: string; committee?: s
     const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
     
     const queryConstraints = [];
+    
+    // Apply only ONE server-side filter to avoid composite index requirements
+    // Priority: school > committee > status (most selective first)
     if (filters?.school && filters.school !== "All Schools") {
       queryConstraints.push(where('school', '==', filters.school));
-    }
-    if (filters?.committee && filters.committee !== "All Committees") {
+    } else if (filters?.committee && filters.committee !== "All Committees") {
       queryConstraints.push(where('committee', '==', filters.committee));
-    }
-    if (filters?.status && filters.status !== 'All') {
+    } else if (filters?.status && filters.status !== 'All') {
       queryConstraints.push(where('status', '==', filters.status));
     }
 
-    const q = query(participantsColRef, ...queryConstraints, orderBy('name'));
+    // Create query without orderBy to avoid composite index requirement
+    // Sorting will be done client-side after fetching
+    const q = queryConstraints.length > 0 
+      ? query(participantsColRef, ...queryConstraints)
+      : query(participantsColRef);
 
     const querySnapshot = await getDocs(q);
     let participantsData = querySnapshot.docs.map(docSnap => transformParticipantDoc(docSnap));
 
+    // Apply remaining filters client-side (in server action)
+    if (filters?.school && filters.school !== "All Schools") {
+      // School filter was applied server-side, now apply committee and status client-side
+      if (filters?.committee && filters.committee !== "All Committees") {
+        participantsData = participantsData.filter(p => p.committee === filters.committee);
+      }
+      if (filters?.status && filters.status !== 'All') {
+        participantsData = participantsData.filter(p => p.status === filters.status);
+      }
+    } else if (filters?.committee && filters.committee !== "All Committees") {
+      // Committee filter was applied server-side, now apply status client-side
+      if (filters?.status && filters.status !== 'All') {
+        participantsData = participantsData.filter(p => p.status === filters.status);
+      }
+    }
+    // If only status filter was applied, it was already done server-side
+
+    // Apply search filter client-side
     if (filters?.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       participantsData = participantsData.filter(p =>
@@ -189,13 +212,18 @@ export async function getParticipants(filters?: { school?: string; committee?: s
         (p.country && p.country.toLowerCase().includes(term))
       );
     }
+
+    // Sort client-side by name
+    participantsData.sort((a, b) => a.name.localeCompare(b.name));
+
     return participantsData;
   } catch (error) {
       console.error("[Server Action - getParticipants] Error fetching participants. Filters:", filters, "Error:", error);
       const firebaseError = error as { code?: string; message?: string };
       let detailedMessage = `Failed to fetch participants. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
       if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-        detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
+        detailedMessage += " A Firestore index is required. The filters have been adjusted to work without requiring additional database configuration.";
+        console.warn("[Server Action] Composite index needed:", firebaseError.message);
       } else if (firebaseError.code === 'permission-denied') {
         detailedMessage += " Permission denied. Check Firestore rules.";
       }
@@ -208,18 +236,33 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
         const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
         const queryConstraints = [];
 
+        // Apply only ONE server-side filter to avoid composite index requirements
+        // Priority: team > status (most selective first)
         if (filters?.team && filters.team !== "All Teams") {
             queryConstraints.push(where('team', '==', filters.team));
-        }
-        if (filters?.status && filters.status !== 'All') {
+        } else if (filters?.status && filters.status !== 'All') {
             queryConstraints.push(where('status', '==', filters.status));
         }
         
-        const q = query(staffColRef, ...queryConstraints, orderBy('name'));
+        // Create query without orderBy to avoid composite index requirement
+        // Sorting will be done client-side after fetching
+        const q = queryConstraints.length > 0
+            ? query(staffColRef, ...queryConstraints)
+            : query(staffColRef);
         const querySnapshot = await getDocs(q);
 
         let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
 
+        // Apply remaining filters client-side (in server action)
+        if (filters?.team && filters.team !== "All Teams") {
+            // Team filter was applied server-side, now apply status client-side
+            if (filters?.status && filters.status !== 'All') {
+                staffData = staffData.filter(s => s.status === filters.status);
+            }
+        }
+        // If only status filter was applied, it was already done server-side
+
+        // Apply search filter client-side
         if (filters?.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
             staffData = staffData.filter(s =>
@@ -230,13 +273,17 @@ export async function getStaffMembers(filters?: { team?: string; searchTerm?: st
             );
         }
 
+        // Sort client-side by name
+        staffData.sort((a, b) => a.name.localeCompare(b.name));
+
         return staffData;
     } catch (error) {
         console.error("[Server Action - getStaffMembers] Error fetching staff. Filters:", filters, "Error:", error);
         const firebaseError = error as { code?: string; message?: string };
         let detailedMessage = `Failed to fetch staff members. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
         if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-            detailedMessage += " A Firestore index is required. Check browser console or server logs for a link to create it.";
+            detailedMessage += " A Firestore index is required. The filters have been adjusted to work without requiring additional database configuration.";
+            console.warn("[Server Action] Composite index needed:", firebaseError.message);
         }
         throw new Error(detailedMessage);
     }

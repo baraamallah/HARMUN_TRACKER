@@ -101,7 +101,11 @@ export default function PublicDashboardPage() {
       queryConstraints.push(where('status', '==', quickStatusFilter));
     }
 
-    const participantsQuery = query(participantsColRef, ...queryConstraints, orderBy('name'));
+    // Don't use orderBy with where clauses to avoid composite index requirement
+    // Sorting will be done client-side after filtering
+    const participantsQuery = queryConstraints.length > 0
+      ? query(participantsColRef, ...queryConstraints)
+      : query(participantsColRef, orderBy('name'));
 
     const unsubscribe = onSnapshot(participantsQuery, (querySnapshot) => {
       let fetchedParticipants = querySnapshot.docs.map(docSnap => {
@@ -148,6 +152,10 @@ export default function PublicDashboardPage() {
           (p.country && p.country.toLowerCase().includes(term))
         );
       }
+
+      // Sort client-side by name
+      fetchedParticipants.sort((a, b) => a.name.localeCompare(b.name));
+
       setParticipants(fetchedParticipants);
       setIsLoadingData(false);
     }, (error) => {
