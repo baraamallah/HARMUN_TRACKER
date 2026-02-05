@@ -342,35 +342,35 @@ function CheckinPageContent() {
 
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-3 sm:p-4">
       <Card className={cn("w-full max-w-lg shadow-xl border-t-8 transition-colors duration-300", cardBorderColor)}>
-        <CardHeader className="items-center text-center pt-8">
-            <div className="mb-4"><Logo size="lg"/></div>
-            <Avatar className="h-28 w-28 mb-4 border-4" style={{ borderColor: 'hsl(var(--primary))' }}>
+        <CardHeader className="items-center text-center pt-6 sm:pt-8 px-4">
+            <div className="mb-3 sm:mb-4"><Logo size="md"/></div>
+            <Avatar className="h-24 w-24 sm:h-28 sm:w-28 mb-3 sm:mb-4 border-4" style={{ borderColor: 'hsl(var(--primary))' }}>
                 <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar large" />
-                <AvatarFallback className="text-4xl">{participant.name.substring(0,2).toUpperCase()}</AvatarFallback>
+                <AvatarFallback className="text-3xl sm:text-4xl">{participant.name.substring(0,2).toUpperCase()}</AvatarFallback>
             </Avatar>
-          <CardTitle className="text-3xl font-bold tracking-tight">{participant.name}</CardTitle>
-          <CardDescription className="text-lg text-muted-foreground">
+          <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">{participant.name}</CardTitle>
+          <CardDescription className="text-base sm:text-lg text-muted-foreground px-2">
             {participant.school} &bull; {participant.committee}
           </CardDescription>
-           <div className="mt-4">
-            <Badge variant="outline" className={cn("text-lg px-4 py-2 rounded-md font-semibold", getStatusBadgeStyling(participant.status))}>
+           <div className="mt-3 sm:mt-4">
+            <Badge variant="outline" className={cn("text-base sm:text-lg px-3 sm:px-4 py-1.5 sm:py-2 rounded-md font-semibold", getStatusBadgeStyling(participant.status))}>
                 Current Status: {participant.status}
             </Badge>
            </div>
            {participant.attended && participant.checkInTime && (
-             <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium flex items-center">
-                <CheckCircle className="mr-2 h-4 w-4"/> Checked In: {isValid(parseISO(participant.checkInTime as string)) ? format(parseISO(participant.checkInTime as string), 'PPpp') : 'Previously'}
+             <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 mt-2 font-medium flex items-center justify-center">
+                <CheckCircle className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4"/> Checked In: {isValid(parseISO(participant.checkInTime as string)) ? format(parseISO(participant.checkInTime as string), 'PPpp') : 'Previously'}
              </p>
            )}
            {participant.updatedAt && (
-             <p className="text-xs text-muted-foreground mt-1 flex items-center">
-                <History className="mr-1.5 h-3 w-3"/> Last Update: {isValid(parseISO(participant.updatedAt as string)) ? format(parseISO(participant.updatedAt as string), 'PPpp') : 'N/A'}
+             <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center">
+                <History className="mr-1 sm:mr-1.5 h-3 w-3"/> Last Update: {isValid(parseISO(participant.updatedAt as string)) ? format(parseISO(participant.updatedAt as string), 'PPpp') : 'N/A'}
              </p>
            )}
         </CardHeader>
-        <CardContent className="flex flex-col items-center space-y-3 text-center py-6 px-6">
+        <CardContent className="flex flex-col items-center space-y-3 text-center py-4 sm:py-6 px-4 sm:px-6">
             {pageError && (
                 <p className="text-red-600 dark:text-red-400 text-sm mb-2 bg-red-100 dark:bg-red-900/30 p-2 rounded-md">
                   {pageError}

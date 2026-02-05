@@ -7,14 +7,15 @@ import {
   Home,
   Eye,
   LogOut,
-  ShieldCheck, 
+  ShieldCheck,
   LogIn,
-  Users2, 
-  QrCode, 
+  Users2,
+  QrCode,
   Clipboard,
   BarChart,
   User,
-  Menu
+  Menu,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,8 +52,8 @@ const baseNavItems: NavItem[] = [
 ];
 
 const adminNavItems: NavItem[] = [
-   { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes' },
-   { href: '/superior-admin/analytics', icon: BarChart, label: 'Analytics', tooltip: 'Analytics Dashboard' },
+  { href: '/qr-management', icon: QrCode, label: 'QR Management', tooltip: 'Manage QR Codes' },
+  { href: '/superior-admin/analytics', icon: BarChart, label: 'Analytics', tooltip: 'Analytics Dashboard' },
 ];
 
 const ownerOnlyNavItems: NavItem[] = [
@@ -60,7 +61,8 @@ const ownerOnlyNavItems: NavItem[] = [
 ];
 
 const publicNavItems: NavItem[] = [
- { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
+  { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
+  { href: '/about', icon: Info, label: 'About', tooltip: 'About HARMUN' },
 ];
 
 export function TopNavbar() {
@@ -102,8 +104,8 @@ export function TopNavbar() {
         items.push(adminNavItems[1]);
       }
     }
-    items.push(...publicNavItems); 
-    
+    items.push(...publicNavItems);
+
     const uniqueItems = items.filter((item, index, self) =>
       index === self.findIndex((t) => t.href === item.href)
     );

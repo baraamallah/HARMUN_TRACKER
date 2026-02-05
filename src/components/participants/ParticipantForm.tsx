@@ -212,6 +212,8 @@ export function ParticipantForm({
           submissionData.status = defaultStatus;
           submissionData.attended = false;
           submissionData.checkInTime = null;
+          submissionData.dayAttendance = { day1: false, day2: false };
+          submissionData.checkInTimes = { day1: null, day2: null };
           submissionData.createdAt = serverTimestamp();
 
           const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);

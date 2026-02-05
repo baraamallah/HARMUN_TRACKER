@@ -228,6 +228,8 @@ export function ImportCsvDialog({ onImportSuccess }: { onImportSuccess?: () => v
             imageUrl: `https://placehold.co/40x40.png?text=${(name || 'P').substring(0,2).toUpperCase()}`,
             attended: false,
             checkInTime: null,
+            dayAttendance: { day1: false, day2: false },
+            checkInTimes: { day1: null, day2: null },
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };

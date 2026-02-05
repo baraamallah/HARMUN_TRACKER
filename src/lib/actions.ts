@@ -78,6 +78,11 @@ function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Par
         phone: data.phone || '',
         attended: data.attended || false,
         checkInTime: toISODateString(data.checkInTime),
+        dayAttendance: data.dayAttendance || { day1: false, day2: false },
+        checkInTimes: {
+            day1: toISODateString(data.checkInTimes?.day1),
+            day2: toISODateString(data.checkInTimes?.day2),
+        },
         createdAt: toISODateString(data.createdAt),
         updatedAt: toISODateString(data.updatedAt),
     };
@@ -155,6 +160,22 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
   } catch (error) {
     console.error("[Server Action] Error fetching event logo URL setting: ", error);
     return null;
+  }
+}
+
+export async function getCurrentConferenceDay(): Promise<'day1' | 'day2'> {
+  console.log(`[Server Action - getCurrentConferenceDay] Attempting to read current conference day.`);
+  try {
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    const docSnap = await getDoc(configDocRef);
+    if (docSnap.exists() && docSnap.data().currentConferenceDay) {
+      return docSnap.data().currentConferenceDay as 'day1' | 'day2';
+    }
+    console.log(`[Server Action - getCurrentConferenceDay] No setting found, returning 'day1'.`);
+    return 'day1'; // Default fallback
+  } catch (error) {
+    console.error("[Server Action] Error fetching current conference day setting: ", error);
+    return 'day1'; // Default fallback on error
   }
 }
 
@@ -507,10 +528,25 @@ export async function quickSetParticipantStatusAction(
       updatedAt: fsServerTimestamp(),
     };
 
+    // Get current conference day
+    const currentDay = await getCurrentConferenceDay();
+
+    // ALWAYS mark day attendance when status is updated (Feature 2)
+    const dayAttendance = participantData.dayAttendance || { day1: false, day2: false };
+    dayAttendance[currentDay] = true;
+    updates.dayAttendance = dayAttendance;
+
     if (options?.isCheckIn && newStatus === 'Present') {
       updates.attended = true;
       if (!participantData.attended || !participantData.checkInTime) {
         updates.checkInTime = fsServerTimestamp();
+      }
+      
+      // Update day-specific check-in time
+      const checkInTimes = participantData.checkInTimes || {};
+      if (!checkInTimes[currentDay]) {
+        checkInTimes[currentDay] = fsServerTimestamp();
+        updates.checkInTimes = checkInTimes;
       }
     }
 
@@ -643,6 +679,80 @@ export async function quickSetStaffStatusAction(
 
 
 // --- Analytics Actions ---
+export async function switchConferenceDayAction(
+  newDay: 'day1' | 'day2'
+): Promise<{ success: boolean; message: string; archiveCount?: number }> {
+  console.log(`[Server Action - switchConferenceDayAction] Switching to ${newDay}`);
+  
+  try {
+    // Get current day first
+    const currentDay = await getCurrentConferenceDay();
+    
+    if (currentDay === newDay) {
+      return { success: true, message: `Already on ${newDay}` };
+    }
+
+    // Get default status for resetting
+    const defaultStatus = await getDefaultAttendanceStatusSetting();
+
+    // Archive current participants and reset statuses
+    const participantsRef = collection(db, PARTICIPANTS_COLLECTION);
+    const participantsSnapshot = await getDocs(participantsRef);
+    
+    const batch = writeBatch(db);
+    let archiveCount = 0;
+
+    participantsSnapshot.docs.forEach((docSnap) => {
+      const participantRef = doc(db, PARTICIPANTS_COLLECTION, docSnap.id);
+      
+      // Archive the current status in a history field (optional)
+      const currentData = docSnap.data();
+      const archiveEntry = {
+        status: currentData.status,
+        day: currentDay,
+        timestamp: fsServerTimestamp(),
+      };
+      
+      // Reset status to default (e.g., "Didn't Arrive Yet" or "Absent")
+      batch.update(participantRef, {
+        status: defaultStatus,
+        updatedAt: fsServerTimestamp(),
+        [`statusHistory.${currentDay}`]: archiveEntry,
+      });
+      
+      archiveCount++;
+    });
+
+    // Update the conference day setting
+    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    batch.update(configDocRef, {
+      currentConferenceDay: newDay,
+      updatedAt: fsServerTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Revalidate all relevant paths
+    revalidatePath('/');
+    revalidatePath('/checkin');
+    revalidatePath('/public');
+    revalidatePath('/superior-admin/analytics');
+    revalidatePath('/superior-admin/system-settings');
+
+    return {
+      success: true,
+      message: `Switched to ${newDay}. ${archiveCount} participants archived and reset to "${defaultStatus}".`,
+      archiveCount,
+    };
+  } catch (error: any) {
+    console.error('[Server Action - switchConferenceDayAction] Error:', error);
+    return {
+      success: false,
+      message: `Failed to switch conference day: ${error.message}`,
+    };
+  }
+}
+
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
     const participantsCollectionRef = collection(db, PARTICIPANTS_COLLECTION);

@@ -3,6 +3,7 @@
 
 import * as React from 'react';
 import { TopNavbar } from '@/components/layout/TopNavbar';
+import { Footer } from '@/components/layout/Footer';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
 
@@ -24,6 +25,7 @@ export function AppLayoutClientShell({ children }: { children: React.ReactNode }
       <main className="flex-1 container mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
+      <Footer />
     </div>
   );
 }

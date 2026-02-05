@@ -3,102 +3,65 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function getUserData() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data 
-        : null;
-    }
-
+    // Owner UID - has full access
     function isOwner() {
       return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
 
-    function isSuperiorAdmin() {
-      let userData = getUserData();
-      return isOwner() || (request.auth != null && userData != null && userData.canAccessSuperiorAdmin == true);
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    function isAdmin() {
-      let userData = getUserData();
-      return request.auth != null && userData != null && userData.role == "admin";
+    // Check if user has admin role in users collection
+    function hasAdminRole() {
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
-    function canEditParticipants() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canEditParticipants', false) == true);
-    }
-
-    function canDeleteParticipants() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canDeleteParticipants', false) == true);
-    }
-
-    function canCreateStaff() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canCreateStaff', false) == true);
-    }
-
-    function canEditStaff() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canEditStaff', false) == true);
-    }
-
-    function canDeleteStaff() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canDeleteStaff', false) == true);
-    }
-
-    function canAccessAnalytics() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canAccessAnalytics', false) == true);
-    }
-
-    function canManageQRCodes() {
-      let userData = getUserData();
-      return isSuperiorAdmin() || (isAdmin() && userData.get('permissions', {}).get('canManageQRCodes', false) == true);
-    }
-
+    // Participants collection
     match /participants/{participantId} {
-      allow read, list: if true;
-      
-      allow update: if true;
-      
-      allow create: if canEditParticipants();
-      allow delete: if canDeleteParticipants();
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isOwner() || hasAdminRole();
     }
 
+    // Staff members collection
     match /staff_members/{staffMemberId} {
-      allow read, list: if true;
-      
-      allow update: if true;
-      
-      allow create: if canCreateStaff();
-      allow delete: if canDeleteStaff();
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isOwner() || hasAdminRole();
     }
 
+    // System schools collection
     match /system_schools/{schoolId} {
       allow read: if true;
-      allow write: if isSuperiorAdmin();
+      allow write: if isAuthenticated();
     }
 
+    // System committees collection
     match /system_committees/{committeeId} {
       allow read: if true;
-      allow write: if isSuperiorAdmin();
+      allow write: if isAuthenticated();
     }
 
+    // System staff teams collection
     match /system_staff_teams/{teamId} {
       allow read: if true;
-      allow write: if isSuperiorAdmin();
+      allow write: if isAuthenticated();
     }
 
+    // System config collection (day switching, default statuses, etc.)
     match /system_config/{settingId} {
       allow read: if true;
-      allow write: if isSuperiorAdmin();
+      allow write: if isOwner() || hasAdminRole();
     }
 
+    // Users collection (for admin management)
     match /users/{userId} {
-      allow read, write: if isSuperiorAdmin();
-      allow get: if request.auth != null && request.auth.uid == userId;
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read, write: if isOwner();
     }
   }
 }

@@ -479,42 +479,42 @@ export default function SuperiorAdminPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/30 to-background">
       <header className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-lg shadow-sm">
-        <div className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="h-10 w-10 text-primary" />
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <div className="container mx-auto flex h-16 sm:h-20 items-center justify-between px-3 sm:px-4 lg:px-8 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <ShieldAlert className="h-8 w-8 sm:h-10 sm:w-10 text-primary flex-shrink-0" />
+            <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-foreground truncate">
                 Superior Admin Panel
                 </h1>
                 {currentUser && ( 
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                        Authenticated as: {currentUser.email} (UID: {currentUser.uid})
+                    <p className="text-xs text-green-600 dark:text-green-400 truncate hidden sm:block">
+                        Authenticated as: {currentUser.email}
                     </p>
                 )}
             </div>
           </div>
-          <Button variant="outline" onClick={handleSuperAdminLogout} size="lg" className="text-md">
-            <LogOut className="mr-2 h-5 w-5" />
-            Logout
+          <Button variant="outline" onClick={handleSuperAdminLogout} size="sm" className="flex-shrink-0">
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Logout</span>
           </Button>
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 p-6 sm:p-8 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl shadow-md">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-3 text-foreground">Welcome, System Owner!</h2>
-          <p className="text-lg sm:text-xl text-muted-foreground">
+      <main className="flex-1 container mx-auto py-6 sm:py-8 lg:py-10 px-3 sm:px-4 lg:px-8">
+        <div className="mb-6 sm:mb-8 lg:mb-10 p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl shadow-md">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 sm:mb-3 text-foreground">Welcome, System Owner!</h2>
+          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground">
             Master control panel for the MUN Attendance Tracker. Manage system configuration, users, and global settings.
           </p>
         </div>
         
         {/* Quick Actions */}
-        <section aria-labelledby="quick-actions-heading" className="mb-12">
-          <h3 id="quick-actions-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <Settings className="h-6 w-6 text-primary" />
+        <section aria-labelledby="quick-actions-heading" className="mb-8 sm:mb-10 lg:mb-12">
+          <h3 id="quick-actions-heading" className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 flex items-center gap-2">
+            <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             Quick Actions
           </h3>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-yellow-500 hover:scale-105">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -602,12 +602,12 @@ export default function SuperiorAdminPage() {
         </section>
 
         {/* System Configuration */}
-        <section aria-labelledby="system-config-heading" className="mb-12">
-          <h3 id="system-config-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <Settings2 className="h-6 w-6 text-primary" />
+        <section aria-labelledby="system-config-heading" className="mb-8 sm:mb-10 lg:mb-12">
+          <h3 id="system-config-heading" className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 flex items-center gap-2">
+            <Settings2 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             System Configuration
           </h3>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
           {renderSystemListManagementCard("Manage Schools", Landmark, "text-primary", newSchoolName, setNewSchoolName, isLoadingSchools, systemSchools, "school", "School")}
           {renderSystemListManagementCard("Manage Committees", BookOpenText, "text-accent", newCommitteeName, setNewCommitteeName, isLoadingCommittees, systemCommittees, "committee", "Committee")}
           {renderSystemListManagementCard("Manage Staff Teams", Network, "text-orange-500", newStaffTeamName, setNewStaffTeamName, isLoadingStaffTeams, systemStaffTeams, "staffTeam", "Staff Team")}
@@ -616,9 +616,9 @@ export default function SuperiorAdminPage() {
         </section>
 
         {/* Staff Management */}
-        <section aria-labelledby="staff-management-heading" className="mb-12">
-          <h3 id="staff-management-heading" className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <StaffIcon className="h-6 w-6 text-green-500" />
+        <section aria-labelledby="staff-management-heading" className="mb-8 sm:mb-10 lg:mb-12">
+          <h3 id="staff-management-heading" className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 flex items-center gap-2">
+            <StaffIcon className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
             Staff Management
           </h3>
           <Card className="shadow-md border-l-4 border-green-500">

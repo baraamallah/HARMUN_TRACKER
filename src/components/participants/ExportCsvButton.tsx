@@ -28,17 +28,19 @@ export function ExportCsvButton({ participants, fileName = 'participants_export.
 
     try {
       const headers = [
-        'name', 
-        'school', 
-        'committee', 
-        'country', 
+        'name',
+        'school',
+        'committee',
+        'country',
         'classgrade',
         'email',
         'phone',
+        'day1',
+        'day2',
         'notes',
         'additionaldetails'
       ];
-      
+
       const csvRows = participants.map(p => [
         `"${(p.name || '').replace(/"/g, '""')}"`,
         `"${(p.school || '').replace(/"/g, '""')}"`,
@@ -47,6 +49,8 @@ export function ExportCsvButton({ participants, fileName = 'participants_export.
         `"${(p.classGrade || '').replace(/"/g, '""')}"`,
         `"${(p.email || '').replace(/"/g, '""')}"`,
         `"${(p.phone || '').replace(/"/g, '""')}"`,
+        `"${p.dayAttendance?.day1 ? 'Yes' : 'No'}"`,
+        `"${p.dayAttendance?.day2 ? 'Yes' : 'No'}"`,
         `"${(p.notes || '').replace(/"/g, '""')}"`,
         `"${(p.additionalDetails || '').replace(/"/g, '""')}"`
       ].join(','));

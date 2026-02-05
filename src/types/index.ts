@@ -28,6 +28,15 @@ export interface Participant {
   phone?: string;
   attended?: boolean;
   checkInTime?: string | FieldValueType | null | undefined;
+  // 2-Day Conference Support
+  dayAttendance?: {
+    day1?: boolean;
+    day2?: boolean;
+  };
+  checkInTimes?: {
+    day1?: string | FieldValueType | null | undefined;
+    day2?: string | FieldValueType | null | undefined;
+  };
   createdAt?: string | FieldValueType | null | undefined;
   updatedAt?: string | FieldValueType | null | undefined;
 }
