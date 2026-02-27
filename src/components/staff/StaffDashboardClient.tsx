@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { PlusCircle, Loader2, Users2 as UsersIcon, Layers, Trash2 } from 'lucide-react';
+import { PlusCircle, Loader2, Users2 as UsersIcon, Layers, Trash2, Filter, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,41 +39,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
-import { writeBatch, doc, serverTimestamp, query, collection, where, getDocs, Timestamp } from 'firebase/firestore';
-
-// Helper function to transform Firestore data into a StaffMember object
-function toISODateString(dateValue: any): string | null {
-  if (!dateValue) return null;
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate().toISOString();
-  }
-  if (typeof dateValue === 'string') {
-    if (!isNaN(Date.parse(dateValue))) {
-       return new Date(dateValue).toISOString();
-    }
-  }
-  return null;
-}
-
-function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMember {
-    const data = docSnap.data();
-    return {
-        id: String(docSnap.id),
-        name: data.name || '',
-        role: data.role || '',
-        department: data.department || '',
-        team: data.team || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        contactInfo: data.contactInfo || '',
-        status: data.status || 'Off Duty',
-        imageUrl: data.imageUrl,
-        notes: data.notes || '',
-        createdAt: toISODateString(data.createdAt),
-        updatedAt: toISODateString(data.updatedAt),
-    };
-}
-
+import { ExportStaffExcelButton } from '@/components/staff/ExportStaffExcelButton';
+import { writeBatch, doc, serverTimestamp, query, collection, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
 
@@ -109,6 +76,10 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = React.useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   React.useEffect(() => {
     if (!isAuthLoading && !user) {
       router.push('/auth/login?redirect=/staff');
@@ -120,53 +91,15 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
     setIsLoading(true);
     try {
-        const staffColRef = collection(db, "staff_members");
-        const queryConstraints = [];
-
-        // Only apply one server-side filter at a time to avoid composite index requirements
-        // Apply the most selective filter first
-        if (selectedTeamFilter !== "All Teams") {
-            queryConstraints.push(where('team', '==', selectedTeamFilter));
-        } else if (quickStatusFilter !== 'All') {
-            queryConstraints.push(where('status', '==', quickStatusFilter));
-        }
-        
-        const q = query(staffColRef, ...queryConstraints);
-        const querySnapshot = await getDocs(q);
-
-        let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
-
-        // Apply remaining filters client-side
-        if (selectedTeamFilter === "All Teams" && quickStatusFilter !== 'All') {
-            // Status filter was already applied server-side, no additional filtering needed
-        } else if (selectedTeamFilter !== "All Teams" && quickStatusFilter !== 'All') {
-            // Team filter was applied server-side, now filter by status client-side
-            staffData = staffData.filter(s => s.status === quickStatusFilter);
-        }
-
-        // Apply search filter client-side
-        if (debouncedSearchTerm) {
-            const term = debouncedSearchTerm.toLowerCase();
-            staffData = staffData.filter(s =>
-                s.name.toLowerCase().includes(term) ||
-                s.role.toLowerCase().includes(term) ||
-                (s.department && s.department.toLowerCase().includes(term)) ||
-                (s.team && s.team.toLowerCase().includes(term))
-            );
-        }
-        
-        setStaffMembers(staffData);
+        const fetchedStaff = await getStaffMembers({
+            team: selectedTeamFilter,
+            status: quickStatusFilter,
+            searchTerm: debouncedSearchTerm,
+        });
+        setStaffMembers(fetchedStaff);
     } catch (error: any) {
         console.error("Failed to fetch filtered staff data:", error);
-        let errorMessage = error.message || "Could not load staff members.";
-        
-        // Check if this is a composite index error
-        if (error.code === 'failed-precondition' || (error.message && error.message.includes('index'))) {
-            errorMessage = "A database index is required for this filter combination. The filters have been adjusted to work without requiring additional database configuration.";
-            console.warn("Firestore composite index needed. URL:", error.message);
-        }
-        
-        toast({ title: "Error", description: errorMessage, variant: "destructive"});
+        toast({ title: "Error", description: error.message || "Could not load staff members.", variant: "destructive"});
     } finally {
         setIsLoading(false);
     }
@@ -175,6 +108,80 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Real-time listener for auto-refresh
+  const fetchDataRef = React.useRef(fetchData);
+  React.useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
+  React.useEffect(() => {
+    if (isAuthLoading || !user) return;
+
+    const staffRef = collection(db, 'staff_members');
+    const q = query(staffRef, orderBy('createdAt', 'desc'));
+
+    let isFirstSnapshot = true;
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          return;
+        }
+
+        const changes = snapshot.docChanges();
+        if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
+          console.log('Staff real-time update detected:', changes.length, 'changes');
+          fetchDataRef.current();
+        }
+      },
+      (error) => {
+        console.error('Staff real-time listener error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isAuthLoading, user]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(staffMembers.length / pageSize);
+  const displayedStaffMembers = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return staffMembers.slice(startIndex, endIndex);
+  }, [staffMembers, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, selectedTeamFilter, quickStatusFilter, pageSize]);
+
+  // Fetch current conference day on mount (for consistency with dashboard)
+  const [currentDay, setCurrentDay] = React.useState<'day1' | 'day2'>('day1');
+  React.useEffect(() => {
+    const fetchCurrentDay = async () => {
+      try {
+        const { getCurrentConferenceDay } = await import('@/lib/actions');
+        const day = await getCurrentConferenceDay();
+        setCurrentDay(day);
+      } catch (error) {
+        console.error('Error fetching current conference day:', error);
+      }
+    };
+    fetchCurrentDay();
+  }, []);
+
+  // Calculate staff stats
+  const staffStats = React.useMemo(() => {
+    const total = staffMembers.length;
+    const onDuty = staffMembers.filter(s => s.status === 'On Duty').length;
+    const offDuty = staffMembers.filter(s => s.status === 'Off Duty').length;
+    const onBreak = staffMembers.filter(s => s.status === 'On Break').length;
+    const away = staffMembers.filter(s => s.status === 'Away').length;
+    return { total, onDuty, offDuty, onBreak, away };
+  }, [staffMembers]);
 
   const handleAddStaffMember = () => {
     setStaffToEdit(null);
@@ -191,10 +198,10 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   };
 
   const handleSelectAllStaff = (isSelected: boolean) => {
-    setSelectedStaffMemberIds(isSelected ? staffMembers.map(s => s.id) : []);
+    setSelectedStaffMemberIds(isSelected ? displayedStaffMembers.map(s => s.id) : []);
   };
 
-  const isAllStaffSelected = staffMembers.length > 0 && selectedStaffMemberIds.length === staffMembers.length;
+  const isAllStaffSelected = displayedStaffMembers.length > 0 && displayedStaffMembers.every(s => selectedStaffMemberIds.includes(s.id));
 
   const handleBulkStatusUpdate = async (status: StaffAttendanceStatus) => {
     if (selectedStaffMemberIds.length === 0) return;
@@ -252,39 +259,80 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Staff Management</h1>
-          <p className="text-muted-foreground">Manage staff members, their roles, teams, and status.</p>
+    <div className="flex flex-col gap-4 sm:gap-6 pb-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Staff Management</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage staff members, their roles, teams, and status.</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700">
+            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs font-medium text-green-700 dark:text-green-300">Auto-refresh</span>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <ImportStaffCsvDialog onImportSuccess={fetchData} />
+          <ExportStaffExcelButton staffMembers={staffMembers} />
           <ExportStaffCsvButton staffMembers={staffMembers} />
-          <Button onClick={handleAddStaffMember} disabled={!permissions?.canCreateStaff}>
+          <Button onClick={handleAddStaffMember} disabled={!permissions?.canCreateStaff} className="w-full sm:w-auto">
             <PlusCircle className="mr-2 h-4 w-4" /> Add Staff Member
           </Button>
         </div>
       </div>
 
-      <div className="p-4 border rounded-lg shadow-sm bg-card space-y-4">
-         <div className="flex flex-col md:flex-row gap-4">
+      <div className="p-3 sm:p-4 border rounded-lg shadow-sm bg-card space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-orange-500 flex-shrink-0" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Conference Day:</span>
+              <span className="text-lg sm:text-xl font-bold text-foreground">
+                {currentDay === 'day1' ? 'Day 1' : 'Day 2'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+            <div>
+              <div className="text-xs sm:text-sm text-muted-foreground mb-1">Staff Status</div>
+              <div className="flex gap-3 sm:gap-4">
+                <div>
+                  <span className="text-xs text-muted-foreground">On Duty:</span>
+                  <span className="ml-1 text-sm font-bold text-green-600 dark:text-green-400">
+                    {staffStats.onDuty}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Off Duty:</span>
+                  <span className="ml-1 text-sm font-bold text-red-600 dark:text-red-400">
+                    {staffStats.offDuty}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground border-l pl-4">
+              <Filter className="h-4 w-4" />
+              <span>Filters</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
           <Input
             placeholder="Search by name, role, department, team..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow focus-visible:ring-primary"
+            className="w-full focus-visible:ring-primary"
             disabled={isLoading}
           />
-          <div className="flex gap-4">
-             <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')} disabled={isLoading}>
-              <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="Filter by status" /></SelectTrigger>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+            <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')} disabled={isLoading}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Filter by status" /></SelectTrigger>
               <SelectContent>
                 {ALL_STAFF_STATUS_FILTER_OPTIONS.map((opt) => <SelectItem key={opt.status} value={opt.status}>{opt.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter} disabled={isLoading}>
-              <SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="Filter by team" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Filter by team" /></SelectTrigger>
               <SelectContent>
                 {systemStaffTeams.map((team) => <SelectItem key={team} value={team}>{team}</SelectItem>)}
               </SelectContent>
@@ -292,7 +340,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
           </div>
         </div>
         {selectedStaffMemberIds.length > 0 && (
-            <div className="border-t pt-4 flex items-center gap-4">
+            <div className="border-t pt-3 sm:pt-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
                 <span className="text-sm font-semibold text-muted-foreground">{selectedStaffMemberIds.length} selected</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -319,7 +367,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
       </div>
 
       <StaffMemberTable
-        staffMembers={staffMembers}
+        staffMembers={displayedStaffMembers}
         isLoading={isLoading}
         onEditStaffMember={handleEditStaffMember}
         visibleColumns={visibleColumns}
@@ -328,6 +376,71 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
         onSelectAll={handleSelectAllStaff}
         isAllSelected={isAllStaffSelected}
       />
+
+      {/* Pagination Controls */}
+      {!isLoading && staffMembers.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, staffMembers.length)} of {staffMembers.length} staff members
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Per page:</span>
+              <Select value={pageSize.toString()} onValueChange={(val) => setPageSize(Number(val))}>
+                <SelectTrigger className="w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+              >
+                First
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground px-3">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                Last
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <StaffMemberForm
         isOpen={isStaffFormOpen}
