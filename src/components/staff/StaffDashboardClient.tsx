@@ -34,7 +34,7 @@ import {
 import { StaffMemberTable } from '@/components/staff/StaffMemberTable';
 import { StaffMemberForm } from '@/components/staff/StaffMemberForm';
 import type { StaffMember, StaffVisibleColumns, StaffAttendanceStatus } from '@/types';
-import { getStaffMembers } from '@/lib/actions';
+import { getStaffMembers, getCurrentConferenceDay } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
@@ -163,7 +163,6 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   React.useEffect(() => {
     const fetchCurrentDay = async () => {
       try {
-        const { getCurrentConferenceDay } = await import('@/lib/actions');
         const day = await getCurrentConferenceDay();
         setCurrentDay(day);
       } catch (error) {
