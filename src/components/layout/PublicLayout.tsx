@@ -2,11 +2,20 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link'; // Added missing import
+import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { getSystemLogoUrlSetting } from '@/lib/actions';
 import { Skeleton } from '@/components/ui/skeleton';
+
+/**
+ * PUBLIC FOOTER CONFIGURATION
+ * Edit these values to manually update the public footer content easily.
+ */
+const PUBLIC_FOOTER_CONFIG = {
+  brandName: 'MUN Attendance Tracker',
+  reservedRightsText: 'All rights reserved.',
+};
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null);
@@ -53,7 +62,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <Logo variant="circled-icon" size="sm" />
           )}
           <p className="text-sm text-muted-foreground text-center sm:text-right">
-            &copy; {new Date().getFullYear()} MUN Attendance Tracker. All rights reserved.
+            &copy; {new Date().getFullYear()} {PUBLIC_FOOTER_CONFIG.brandName}. {PUBLIC_FOOTER_CONFIG.reservedRightsText}
           </p>
         </div>
       </footer>
