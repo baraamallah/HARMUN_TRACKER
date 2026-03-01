@@ -4,6 +4,8 @@ import { ParticipantDashboardClient } from '@/components/participants/Participan
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import { redirect }from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * This is a server component that fetches initial data for filters, but participant
  * data is now fetched on the client to ensure authentication before access.
