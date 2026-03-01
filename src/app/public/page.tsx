@@ -54,6 +54,8 @@ const columnLabels: Record<keyof typeof initialVisibleColumns, string> = {
 
 type PublicVisibleColumns = typeof initialVisibleColumns;
 
+type PublicStatusFilterValue = 'All' | 'Present' | 'Absent' | 'Others';
+
 export default function PublicDashboardPage() {
   const { toast } = useToast();
   const [participants, setParticipants] = React.useState<Participant[]>([]);
@@ -64,7 +66,7 @@ export default function PublicDashboardPage() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
-  const [quickStatusFilter, setQuickStatusFilter] = React.useState<AttendanceStatus | 'All'>('All');
+  const [quickStatusFilter, setQuickStatusFilter] = React.useState<PublicStatusFilterValue>('All');
   const [dayFilter, setDayFilter] = React.useState<'All' | 'Day 1' | 'Day 2' | 'Both Days'>('All');
   const [currentDay, setCurrentDay] = React.useState<'day1' | 'day2'>('day1');
 
@@ -97,11 +99,10 @@ export default function PublicDashboardPage() {
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const statusToFetch = (quickStatusFilter === 'Present' || quickStatusFilter === 'Absent') ? 'All' : quickStatusFilter;
       const fetchedParticipants = await getParticipants({
         school: selectedSchool,
         committee: selectedCommittee,
-        status: statusToFetch,
+        status: 'All',
         searchTerm: debouncedSearchTerm,
       });
       setParticipants(fetchedParticipants);
@@ -180,8 +181,20 @@ export default function PublicDashboardPage() {
     else if (dayFilter === 'Day 2') list = list.filter(p => Boolean(p.dayAttendance?.day2));
     else if (dayFilter === 'Both Days') list = list.filter(p => Boolean(p.dayAttendance?.day1) && Boolean(p.dayAttendance?.day2));
 
-    if (quickStatusFilter === 'Present') list = list.filter(p => !isEffectivelyAbsent(p.status));
-    else if (quickStatusFilter === 'Absent') list = list.filter(p => isEffectivelyAbsent(p.status));
+    if (quickStatusFilter === 'Present') {
+      list = list.filter(p =>
+        !isEffectivelyAbsent(p.status) &&
+        (p.status === 'Present' || p.status === 'Present On Account')
+      );
+    } else if (quickStatusFilter === 'Absent') {
+      list = list.filter(p => isEffectivelyAbsent(p.status));
+    } else if (quickStatusFilter === 'Others') {
+      list = list.filter(p =>
+        p.status === 'In Break' ||
+        p.status === 'Restroom Break' ||
+        p.status === 'Technical Issue'
+      );
+    }
     return list;
   }, [participants, dayFilter, quickStatusFilter]);
 
@@ -198,20 +211,29 @@ export default function PublicDashboardPage() {
     setCurrentPage(1);
   }, [debouncedSearchTerm, selectedSchool, selectedCommittee, quickStatusFilter, dayFilter, pageSize]);
 
-  // Calculate attendance stats: effective Present = not Absent/Stepped Out
+  // Calculate attendance stats: Present / Absent / Others based on current status only
   const attendanceStats = React.useMemo(() => {
     const total = participants.length;
-    const day1Present = participants.filter(p => Boolean(p.dayAttendance?.day1) && !isEffectivelyAbsent(p.status)).length;
-    const day2Present = participants.filter(p => Boolean(p.dayAttendance?.day2) && !isEffectivelyAbsent(p.status)).length;
-    const currentDayPresent = currentDay === 'day1' ? day1Present : day2Present;
-    const currentDayAbsent = total - currentDayPresent;
+    const isOthersStatus = (status: AttendanceStatus) =>
+      status === 'In Break' || status === 'Restroom Break' || status === 'Technical Issue';
+
+    const currentDayPresent = participants.filter(
+      p =>
+        !isEffectivelyAbsent(p.status) &&
+        (p.status === 'Present' || p.status === 'Present On Account')
+    ).length;
+
+    const currentDayAbsent = participants.filter(p => isEffectivelyAbsent(p.status)).length;
+
+    const currentDayOthers = participants.filter(p => isOthersStatus(p.status)).length;
 
     return {
       total,
       currentDayPresent,
       currentDayAbsent,
+      currentDayOthers,
     };
-  }, [participants, currentDay]);
+  }, [participants]);
 
 
   const toggleAllColumns = (show: boolean) => {
@@ -270,20 +292,26 @@ export default function PublicDashboardPage() {
             <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
               <div>
                 <div className="text-xs sm:text-sm text-muted-foreground mb-1">Today's Status</div>
-                <div className="flex gap-3 sm:gap-4">
-                  <div>
-                    <span className="text-xs text-muted-foreground">Present:</span>
-                    <span className="ml-1 text-sm font-bold text-green-600 dark:text-green-400">
-                      {attendanceStats.currentDayPresent}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground">Absent:</span>
-                    <span className="ml-1 text-sm font-bold text-red-600 dark:text-red-400">
-                      {attendanceStats.currentDayAbsent}
-                    </span>
-                  </div>
+              <div className="flex gap-3 sm:gap-4">
+                <div>
+                  <span className="text-xs text-muted-foreground">Present:</span>
+                  <span className="ml-1 text-sm font-bold text-green-600 dark:text-green-400">
+                    {attendanceStats.currentDayPresent}
+                  </span>
                 </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Absent:</span>
+                  <span className="ml-1 text-sm font-bold text-red-600 dark:text-red-400">
+                    {attendanceStats.currentDayAbsent}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Others:</span>
+                  <span className="ml-1 text-sm font-bold text-amber-600 dark:text-amber-400">
+                    {attendanceStats.currentDayOthers}
+                  </span>
+                </div>
+              </div>
               </div>
               <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground border-l pl-4">
                 <Filter className="h-4 w-4" />
@@ -308,11 +336,19 @@ export default function PublicDashboardPage() {
                 <SelectTrigger className="w-full"><SelectValue placeholder="All Committees" /></SelectTrigger>
                 <SelectContent>{committees.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={quickStatusFilter} onValueChange={(val) => setQuickStatusFilter(val as AttendanceStatus | 'All')} disabled={isLoadingData}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+              <Select
+                value={quickStatusFilter}
+                onValueChange={(val) => setQuickStatusFilter(val as PublicStatusFilterValue)}
+                disabled={isLoadingData}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All Statuses</SelectItem>
-                  {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => <SelectItem key={opt.status} value={opt.status}>{opt.label}</SelectItem>)}
+                  <SelectItem value="Present">Present</SelectItem>
+                  <SelectItem value="Absent">Absent</SelectItem>
+                  <SelectItem value="Others">Others</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={dayFilter} onValueChange={(val) => setDayFilter(val as 'All' | 'Day 1' | 'Day 2' | 'Both Days')} disabled={isLoadingData}>

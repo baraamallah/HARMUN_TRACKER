@@ -35,10 +35,11 @@ export const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label:
     { status: 'Stepped Out', label: 'Stepped Out', icon: LogOutIcon },
 ];
 
-export const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All'; label: string; }[] = [
+export const ALL_STAFF_STATUS_FILTER_OPTIONS: { status: StaffAttendanceStatus | 'All' | 'Others'; label: string; }[] = [
     { status: 'All', label: 'All Statuses' },
     { status: 'On Duty', label: 'On Duty' },
     { status: 'Off Duty', label: 'Off Duty' },
+    { status: 'Others', label: 'Others' },
     { status: 'On Break', label: 'On Break' },
     { status: 'Away', label: 'Away' },
 ];

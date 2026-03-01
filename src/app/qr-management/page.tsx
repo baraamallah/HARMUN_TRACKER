@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Participant, StaffMember, AdminManagedUser } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getSystemLogoUrlSetting } from '@/lib/actions';
+import { PUBLIC_EVENT_CONFIG } from '@/lib/public-event-config';
 import QRCodeStyling, { type Options as QRCodeStylingOptions } from 'qr-code-styling';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -71,8 +71,6 @@ export default function QrManagementPage() {
   const [isZippingStaff, setIsZippingStaff] = useState(false);
 
   const [appBaseUrl, setAppBaseUrl] = useState('');
-  const [eventLogoUrl, setEventLogoUrl] = useState<string | undefined>(undefined);
-  const [isLoadingLogo, setIsLoadingLogo] = useState(true);
 
   const participantSchools = [
     'All Schools',
@@ -95,19 +93,9 @@ export default function QrManagementPage() {
     if (typeof window !== 'undefined') {
       setAppBaseUrl(window.location.origin);
     }
-    const fetchLogo = async () => {
-      setIsLoadingLogo(true);
-      try {
-        const url = await getSystemLogoUrlSetting();
-        if (url) setEventLogoUrl(url);
-      } catch (error) {
-        console.error("Failed to fetch system logo URL for QR management:", error);
-      } finally {
-        setIsLoadingLogo(false);
-      }
-    };
-    fetchLogo();
   }, []);
+
+  const eventLogoUrl = appBaseUrl ? `${appBaseUrl}${PUBLIC_EVENT_CONFIG.eventLogoPath}` : undefined;
 
   const fetchUserDataAndRoles = useCallback(async (user: User) => {
     if (user.uid === OWNER_UID) {
@@ -252,7 +240,7 @@ export default function QrManagementPage() {
       backgroundOptions: { color: '#ffffff' },
       cornersSquareOptions: { type: 'extra-rounded', color: '#1976D2' },
       cornersDotOptions: { type: 'dot', color: '#388E3C' },
-      image: eventLogoUrl || undefined,
+      image: eventLogoUrl,
     };
 
     try {
@@ -377,7 +365,6 @@ export default function QrManagementPage() {
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Participant Check-in QR Codes</CardTitle>
                 <CardDescription>
                   Manage and download QR codes for participant check-in.
-                  {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
@@ -473,7 +460,6 @@ export default function QrManagementPage() {
                 <CardTitle className="text-2xl font-semibold flex items-center gap-2">Staff Member Status QR Codes</CardTitle>
                 <CardDescription>
                   Manage and download QR codes for staff member status updates.
-                  {isLoadingLogo && <span className="ml-2 text-xs text-muted-foreground">(Loading event logo settings...)</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-2">

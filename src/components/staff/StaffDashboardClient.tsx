@@ -58,7 +58,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
   const [isLoading, setIsLoading] = React.useState(true);
 
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [quickStatusFilter, setQuickStatusFilter] = React.useState<StaffAttendanceStatus | 'All'>('All');
+  const [quickStatusFilter, setQuickStatusFilter] = React.useState<StaffAttendanceStatus | 'All' | 'Others'>('All');
   const [selectedTeamFilter, setSelectedTeamFilter] = React.useState<string>('All Teams');
 
   const [isStaffFormOpen, setIsStaffFormOpen] = React.useState(false);
@@ -91,9 +91,10 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
     setIsLoading(true);
     try {
+        const statusToFetch = quickStatusFilter === 'Others' ? 'All' : quickStatusFilter;
         const fetchedStaff = await getStaffMembers({
             team: selectedTeamFilter,
-            status: quickStatusFilter,
+            status: statusToFetch,
             searchTerm: debouncedSearchTerm,
         });
         setStaffMembers(fetchedStaff);
@@ -145,13 +146,19 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     return () => unsubscribe();
   }, [isAuthLoading, user]);
 
+  // Client-side Others filter
+  const filteredStaffMembers = React.useMemo(() => {
+    if (quickStatusFilter !== 'Others') return staffMembers;
+    return staffMembers.filter(s => s.status === 'On Break' || s.status === 'Away');
+  }, [staffMembers, quickStatusFilter]);
+
   // Pagination calculation
-  const totalPages = Math.ceil(staffMembers.length / pageSize);
+  const totalPages = Math.ceil(filteredStaffMembers.length / pageSize);
   const displayedStaffMembers = React.useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
-    return staffMembers.slice(startIndex, endIndex);
-  }, [staffMembers, currentPage, pageSize]);
+    return filteredStaffMembers.slice(startIndex, endIndex);
+  }, [filteredStaffMembers, currentPage, pageSize]);
 
   // Reset to page 1 when filters change
   React.useEffect(() => {
@@ -179,7 +186,8 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     const offDuty = staffMembers.filter(s => s.status === 'Off Duty').length;
     const onBreak = staffMembers.filter(s => s.status === 'On Break').length;
     const away = staffMembers.filter(s => s.status === 'Away').length;
-    return { total, onDuty, offDuty, onBreak, away };
+    const others = onBreak + away;
+    return { total, onDuty, offDuty, onBreak, away, others };
   }, [staffMembers]);
 
   const handleAddStaffMember = () => {
@@ -271,12 +279,23 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <ImportStaffCsvDialog onImportSuccess={fetchData} />
-          <ExportStaffExcelButton staffMembers={staffMembers} />
-          <ExportStaffCsvButton staffMembers={staffMembers} />
-          <Button onClick={handleAddStaffMember} disabled={!permissions?.canCreateStaff} className="w-full sm:w-auto">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Staff Member
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Layers className="mr-2 h-4 w-4" /> Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72 p-2">
+              <div className="flex flex-col gap-2">
+                <ImportStaffCsvDialog onImportSuccess={fetchData} />
+                <ExportStaffExcelButton staffMembers={staffMembers} />
+                <ExportStaffCsvButton staffMembers={staffMembers} />
+                <Button onClick={handleAddStaffMember} disabled={!permissions?.canCreateStaff} className="w-full">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Staff Member
+                </Button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -307,6 +326,12 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
                     {staffStats.offDuty}
                   </span>
                 </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Others:</span>
+                  <span className="ml-1 text-sm font-bold text-amber-600 dark:text-amber-400">
+                    {staffStats.others}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground border-l pl-4">
@@ -324,7 +349,7 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
             disabled={isLoading}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-            <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All')} disabled={isLoading}>
+            <Select value={quickStatusFilter} onValueChange={(value) => setQuickStatusFilter(value as StaffAttendanceStatus | 'All' | 'Others')} disabled={isLoading}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Filter by status" /></SelectTrigger>
               <SelectContent>
                 {ALL_STAFF_STATUS_FILTER_OPTIONS.map((opt) => <SelectItem key={opt.status} value={opt.status}>{opt.label}</SelectItem>)}
@@ -377,11 +402,11 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
       />
 
       {/* Pagination Controls */}
-      {!isLoading && staffMembers.length > 0 && (
+      {!isLoading && filteredStaffMembers.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, staffMembers.length)} of {staffMembers.length} staff members
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredStaffMembers.length)} of {filteredStaffMembers.length} staff members
             </span>
           </div>
           <div className="flex items-center gap-4">

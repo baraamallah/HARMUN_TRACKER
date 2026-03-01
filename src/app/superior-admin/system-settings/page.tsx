@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, Image as ImageIcon, Workflow, Calendar } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, Workflow, Calendar } from 'lucide-react';
 import { auth, db } from '@/lib/firebase'; 
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
@@ -42,7 +42,6 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   getDefaultAttendanceStatusSetting, 
   getDefaultStaffStatusSetting,
-  getSystemLogoUrlSetting,
   switchConferenceDayAction,
 } from '@/lib/actions';
 import type { AttendanceStatus, StaffAttendanceStatus } from '@/types';
@@ -66,7 +65,6 @@ export default function SystemSettingsPage() {
   
   const [currentDefaultParticipantStatus, setCurrentDefaultParticipantStatus] = useState<AttendanceStatus | null>(null);
   const [currentDefaultStaffStatus, setCurrentDefaultStaffStatus] = useState<StaffAttendanceStatus | null>(null);
-  const [currentEventLogoUrl, setCurrentEventLogoUrl] = useState<string | null>(null);
   const [currentConferenceDay, setCurrentConferenceDay] = useState<'day1' | 'day2'>('day1');
   
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -78,14 +76,12 @@ export default function SystemSettingsPage() {
   const fetchAllSettings = async () => {
     setIsLoadingSettings(true);
     try {
-      const [participantStatus, staffStatus, logoUrl] = await Promise.all([
+      const [participantStatus, staffStatus] = await Promise.all([
         getDefaultAttendanceStatusSetting(),
         getDefaultStaffStatusSetting(),
-        getSystemLogoUrlSetting(),
       ]);
       setCurrentDefaultParticipantStatus(participantStatus);
       setCurrentDefaultStaffStatus(staffStatus);
-      setCurrentEventLogoUrl(logoUrl);
       
       // Fetch current conference day
       const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
@@ -161,7 +157,6 @@ export default function SystemSettingsPage() {
         
         if (settingKey === 'defaultAttendanceStatus') setCurrentDefaultParticipantStatus(newValue as AttendanceStatus);
         if (settingKey === 'defaultStaffStatus') setCurrentDefaultStaffStatus(newValue as StaffAttendanceStatus);
-        if (settingKey === 'eventLogoUrl') setCurrentEventLogoUrl(newValue as string);
 
         toast({ title: 'Setting Updated', description: `Configuration for "${settingKey}" has been saved.` });
       } catch (error: any) {
@@ -356,38 +351,6 @@ export default function SystemSettingsPage() {
                 {isUpdatingSetting && currentDefaultStaffStatus !== null && <p className="text-xs sm:text-sm text-blue-500 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
             </div>
 
-            {/* Event Logo URL Setting */}
-            <div className="space-y-3 p-3 sm:p-4 border rounded-lg shadow-sm">
-                <Label htmlFor="eventLogoUrlInput" className="text-base sm:text-lg font-semibold flex items-center">
-                    <ImageIcon className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-green-500 flex-shrink-0" /> Event Logo URL
-                </Label>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                    URL for the event logo. Used for QR codes and public page branding. Leave blank for default.
-                </p>
-                {isLoadingSettings ? (
-                    <Skeleton className="h-10 w-full" />
-                ) : (
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <Input 
-                            id="eventLogoUrlInput"
-                            placeholder="https://example.com/your-logo.png"
-                            defaultValue={currentEventLogoUrl || ''}
-                            onBlur={(e) => handleSettingUpdate('eventLogoUrl', e.target.value)}
-                            disabled={isUpdatingSetting}
-                            className="flex-grow"
-                        />
-                        <Button onClick={() => handleSettingUpdate('eventLogoUrl', (document.getElementById('eventLogoUrlInput') as HTMLInputElement)?.value || '')} disabled={isUpdatingSetting} className="w-full sm:w-auto">
-                            {isUpdatingSetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save
-                        </Button>
-                    </div>
-                )}
-                {currentEventLogoUrl && (
-                    <div className="mt-2">
-                        <p className="text-xs text-muted-foreground">Current Logo Preview:</p>
-                        <img src={currentEventLogoUrl} alt="Event Logo Preview" className="max-h-20 border rounded bg-muted p-1" onError={(e) => (e.currentTarget.style.display='none')} />
-                    </div>
-                )}
-            </div>
             
             <div className="mt-8 p-4 border border-dashed rounded-lg text-center">
                 <Settings size={48} className="mx-auto text-muted-foreground opacity-30 mb-2" />

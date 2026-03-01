@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Facebook, Twitter, Instagram, Linkedin, Youtube } from 'lucide-react';
 import Link from 'next/link';
+import { PUBLIC_EVENT_CONFIG } from '@/lib/public-event-config';
 
 /**
  * FOOTER CONFIGURATION
@@ -11,13 +12,6 @@ import Link from 'next/link';
 const FOOTER_CONFIG = {
   // Brand name and copyright text
   brandName: 'HARMUN Tracker',
-
-  // Logos section: You can add, remove or edit logos here
-  logos: [
-    { label: 'HARMUN Tracker', type: 'text' },
-    { label: 'Model UN', type: 'text' },
-    { label: 'Partner Logo', type: 'text' },
-  ],
 
   // Social Media Links: Set href to '#' to hide or use the actual URL
   socials: [
@@ -40,9 +34,12 @@ export function Footer() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Logos Section */}
         <div className="flex flex-wrap items-center justify-center gap-8 mb-8">
-          {FOOTER_CONFIG.logos.map((logo, index) => (
-            <div key={`footer-logo-${index}`} className="flex items-center justify-center w-32 h-20 bg-muted rounded-lg p-4">
-              <span className="text-sm font-semibold text-center">{logo.label}</span>
+          {PUBLIC_EVENT_CONFIG.heroImagePaths.map((src, index) => (
+            <div
+              key={`footer-logo-${index}`}
+              className="flex items-center justify-center w-32 h-20 bg-muted dark:bg-muted-foreground/20 rounded-lg p-2"
+            >
+              <img src={src} alt={`Footer Logo ${index + 1}`} className="w-full h-full object-contain" />
             </div>
           ))}
         </div>

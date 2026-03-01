@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User, BarChart, QrCode } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -522,7 +522,7 @@ export default function SuperiorAdminPage() {
             <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             Quick Actions
           </h3>
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-yellow-500 hover:scale-105">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -606,6 +606,48 @@ export default function SuperiorAdminPage() {
                 </Button>
               </CardFooter>
             </Card>
+
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-emerald-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-emerald-500" />
+                  Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  View high-level attendance statistics and insights
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-emerald-500 hover:bg-emerald-600 text-white">
+                  <Link href="/superior-admin/analytics">
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open Analytics
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-sky-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <QrCode className="h-5 w-5 text-sky-500" />
+                  QR Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Generate and download participant and staff QR codes
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-sky-500 hover:bg-sky-600 text-white">
+                  <Link href="/qr-management">
+                    <ExternalLink className="mr-2 h-4 w-4" /> Manage QR Codes
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
         </section>
 
@@ -642,48 +684,125 @@ export default function SuperiorAdminPage() {
               {isLoadingStaff ? (
                 <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : staffMembers.length > 0 ? (
-                <ScrollArea className="h-96 w-full rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="w-[50px]">Avatar</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="hidden sm:table-cell">Department</TableHead>
-                        <TableHead className="hidden md:table-cell">Team</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {staffMembers.map((staff) => (
-                        <TableRow key={staff.id}>
-                           <TableCell>
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar"/>
-                              <AvatarFallback>{staff.name.substring(0,1)}</AvatarFallback>
-                            </Avatar>
-                          </TableCell>
-                          <TableCell className="font-medium">{staff.name}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{staff.role}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{staff.department || 'N/A'}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{staff.team || 'N/A'}</TableCell>
-                          <TableCell><StaffMemberStatusBadge status={staff.status} /></TableCell>
-                          <TableCell className="text-right space-x-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenEditStaffForm(staff)} className="text-blue-500 hover:text-blue-600 h-8 w-8" title={`Edit ${staff.name}`}>
-                                <Edit className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
+                <>
+                  {/* Mobile-friendly stacked cards */}
+                  <div className="space-y-3 md:hidden">
+                    {staffMembers.map((staff) => (
+                      <div
+                        key={staff.id}
+                        className="flex items-start gap-3 rounded-lg border bg-card px-3 py-3 shadow-sm"
+                      >
+                        <Avatar className="h-10 w-10 flex-shrink-0">
+                          <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
+                          <AvatarFallback>{staff.name.substring(0, 1)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-sm truncate">{staff.name}</p>
+                            <StaffMemberStatusBadge status={staff.status} />
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {staff.role || 'No role'}{staff.team ? ` • ${staff.team}` : ''}
+                          </p>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleOpenEditStaffForm(staff)}
+                              title={`Edit ${staff.name}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)} className="text-destructive hover:text-destructive/80 h-8 w-8" title={`Delete ${staff.name}`} disabled={isPending}>
-                              {isPending && itemToDelete?.id === staff.id && itemToDelete?.type === 'staffMember' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-destructive border-destructive/40 hover:text-destructive"
+                              onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)}
+                              disabled={isPending}
+                              title={`Delete ${staff.name}`}
+                            >
+                              {isPending && itemToDelete?.id === staff.id && itemToDelete?.type === 'staffMember' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
                               <span className="sr-only">Delete</span>
                             </Button>
-                          </TableCell>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <ScrollArea className="hidden md:block h-[70vh] w-full rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-[50px]">Avatar</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead className="hidden sm:table-cell">Department</TableHead>
+                          <TableHead className="hidden md:table-cell">Team</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                      </TableHeader>
+                      <TableBody>
+                        {staffMembers.map((staff) => (
+                          <TableRow key={staff.id}>
+                            <TableCell>
+                              <Avatar className="h-9 w-9">
+                                <AvatarImage src={staff.imageUrl} alt={staff.name} data-ai-hint="person avatar" />
+                                <AvatarFallback>{staff.name.substring(0, 1)}</AvatarFallback>
+                              </Avatar>
+                            </TableCell>
+                            <TableCell className="font-medium">{staff.name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{staff.role}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              {staff.department || 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                              {staff.team || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <StaffMemberStatusBadge status={staff.status} />
+                            </TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleOpenEditStaffForm(staff)}
+                                className="text-blue-500 hover:text-blue-600 h-8 w-8"
+                                title={`Edit ${staff.name}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                                <span className="sr-only">Edit</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => confirmDeleteItem('staffMember', staff.name, staff.id)}
+                                className="text-destructive hover:text-destructive/80 h-8 w-8"
+                                title={`Delete ${staff.name}`}
+                                disabled={isPending}
+                              >
+                                {isPending && itemToDelete?.id === staff.id && itemToDelete?.type === 'staffMember' ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                                <span className="sr-only">Delete</span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </>
               ) : (
                 <div className="text-center py-12 border rounded-md bg-muted/20">
                   <StaffIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />

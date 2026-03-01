@@ -52,6 +52,8 @@ interface ParticipantDashboardClientProps {
   systemCommittees: string[];
 }
 
+type StatusFilterValue = 'All' | 'Present' | 'Absent' | 'Others';
+
 export function ParticipantDashboardClient({ initialParticipants, systemSchools, systemCommittees }: ParticipantDashboardClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -63,7 +65,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedSchool, setSelectedSchool] = React.useState('All Schools');
   const [selectedCommittee, setSelectedCommittee] = React.useState('All Committees');
-  const [statusFilter, setStatusFilter] = React.useState<AttendanceStatus | 'All'>('All');
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilterValue>('All');
   const [dayFilter, setDayFilter] = React.useState<'All' | 'Day 1' | 'Day 2' | 'Both Days'>('All');
   const [currentDay, setCurrentDay] = React.useState<'day1' | 'day2'>('day1');
 
@@ -97,12 +99,11 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
 
     setIsLoading(true);
     try {
-      // Present/Absent filters use effective status (Stepped Out = Absent); fetch all and filter client-side
-      const statusToFetch = (statusFilter === 'Present' || statusFilter === 'Absent') ? 'All' : statusFilter;
+      // Always fetch all statuses; we group Present/Absent/Others client-side
       const fetchedParticipants = await getParticipants({
         school: selectedSchool,
         committee: selectedCommittee,
-        status: statusToFetch,
+        status: 'All',
         searchTerm: debouncedSearchTerm,
       });
       setParticipants(fetchedParticipants);
@@ -177,8 +178,23 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     else if (dayFilter === 'Day 2') list = list.filter(p => Boolean(p.dayAttendance?.day2));
     else if (dayFilter === 'Both Days') list = list.filter(p => Boolean(p.dayAttendance?.day1) && Boolean(p.dayAttendance?.day2));
 
-    if (statusFilter === 'Present') list = list.filter(p => !isEffectivelyAbsent(p.status));
-    else if (statusFilter === 'Absent') list = list.filter(p => isEffectivelyAbsent(p.status));
+    if (statusFilter === 'Present') {
+      // Present group: Present or Present On Account, and not Absent/Stepped Out
+      list = list.filter(p =>
+        !isEffectivelyAbsent(p.status) &&
+        (p.status === 'Present' || p.status === 'Present On Account')
+      );
+    } else if (statusFilter === 'Absent') {
+      // Absent group: Absent or Stepped Out
+      list = list.filter(p => isEffectivelyAbsent(p.status));
+    } else if (statusFilter === 'Others') {
+      // Others group: In Break, Restroom Break, Technical Issue
+      list = list.filter(p =>
+        p.status === 'In Break' ||
+        p.status === 'Restroom Break' ||
+        p.status === 'Technical Issue'
+      );
+    }
     return list;
   }, [participants, dayFilter, statusFilter]);
 
@@ -195,26 +211,29 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     setCurrentPage(1);
   }, [debouncedSearchTerm, selectedSchool, selectedCommittee, statusFilter, dayFilter, pageSize]);
 
-  // Calculate attendance stats: dayAttendance = attended that day; effective Present = not Absent/Stepped Out
+  // Calculate attendance stats: Present / Absent / Others based on current status only
   const attendanceStats = React.useMemo(() => {
     const total = participants.length;
-    const day1Present = participants.filter(p => Boolean(p.dayAttendance?.day1) && !isEffectivelyAbsent(p.status)).length;
-    const day2Present = participants.filter(p => Boolean(p.dayAttendance?.day2) && !isEffectivelyAbsent(p.status)).length;
-    const day1Absent = total - day1Present;
-    const day2Absent = total - day2Present;
-    const currentDayPresent = currentDay === 'day1' ? day1Present : day2Present;
-    const currentDayAbsent = currentDay === 'day1' ? day1Absent : day2Absent;
+    const isOthersStatus = (status: AttendanceStatus) =>
+      status === 'In Break' || status === 'Restroom Break' || status === 'Technical Issue';
+
+    const currentDayPresent = participants.filter(
+      p =>
+        !isEffectivelyAbsent(p.status) &&
+        (p.status === 'Present' || p.status === 'Present On Account')
+    ).length;
+
+    const currentDayAbsent = participants.filter(p => isEffectivelyAbsent(p.status)).length;
+
+    const currentDayOthers = participants.filter(p => isOthersStatus(p.status)).length;
     
     return {
       total,
-      day1Present,
-      day2Present,
-      day1Absent,
-      day2Absent,
       currentDayPresent,
       currentDayAbsent,
+      currentDayOthers,
     };
-  }, [participants, currentDay]);
+  }, [participants]);
 
   const handleAddParticipant = () => {
     setParticipantToEdit(null);
@@ -305,20 +324,31 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <ImportCsvDialog onImportSuccess={fetchData} />
-          <ExportExcelButton
-            participants={participants}
-            currentFilters={{
-              school: selectedSchool,
-              committee: selectedCommittee,
-              status: statusFilter === 'All' ? undefined : statusFilter,
-              day: dayFilter,
-            }}
-          />
-          <ExportCsvButton participants={filteredParticipants} />
-          <Button onClick={handleAddParticipant} disabled={!permissions?.canEditParticipants} className="w-full sm:w-auto">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Layers className="mr-2 h-4 w-4" /> Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72 p-2">
+              <div className="flex flex-col gap-2">
+                <ImportCsvDialog onImportSuccess={fetchData} />
+                <ExportExcelButton
+                  participants={participants}
+                  currentFilters={{
+                    school: selectedSchool,
+                    committee: selectedCommittee,
+                    status: statusFilter === 'All' ? undefined : statusFilter,
+                    day: dayFilter,
+                  }}
+                />
+                <ExportCsvButton participants={filteredParticipants} />
+                <Button onClick={handleAddParticipant} disabled={!permissions?.canEditParticipants} className="w-full">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Participant
+                </Button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -350,6 +380,12 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
                     {attendanceStats.currentDayAbsent}
                   </span>
                 </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Others:</span>
+                  <span className="ml-1 text-sm font-bold text-amber-600 dark:text-amber-400">
+                    {attendanceStats.currentDayOthers}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground border-l pl-4">
@@ -365,7 +401,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full focus-visible:ring-primary"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             <Select value={selectedSchool} onValueChange={setSelectedSchool} disabled={isLoading}>
               <SelectTrigger className="w-full"><SelectValue placeholder="All Schools" /></SelectTrigger>
               <SelectContent>{systemSchools.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
@@ -374,20 +410,19 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
               <SelectTrigger className="w-full"><SelectValue placeholder="All Committees" /></SelectTrigger>
               <SelectContent>{systemCommittees.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as AttendanceStatus | 'All')} disabled={isLoading}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+            <Select
+              value={statusFilter}
+              onValueChange={(val) => setStatusFilter(val as StatusFilterValue)}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All Statuses</SelectItem>
-                {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => <SelectItem key={opt.status} value={opt.status}>{opt.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={dayFilter} onValueChange={(val) => setDayFilter(val as 'All' | 'Day 1' | 'Day 2' | 'Both Days')} disabled={isLoading}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Days" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Days</SelectItem>
-                <SelectItem value="Day 1">Day 1 Only</SelectItem>
-                <SelectItem value="Day 2">Day 2 Only</SelectItem>
-                <SelectItem value="Both Days">Both Days</SelectItem>
+                <SelectItem value="Present">Present</SelectItem>
+                <SelectItem value="Absent">Absent</SelectItem>
+                <SelectItem value="Others">Others</SelectItem>
               </SelectContent>
             </Select>
           </div>

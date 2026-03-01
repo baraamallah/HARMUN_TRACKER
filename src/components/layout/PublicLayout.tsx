@@ -1,49 +1,37 @@
-
 'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
-import { getSystemLogoUrlSetting } from '@/lib/actions';
-import { Skeleton } from '@/components/ui/skeleton';
-
-/**
- * PUBLIC FOOTER CONFIGURATION
- * Edit these values to manually update the public footer content easily.
- */
-const PUBLIC_FOOTER_CONFIG = {
-  brandName: 'MUN Attendance Tracker',
-  reservedRightsText: 'All rights reserved.',
-};
+import { Footer } from '@/components/layout/Footer';
+import { PUBLIC_EVENT_CONFIG } from '@/lib/public-event-config';
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
-  const [munLogoUrl, setMunLogoUrl] = React.useState<string | null>(null);
-  const [isLoadingLogo, setIsLoadingLogo] = React.useState(true);
+  const [logoError, setLogoError] = React.useState(false);
+  const [logoChecked, setLogoChecked] = React.useState(false);
 
   React.useEffect(() => {
-    const fetchLogo = async () => {
-      try {
-        const url = await getSystemLogoUrlSetting();
-        setMunLogoUrl(url);
-      } catch (error) {
-        console.error("Failed to fetch logo URL for public layout:", error);
-      } finally {
-        setIsLoadingLogo(false);
-      }
-    };
-    fetchLogo();
+    const img = new Image();
+    img.onerror = () => setLogoError(true);
+    img.onload = () => setLogoChecked(true);
+    img.src = PUBLIC_EVENT_CONFIG.eventLogoPath;
   }, []);
+
+  const useEventLogo = logoChecked && !logoError;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 shrink-0 border-b bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto h-16 flex items-center justify-between px-4 md:px-6">
-          {isLoadingLogo ? (
-            <Skeleton className="h-8 w-32" />
-          ) : munLogoUrl ? (
+          {useEventLogo ? (
             <Link href="/" className="flex items-center gap-2 group">
-                <img src={munLogoUrl} alt="Event Logo" className="h-8 object-contain" data-ai-hint="event logo organization"/>
+              <img
+                src={PUBLIC_EVENT_CONFIG.eventLogoPath}
+                alt="Event Logo"
+                className="h-8 object-contain"
+                data-ai-hint="event logo organization"
+              />
             </Link>
           ) : (
             <Logo />
@@ -51,21 +39,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <ThemeToggleButton />
         </div>
       </header>
-      <main className="flex-1 container mx-auto py-8 px-4 md:px-6">
+
+      <main className="flex-1 min-h-0 container mx-auto py-8 px-4 md:px-6">
         {children}
       </main>
-      <footer className="py-6 border-t">
-        <div className="container mx-auto px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          {munLogoUrl ? (
-             <img src={munLogoUrl} alt="Event Logo Small" className="h-7 object-contain" data-ai-hint="event logo organization small"/>
-          ) : (
-            <Logo variant="circled-icon" size="sm" />
-          )}
-          <p className="text-sm text-muted-foreground text-center sm:text-right">
-            &copy; {new Date().getFullYear()} {PUBLIC_FOOTER_CONFIG.brandName}. {PUBLIC_FOOTER_CONFIG.reservedRightsText}
-          </p>
-        </div>
-      </footer>
+
+      <Footer />
     </div>
   );
 }
