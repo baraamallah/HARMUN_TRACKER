@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Facebook, Twitter, Instagram, Linkedin, Youtube } from 'lucide-react';
+import { Facebook, Twitter, Instagram } from 'lucide-react';
 import Link from 'next/link';
 import { PUBLIC_EVENT_CONFIG } from '@/lib/public-event-config';
 
@@ -15,11 +15,9 @@ const FOOTER_CONFIG = {
 
   // Social Media Links: Set href to '#' to hide or use the actual URL
   socials: [
-    { name: 'Facebook', icon: Facebook, href: 'https://facebook.com' },
-    { name: 'Twitter', icon: Twitter, href: 'https://twitter.com' },
-    { name: 'Instagram', icon: Instagram, href: 'https://instagram.com' },
-    { name: 'LinkedIn', icon: Linkedin, href: 'https://linkedin.com' },
-    { name: 'YouTube', icon: Youtube, href: 'https://youtube.com' },
+    { name: 'Facebook', icon: Facebook, href: 'https://www.facebook.com/RaficHaririHighSchool' },
+    { name: 'Twitter', icon: Twitter, href: 'https://x.com/RHHS_Saida' },
+    { name: 'Instagram', icon: Instagram, href: 'https://www.instagram.com/rhhs_saida' },
   ],
 
   // Bottom text
