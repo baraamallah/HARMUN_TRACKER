@@ -26,7 +26,7 @@ import {
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
-import { getSystemSchools, getSystemCommittees, getParticipants } from '@/lib/actions';
+import { getSystemSchools, getSystemCommittees, getParticipants, getCurrentConferenceDay } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';

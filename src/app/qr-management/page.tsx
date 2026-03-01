@@ -40,6 +40,14 @@ const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
 const USERS_COLLECTION = 'users';
 
+/**
+ * QR MANAGEMENT FOOTER CONFIGURATION
+ * Edit these values to manually update the QR management footer content easily.
+ */
+const QR_FOOTER_CONFIG = {
+  brandName: 'MUN Tracker - QR Code Management',
+};
+
 export default function QrManagementPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -561,7 +569,7 @@ export default function QrManagementPage() {
         <footer className="py-10 border-t mt-16 bg-background/80">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <p className="text-md text-muted-foreground">
-              MUN Tracker - QR Code Management &copy; {new Date().getFullYear()}
+              {QR_FOOTER_CONFIG.brandName} &copy; {new Date().getFullYear()}
             </p>
             {currentUser && (
               <p className="text-xs text-muted-foreground mt-1">
