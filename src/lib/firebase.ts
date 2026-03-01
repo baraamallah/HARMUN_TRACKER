@@ -3,7 +3,7 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // Import getAuth
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 // Your web app's Firebase configuration
 // IMPORTANT: For production, these values MUST be sourced from environment variables.
@@ -62,6 +62,13 @@ const db = getFirestore(app);
 
 // Initialize Firebase Auth
 const auth = getAuth(app);
+
+// Persist login across page navigations and browser restarts
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('[Firebase] Auth persistence setup failed:', err);
+  });
+}
 
 let analytics;
 if (typeof window !== 'undefined') {

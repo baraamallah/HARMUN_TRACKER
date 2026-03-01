@@ -531,10 +531,13 @@ export async function quickSetParticipantStatusAction(
     // Get current conference day
     const currentDay = await getCurrentConferenceDay();
 
-    // ALWAYS mark day attendance when status is updated (Feature 2)
+    // Only mark day attendance when status is "present" (not Absent or Stepped Out)
+    const isEffectivelyPresent = newStatus !== 'Absent' && newStatus !== 'Stepped Out';
     const dayAttendance = participantData.dayAttendance || { day1: false, day2: false };
-    dayAttendance[currentDay] = true;
-    updates.dayAttendance = dayAttendance;
+    if (isEffectivelyPresent) {
+      dayAttendance[currentDay] = true;
+      updates.dayAttendance = dayAttendance;
+    }
 
     if (options?.isCheckIn && newStatus === 'Present') {
       updates.attended = true;

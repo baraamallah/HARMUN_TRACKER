@@ -1,5 +1,11 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { AttendanceStatus } from "@/types"
+
+/** Stepped Out and Absent count as "absent"; everything else counts as "present". */
+export function isEffectivelyAbsent(status: AttendanceStatus): boolean {
+  return status === 'Absent' || status === 'Stepped Out'
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

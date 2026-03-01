@@ -3,65 +3,83 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Owner UID - has full access
+    // ─────────────────────────────────────────────────────────────
+    // Helper functions
+    // ─────────────────────────────────────────────────────────────
+
+    // Superior admin / owner – full access
     function isOwner() {
-      return request.auth != null && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
+      return request.auth != null
+        && request.auth.uid == "JZgMG6xdwAYInXsdciaGj6qNAsG2";
     }
 
-    // Check if user is authenticated
+    // Any signed-in user
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Check if user has admin role in users collection
+    // Admin role (from users collection)
     function hasAdminRole() {
-      return request.auth != null 
+      return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
-    // Participants collection
+    // Owner or admin – for privileged operations
+    function isOwnerOrAdmin() {
+      return isOwner() || hasAdminRole();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Participants – attendance & check-in
+    // ─────────────────────────────────────────────────────────────
     match /participants/{participantId} {
       allow read: if true;
       allow create, update: if isAuthenticated();
-      allow delete: if isOwner() || hasAdminRole();
+      allow delete: if isOwnerOrAdmin();
     }
 
-    // Staff members collection
+    // ─────────────────────────────────────────────────────────────
+    // Staff members – attendance & check-in
+    // ─────────────────────────────────────────────────────────────
     match /staff_members/{staffMemberId} {
       allow read: if true;
       allow create, update: if isAuthenticated();
-      allow delete: if isOwner() || hasAdminRole();
+      allow delete: if isOwnerOrAdmin();
     }
 
-    // System schools collection
+    // ─────────────────────────────────────────────────────────────
+    // System reference data
+    // ─────────────────────────────────────────────────────────────
     match /system_schools/{schoolId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
     }
 
-    // System committees collection
     match /system_committees/{committeeId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
     }
 
-    // System staff teams collection
     match /system_staff_teams/{teamId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
     }
 
-    // System config collection (day switching, default statuses, etc.)
+    // ─────────────────────────────────────────────────────────────
+    // System config – day switch, default statuses (owner/admin only)
+    // ─────────────────────────────────────────────────────────────
     match /system_config/{settingId} {
       allow read: if true;
-      allow write: if isOwner() || hasAdminRole();
+      allow create, update, delete: if isOwnerOrAdmin();
     }
 
-    // Users collection (for admin management)
+    // ─────────────────────────────────────────────────────────────
+    // Admin users – management (owner only for writes)
+    // ─────────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow read, write: if isOwner();
+      allow read, create, update, delete: if isOwner();
     }
   }
 }

@@ -26,6 +26,7 @@ import {
 import { ParticipantTable } from '@/components/participants/ParticipantTable';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
+import { isEffectivelyAbsent } from '@/lib/utils';
 import { getSystemSchools, getSystemCommittees, getParticipants, getCurrentConferenceDay } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -96,10 +97,11 @@ export default function PublicDashboardPage() {
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
+      const statusToFetch = (quickStatusFilter === 'Present' || quickStatusFilter === 'Absent') ? 'All' : quickStatusFilter;
       const fetchedParticipants = await getParticipants({
         school: selectedSchool,
         committee: selectedCommittee,
-        status: quickStatusFilter,
+        status: statusToFetch,
         searchTerm: debouncedSearchTerm,
       });
       setParticipants(fetchedParticipants);
@@ -171,14 +173,17 @@ export default function PublicDashboardPage() {
     fetchInitialData();
   }, [toast]);
 
-  // Client-side day filtering
+  // Client-side day + effective status filtering (Stepped Out = Absent)
   const filteredParticipants = React.useMemo(() => {
-    if (dayFilter === 'All') return participants;
-    if (dayFilter === 'Day 1') return participants.filter(p => Boolean(p.dayAttendance?.day1));
-    if (dayFilter === 'Day 2') return participants.filter(p => Boolean(p.dayAttendance?.day2));
-    if (dayFilter === 'Both Days') return participants.filter(p => Boolean(p.dayAttendance?.day1) && Boolean(p.dayAttendance?.day2));
-    return participants;
-  }, [participants, dayFilter]);
+    let list = participants;
+    if (dayFilter === 'Day 1') list = list.filter(p => Boolean(p.dayAttendance?.day1));
+    else if (dayFilter === 'Day 2') list = list.filter(p => Boolean(p.dayAttendance?.day2));
+    else if (dayFilter === 'Both Days') list = list.filter(p => Boolean(p.dayAttendance?.day1) && Boolean(p.dayAttendance?.day2));
+
+    if (quickStatusFilter === 'Present') list = list.filter(p => !isEffectivelyAbsent(p.status));
+    else if (quickStatusFilter === 'Absent') list = list.filter(p => isEffectivelyAbsent(p.status));
+    return list;
+  }, [participants, dayFilter, quickStatusFilter]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredParticipants.length / pageSize);
@@ -193,11 +198,11 @@ export default function PublicDashboardPage() {
     setCurrentPage(1);
   }, [debouncedSearchTerm, selectedSchool, selectedCommittee, quickStatusFilter, dayFilter, pageSize]);
 
-  // Calculate attendance stats
+  // Calculate attendance stats: effective Present = not Absent/Stepped Out
   const attendanceStats = React.useMemo(() => {
     const total = participants.length;
-    const day1Present = participants.filter(p => Boolean(p.dayAttendance?.day1)).length;
-    const day2Present = participants.filter(p => Boolean(p.dayAttendance?.day2)).length;
+    const day1Present = participants.filter(p => Boolean(p.dayAttendance?.day1) && !isEffectivelyAbsent(p.status)).length;
+    const day2Present = participants.filter(p => Boolean(p.dayAttendance?.day2) && !isEffectivelyAbsent(p.status)).length;
     const currentDayPresent = currentDay === 'day1' ? day1Present : day2Present;
     const currentDayAbsent = total - currentDayPresent;
 

@@ -39,7 +39,8 @@ import Link from 'next/link';
 import type { Participant, AttendanceStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
-import { getParticipantById, quickSetParticipantStatusAction, resetParticipantAttendanceAction } from '@/lib/actions';
+import { getParticipantById } from '@/lib/actions';
+import { quickSetParticipantStatusClient, resetParticipantAttendanceClient } from '@/lib/checkin-client';
 import { format, parseISO, isValid } from 'date-fns';
 
 const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
@@ -119,7 +120,7 @@ function CheckinPageContent() {
     setPageError(null);
 
     startTransition(async () => {
-      const result = await quickSetParticipantStatusAction(participant.id, newStatus, { isCheckIn: isCheckInIntent });
+      const result = await quickSetParticipantStatusClient(participant.id, newStatus, { isCheckIn: isCheckInIntent });
       if (result.success && result.participant) {
         setParticipant(result.participant);
         toast({
@@ -145,7 +146,7 @@ function CheckinPageContent() {
     setIsResetConfirmationOpen(false);
 
     startTransition(async () => {
-        const result = await resetParticipantAttendanceAction(participant.id);
+        const result = await resetParticipantAttendanceClient(participant.id);
         if (result.success && result.participant) {
             setParticipant(result.participant);
             toast({
@@ -214,7 +215,7 @@ function CheckinPageContent() {
               Secure attendance tracking requires authentication.
             </p>
             <Button asChild className="w-full" size="lg">
-              <Link href={`/auth/login?redirect=/checkin${effectiveParticipantId ? `?id=${effectiveParticipantId}` : ''}`}>
+              <Link href={`/auth/login?redirect=${encodeURIComponent(`/checkin${effectiveParticipantId ? `?id=${effectiveParticipantId}` : ''}`)}`}>
                 <span><LogIn className="mr-2 h-4 w-4" /> Login to Continue</span>
               </Link>
             </Button>

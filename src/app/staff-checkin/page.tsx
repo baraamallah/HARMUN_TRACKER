@@ -169,7 +169,7 @@ function StaffCheckinPageContent() {
               Secure staff attendance tracking requires authentication.
             </p>
             <Button asChild className="w-full" size="lg">
-              <Link href={`/auth/login?redirect=/staff-checkin${effectiveStaffId ? `?id=${effectiveStaffId}` : ''}`}>
+              <Link href={`/auth/login?redirect=${encodeURIComponent(`/staff-checkin${effectiveStaffId ? `?id=${effectiveStaffId}` : ''}`)}`}>
                 <span><LogIn className="mr-2 h-4 w-4" /> Login to Continue</span>
               </Link>
             </Button>
