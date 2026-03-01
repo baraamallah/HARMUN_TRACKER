@@ -35,8 +35,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { getDefaultStaffStatusSetting } from '@/lib/actions';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -144,31 +143,35 @@ export function StaffMemberForm({
           team: data.team === UNASSIGNED_TEAM_VALUE ? '' : data.team?.trim() || '',
           email: data.email?.trim() || '',
           phone: data.phone?.trim() || '',
-          contactInfo: data.contactInfo?.trim() || '',
+          contact_info: data.contactInfo?.trim() || '',
           notes: data.notes?.trim() || '',
-          updatedAt: serverTimestamp(),
+          updated_at: new Date().toISOString(),
         };
         
         const formImageUrl = data.imageUrl?.trim();
         if (!formImageUrl) {
           const nameInitial = (data.name.trim() || 'S').substring(0, 2).toUpperCase();
-          submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          submissionData.image_url = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-          submissionData.imageUrl = formImageUrl;
+          submissionData.image_url = formImageUrl;
         }
 
         if (staffMemberToEdit) {
-          const staffMemberRef = doc(db, 'staff_members', staffMemberToEdit.id);
-          submissionData.status = staffMemberToEdit.status;
-          await updateDoc(staffMemberRef, submissionData);
+          const { error } = await supabase
+            .from('staff_members')
+            .update(submissionData)
+            .eq('id', staffMemberToEdit.id);
+
+          if (error) throw error;
           toast({ title: 'Staff Member Updated', description: `${data.name} has been updated.` });
         } else {
           const newStaffMemberData = {
             ...submissionData,
             status: defaultStatus,
-            createdAt: serverTimestamp(),
+            created_at: new Date().toISOString(),
           };
-          await addDoc(collection(db, 'staff_members'), newStaffMemberData);
+          const { error } = await supabase.from('staff_members').insert(newStaffMemberData);
+          if (error) throw error;
           toast({ title: 'Staff Member Added', description: `${data.name} has been added.` });
         }
         onOpenChange(false);

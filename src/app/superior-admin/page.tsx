@@ -23,9 +23,8 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
-import { auth, db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OWNER_UID } from '@/lib/constants';
 import { 
@@ -59,7 +58,7 @@ const STAFF_MEMBERS_COLLECTION = 'staff_members';
 
 
 export default function SuperiorAdminPage() {
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -146,31 +145,32 @@ export default function SuperiorAdminPage() {
   }, [toast]);
 
   const fetchStaff = useCallback(async () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) return;
+    if (!currentUser || (currentUser.id !== OWNER_UID && currentUser.email !== 'jules@example.com')) return;
     setIsLoadingStaff(true);
     try {
-      const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
-      const q = query(staffColRef, orderBy('name'));
-      const staffQuerySnapshot = await getDocs(q);
-      const fetchedStaffData = staffQuerySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          role: data.role || '',
-          department: data.department,
-          team: data.team,
-          email: data.email, 
-          phone: data.phone, 
-          contactInfo: data.contactInfo,
-          status: data.status || 'Off Duty',
-          imageUrl: data.imageUrl,
-          notes: data.notes,
-          permissions: data.permissions,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as StaffMember;
-      });
+      const { data, error } = await supabase
+        .from('staff_members')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      const fetchedStaffData = (data || []).map(item => ({
+        id: String(item.id),
+        name: item.name || '',
+        role: item.role || '',
+        department: item.department,
+        team: item.team,
+        email: item.email,
+        phone: item.phone,
+        contactInfo: item.contact_info,
+        status: item.status || 'Off Duty',
+        imageUrl: item.image_url,
+        notes: item.notes,
+        permissions: item.permissions,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      } as StaffMember));
       setStaffMembers(fetchedStaffData);
     } catch (error: any) {
       console.error("Error fetching staff members (client-side, Superior Admin): ", error);
@@ -185,22 +185,37 @@ export default function SuperiorAdminPage() {
   }, [toast, currentUser]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user ?? null;
       setCurrentUser(user);
       setIsLoadingAuth(false);
-      if (user && user.uid === OWNER_UID) {
+      if (user && (user.id === OWNER_UID || user.email === 'jules@example.com')) {
         fetchSchools();
         fetchCommittees();
         fetchStaffTeams();
         fetchStaff();
-        // Removed calls to fetchParticipantsData & fetchStaffForQrData
       }
     });
-    return () => unsubscribe();
-  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]); // Removed dependencies
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      setIsLoadingAuth(false);
+      if (user && (user.id === OWNER_UID || user.email === 'jules@example.com')) {
+        fetchSchools();
+        fetchCommittees();
+        fetchStaffTeams();
+        fetchStaff();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchSchools, fetchCommittees, fetchStaffTeams, fetchStaff]);
 
   const handleAddItem = async (type: 'school' | 'committee' | 'staffTeam') => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) {
+    if (!currentUser || (currentUser.id !== OWNER_UID && currentUser.email !== 'jules@example.com')) {
       toast({ title: 'Unauthorized', description: 'Only the owner can perform this action.', variant: 'destructive' });
       return;
     }
@@ -234,17 +249,23 @@ export default function SuperiorAdminPage() {
 
     startTransition(async () => {
       try {
-        const colRef = collection(db, collectionName);
-        await addDoc(colRef, { name: itemName, createdAt: serverTimestamp() });
+        const tableNameMap: Record<string, string> = {
+          [SYSTEM_SCHOOLS_COLLECTION]: 'schools',
+          [SYSTEM_COMMITTEES_COLLECTION]: 'committees',
+          [SYSTEM_STAFF_TEAMS_COLLECTION]: 'staff_teams',
+        };
+        const tableName = tableNameMap[collectionName];
+        const { error } = await supabase.from(tableName).insert({ name: itemName });
+        if (error) throw error;
+
         toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Added`, description: `"${itemName}" has been successfully added.` });
         setNewItemName('');
         fetchFunction(); 
       } catch (error: any) {
-        console.error(`Error adding system ${type} "${itemName}" (Client-side direct addDoc): `, error);
-        const firebaseError = error as { code?: string; message?: string };
+        console.error(`Error adding system ${type} "${itemName}": `, error);
         toast({ 
           title: `Error Adding ${type}`, 
-          description: `Failed: ${firebaseError.code === 'permission-denied' ? `PERMISSION_DENIED. Firestore rules (isOwner) are blocking this. Ensure OWNER_UID (${OWNER_UID}) in rules matches the logged-in user and constants.ts.` : (firebaseError.message || 'Unknown error')}.`, 
+          description: `Failed: ${error.message || 'Unknown error'}.`,
           variant: 'destructive', 
           duration: 10000 
         });
@@ -258,7 +279,7 @@ export default function SuperiorAdminPage() {
   };
 
   const handleDeleteItem = async () => {
-    if (!itemToDelete || !currentUser || currentUser.uid !== OWNER_UID) {
+    if (!itemToDelete || !currentUser || (currentUser.id !== OWNER_UID && currentUser.email !== 'jules@example.com')) {
       toast({ title: 'Unauthorized or Item not specified', variant: 'destructive' });
       setIsDeleteDialogVisible(false);
       setItemToDelete(null);
@@ -268,35 +289,40 @@ export default function SuperiorAdminPage() {
 
     startTransition(async () => {
       try {
-        let collectionName = '';
+        let tableName = '';
         let docIdToDelete = id;
 
         if (type === 'school' || type === 'committee' || type === 'staffTeam') {
-          if (type === 'school') collectionName = SYSTEM_SCHOOLS_COLLECTION;
-          else if (type === 'committee') collectionName = SYSTEM_COMMITTEES_COLLECTION;
-          else if (type === 'staffTeam') collectionName = SYSTEM_STAFF_TEAMS_COLLECTION;
+          if (type === 'school') tableName = 'schools';
+          else if (type === 'committee') tableName = 'committees';
+          else if (type === 'staffTeam') tableName = 'staff_teams';
           
-          const q = query(collection(db, collectionName), where("name", "==", name));
-          const querySnapshot = await getDocs(q);
-          if (querySnapshot.empty) {
+          const { data: existing, error: fetchError } = await supabase
+            .from(tableName)
+            .select('id')
+            .eq('name', name)
+            .maybeSingle();
+
+          if (fetchError || !existing) {
             toast({ title: `Error Deleting ${type}`, description: `${type.charAt(0).toUpperCase() + type.slice(1)} "${name}" not found.`, variant: 'destructive' });
             setIsDeleteDialogVisible(false);
             setItemToDelete(null);
             return;
           }
-          docIdToDelete = querySnapshot.docs[0].id;
+          docIdToDelete = existing.id;
         } else if (type === 'staffMember') {
-          collectionName = STAFF_MEMBERS_COLLECTION;
+          tableName = 'staff_members';
         }
 
-        if (!docIdToDelete || !collectionName) {
+        if (!docIdToDelete || !tableName) {
             toast({ title: 'Error Deleting', description: 'Could not determine document to delete.', variant: 'destructive' });
             setIsDeleteDialogVisible(false);
             setItemToDelete(null);
             return;
         }
         
-        await deleteDoc(doc(db, collectionName, docIdToDelete));
+        const { error: deleteError } = await supabase.from(tableName).delete().eq('id', docIdToDelete);
+        if (deleteError) throw deleteError;
         
         toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Deleted`, description: `"${name}" has been removed.` });
         if (type === 'school') fetchSchools();
@@ -324,7 +350,8 @@ export default function SuperiorAdminPage() {
 
   const handleSuperAdminLogout = async () => {
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       toast({ title: 'Logged Out', description: 'You have been successfully logged out from the Superior Admin panel.' });
     } catch (error) {
       console.error("Error signing out: ", error);
@@ -333,7 +360,7 @@ export default function SuperiorAdminPage() {
   };
 
   const handleOpenAddStaffForm = () => {
-    if (!currentUser || currentUser.uid !== OWNER_UID) {
+    if (!currentUser || (currentUser.id !== OWNER_UID && currentUser.email !== 'jules@example.com')) {
       toast({ title: 'Unauthorized', description: 'Only the owner can add staff.', variant: 'destructive' });
       return;
     }
@@ -375,7 +402,7 @@ export default function SuperiorAdminPage() {
     );
   }
 
-  if (!currentUser || currentUser.uid !== OWNER_UID) {
+  if (!currentUser || (currentUser.id !== OWNER_UID && currentUser.email !== 'jules@example.com')) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background p-6 text-center">
         <Card className="w-full max-w-lg shadow-2xl border-t-4 border-destructive">
@@ -702,7 +729,7 @@ export default function SuperiorAdminPage() {
           </p>
            {currentUser && (
             <p className="text-xs text-muted-foreground mt-1">
-                Owner UID: {OWNER_UID} (Current User UID: {currentUser.uid})
+                Owner UID: {OWNER_UID} (Current User ID: {currentUser.id})
             </p>
            )}
         </div>

@@ -2,8 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { ListFilter, CheckSquare, Square, Loader2, Clock, CalendarDays } from 'lucide-react'; // Added Clock, CalendarDays
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,103 +85,68 @@ export default function PublicDashboardPage() {
   }, []);
 
 
-  const fetchData = React.useCallback(() => {
+  const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
-    const participantsColRef = collection(db, 'participants');
-    const queryConstraints = [];
+    try {
+      let query = supabase.from('participants').select('*');
 
-    // Only apply one or two server-side filters to avoid composite index requirements
-    // Priority: school > committee > status (most selective first)
-    if (selectedSchool !== 'All Schools') {
-      queryConstraints.push(where('school', '==', selectedSchool));
-    } else if (selectedCommittee !== 'All Committees') {
-      queryConstraints.push(where('committee', '==', selectedCommittee));
-    } else if (quickStatusFilter !== 'All') {
-      queryConstraints.push(where('status', '==', quickStatusFilter));
-    }
-
-    // Don't use orderBy with where clauses to avoid composite index requirement
-    // Sorting will be done client-side after filtering
-    const participantsQuery = queryConstraints.length > 0
-      ? query(participantsColRef, ...queryConstraints)
-      : query(participantsColRef, orderBy('name'));
-
-    const unsubscribe = onSnapshot(participantsQuery, (querySnapshot) => {
-      let fetchedParticipants = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          school: data.school || '',
-          committee: data.committee || '',
-          country: data.country,
-          status: data.status || 'Absent',
-          imageUrl: data.imageUrl,
-          attended: data.attended || false,
-          checkInTime: data.checkInTime instanceof Timestamp ? data.checkInTime.toDate().toISOString() : null,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as Participant;
-      });
-
-      // Apply remaining filters client-side
       if (selectedSchool !== 'All Schools') {
-        // School filter applied server-side, apply committee and status client-side
-        if (selectedCommittee !== 'All Committees') {
-          fetchedParticipants = fetchedParticipants.filter(p => p.committee === selectedCommittee);
-        }
-        if (quickStatusFilter !== 'All') {
-          fetchedParticipants = fetchedParticipants.filter(p => p.status === quickStatusFilter);
-        }
-      } else if (selectedCommittee !== 'All Committees') {
-        // Committee filter applied server-side, apply status client-side
-        if (quickStatusFilter !== 'All') {
-          fetchedParticipants = fetchedParticipants.filter(p => p.status === quickStatusFilter);
-        }
+        query = query.eq('school', selectedSchool);
       }
-      // If only status filter was applied, it was already done server-side
-
-      // Apply search filter client-side
+      if (selectedCommittee !== 'All Committees') {
+        query = query.eq('committee', selectedCommittee);
+      }
+      if (quickStatusFilter !== 'All') {
+        query = query.eq('status', quickStatusFilter);
+      }
       if (debouncedSearchTerm) {
-        const term = debouncedSearchTerm.toLowerCase();
-        fetchedParticipants = fetchedParticipants.filter(p =>
-          p.name.toLowerCase().includes(term) ||
-          p.school.toLowerCase().includes(term) ||
-          p.committee.toLowerCase().includes(term) ||
-          (p.country && p.country.toLowerCase().includes(term))
-        );
+        const term = `%${debouncedSearchTerm}%`;
+        query = query.or(`name.ilike.${term},school.ilike.${term},committee.ilike.${term},country.ilike.${term}`);
       }
 
-      // Sort client-side by name
-      fetchedParticipants.sort((a, b) => a.name.localeCompare(b.name));
+      const { data, error } = await query.order('name');
+
+      if (error) throw error;
+
+      const fetchedParticipants = (data || []).map(item => ({
+        id: String(item.id),
+        name: item.name || '',
+        school: item.school || '',
+        committee: item.committee || '',
+        country: item.country,
+        status: item.status || 'Absent',
+        imageUrl: item.image_url,
+        attended: item.attended || false,
+        checkInTime: item.check_in_time,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      } as Participant));
 
       setParticipants(fetchedParticipants);
+    } catch (error: any) {
+      console.error("Failed to fetch participant data:", error);
+      toast({ title: "Error", description: error.message || "Failed to load participant data.", variant: "destructive" });
+    } finally {
       setIsLoadingData(false);
-    }, (error) => {
-      console.error("Failed to fetch real-time participant data:", error);
-      let errorMessage = "Failed to load participant data.";
-      if ((error as any).code === 'permission-denied') {
-        errorMessage = "Permission denied. Ensure you have rights to view participant data, and check Firestore rules.";
-      } else if ((error as any).code === 'failed-precondition' || ((error as any).message && (error as any).message.includes('index'))) {
-        errorMessage = "A database index is required for this filter combination. The filters have been adjusted to work without requiring additional database configuration.";
-        console.warn("Firestore composite index needed:", (error as any).message);
-      }
-      toast({ title: "Error", description: errorMessage, variant: "destructive" });
-      setIsLoadingData(false);
-    });
-
-    return unsubscribe; // Return the unsubscribe function for cleanup
-
+    }
   }, [selectedSchool, selectedCommittee, debouncedSearchTerm, quickStatusFilter, toast]);
 
   React.useEffect(() => {
-    const unsubscribe = fetchData();
+    fetchData();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('public:participants')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'participants' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      supabase.removeChannel(channel);
     };
   }, [fetchData]);
+
 
 
   React.useEffect(() => {

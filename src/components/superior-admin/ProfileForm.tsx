@@ -27,8 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
 import { Link as LinkIcon } from 'lucide-react';
 
@@ -87,12 +86,16 @@ export function ProfileForm({ isOpen, onOpenChange, adminUser, onFormSubmitSucce
   const onSubmit = (data: ProfileFormData) => {
     startTransition(async () => {
       try {
-        const userDocRef = doc(db, 'users', adminUser.id);
-        await setDoc(userDocRef, {
-          displayName: data.displayName.trim(),
-          imageUrl: data.imageUrl?.trim() || '',
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            display_name: data.displayName.trim(),
+            image_url: data.imageUrl?.trim() || '',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', adminUser.id);
+
+        if (error) throw error;
 
         toast({ title: 'Profile Updated', description: 'Your profile has been updated successfully.' });
         onFormSubmitSuccess?.();

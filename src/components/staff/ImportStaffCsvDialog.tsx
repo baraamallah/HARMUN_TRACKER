@@ -16,8 +16,7 @@ import { UploadCloud, AlertTriangle, Info, Loader2, FileText, CheckCircle, XCirc
 import { addSystemItems, validateStaffImportData, getDefaultStaffStatusSetting, type StaffImportValidationResult } from '@/lib/actions';
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { db } from '@/lib/firebase';
-import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -184,10 +183,10 @@ export function ImportStaffCsvDialog({ onImportSuccess }: { onImportSuccess?: ()
 
       try {
         const defaultStatus = await getDefaultStaffStatusSetting();
-        const batch = writeBatch(db);
         let importCount = 0;
         let skippedMissing = 0;
         let skippedExisting = 0;
+        const staffToInsert: any[] = [];
 
         for (const [index, row] of parsedData.entries()) {
           const name = row.name?.trim();
@@ -200,8 +199,13 @@ export function ImportStaffCsvDialog({ onImportSuccess }: { onImportSuccess?: ()
 
           let id = row.id?.trim();
           if (id) {
-            const docSnap = await getDoc(fsDoc(db, 'staff_members', id));
-            if (docSnap.exists()) {
+            const { data: existing } = await supabase
+              .from('staff_members')
+              .select('id')
+              .eq('id', id)
+              .maybeSingle();
+
+            if (existing) {
               skippedExisting++;
               continue;
             }
@@ -209,25 +213,32 @@ export function ImportStaffCsvDialog({ onImportSuccess }: { onImportSuccess?: ()
             id = uuidv4();
           }
 
-          const newStaff: Omit<StaffMember, 'id'> = {
+          staffToInsert.push({
+            id,
             name, role,
             department: row.department?.trim() || '',
             team: row.team?.trim() || '',
             email: row.email?.trim() || '',
             phone: row.phone?.trim() || '',
-            contactInfo: (row.contactinfo || '').trim(),
+            contact_info: (row.contactinfo || '').trim(),
             notes: row.notes?.trim() || '',
             status: defaultStatus,
-            imageUrl: `https://placehold.co/40x40.png?text=${(name || 'S').substring(0,2).toUpperCase()}`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          };
-          batch.set(fsDoc(db, 'staff_members', id), newStaff);
+            image_url: `https://placehold.co/40x40.png?text=${(name || 'S').substring(0,2).toUpperCase()}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
           importCount++;
           setImportProgress(((index + 1) / parsedData.length) * 100);
         }
 
-        await batch.commit();
+        if (staffToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('staff_members')
+            .insert(staffToInsert);
+
+          if (insertError) throw insertError;
+        }
+
         setSummary({ 
           importedCount: importCount, 
           skippedMissingFields: skippedMissing, 

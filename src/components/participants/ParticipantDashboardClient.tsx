@@ -41,8 +41,7 @@ import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants } from '@/lib/actions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { doc, writeBatch, serverTimestamp, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
 
 interface ParticipantDashboardClientProps {
@@ -116,42 +115,20 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
   }, [fetchData]);
 
   // Real-time listener for auto-refresh when new data is added
-  const fetchDataRef = React.useRef(fetchData);
-  React.useEffect(() => {
-    fetchDataRef.current = fetchData;
-  }, [fetchData]);
-
   React.useEffect(() => {
     if (isAuthLoading || !user) return;
 
-    const participantsRef = collection(db, 'participants');
-    const q = query(participantsRef, orderBy('createdAt', 'desc'));
+    const channel = supabase
+      .channel('participants-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'participants' }, () => {
+        fetchData();
+      })
+      .subscribe();
 
-    let isFirstSnapshot = true;
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        // Skip the first snapshot (initial load)
-        if (isFirstSnapshot) {
-          isFirstSnapshot = false;
-          return;
-        }
-
-        // Only update if there are actual document changes
-        const changes = snapshot.docChanges();
-        if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
-          console.log('Real-time update detected:', changes.length, 'changes');
-          fetchDataRef.current();
-        }
-      },
-      (error) => {
-        console.error('Real-time listener error:', error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [isAuthLoading, user]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthLoading, user, fetchData]);
 
   // Fetch current conference day on mount
   React.useEffect(() => {
@@ -234,11 +211,13 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     if (selectedParticipantIds.length === 0) return;
     setIsBulkUpdating(true);
     try {
-      const batch = writeBatch(db);
-      selectedParticipantIds.forEach(id => {
-        batch.update(doc(db, "participants", id), { status, updatedAt: serverTimestamp() });
-      });
-      await batch.commit();
+      const { error } = await supabase
+        .from('participants')
+        .update({ status, updated_at: new Date().toISOString() })
+        .in('id', selectedParticipantIds);
+
+      if (error) throw error;
+
       toast({ title: "Bulk Update Successful", description: `${selectedParticipantIds.length} participant(s) updated to ${status}.` });
       fetchData();
     } catch (error: any) {
@@ -259,11 +238,13 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     if (selectedParticipantIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const batch = writeBatch(db);
-      selectedParticipantIds.forEach(id => {
-        batch.delete(doc(db, "participants", id));
-      });
-      await batch.commit();
+      const { error } = await supabase
+        .from('participants')
+        .delete()
+        .in('id', selectedParticipantIds);
+
+      if (error) throw error;
+
       toast({ title: "Bulk Delete Successful", description: `${selectedParticipantIds.length} participant(s) deleted.` });
       fetchData();
       setSelectedParticipantIds([]);

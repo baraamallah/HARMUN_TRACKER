@@ -36,8 +36,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore'; // Added deleteDoc
+import { supabase } from '@/lib/supabase';
 
 interface ParticipantActionsProps {
   participant: Participant;
@@ -55,8 +54,13 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
   const handleMarkAttendanceClientSide = async (status: AttendanceStatus) => {
     startStatusUpdateTransition(async () => {
       try {
-        const participantRef = doc(db, 'participants', participant.id);
-        await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+        const { error } = await supabase
+          .from('participants')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', participant.id);
+
+        if (error) throw error;
+
         toast({
           title: 'Attendance Updated',
           description: `${participant.name}'s status set to ${status}.`,
@@ -76,8 +80,13 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
   const handleDeleteClientSide = async () => {
     startDeleteTransition(async () => {
       try {
-        const participantRef = doc(db, 'participants', participant.id);
-        await deleteDoc(participantRef);
+        const { error } = await supabase
+          .from('participants')
+          .delete()
+          .eq('id', participant.id);
+
+        if (error) throw error;
+
         toast({
           title: 'Participant Deleted',
           description: `${participant.name} has been removed.`,

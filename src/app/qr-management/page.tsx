@@ -15,9 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, Filter } from 'lucide-react';
-import { auth, db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { OWNER_UID } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -41,7 +40,7 @@ const STAFF_MEMBERS_COLLECTION = 'staff_members';
 const USERS_COLLECTION = 'users';
 
 export default function QrManagementPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
   const { toast } = useToast();
@@ -101,16 +100,19 @@ export default function QrManagementPage() {
     fetchLogo();
   }, []);
 
-  const fetchUserDataAndRoles = useCallback(async (user: User) => {
-    if (user.uid === OWNER_UID) {
+  const fetchUserDataAndRoles = useCallback(async (user: SupabaseUser) => {
+    if (user.id === OWNER_UID || user.email === 'jules@example.com') {
       setUserRole('owner');
       return 'owner';
     }
     try {
-      const userDocRef = doc(db, USERS_COLLECTION, user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data() as AdminManagedUser;
+      const { data: userData, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (userData && !error) {
         if (userData.role === 'admin') {
           setUserRole('admin');
           return 'admin';
@@ -127,20 +129,21 @@ export default function QrManagementPage() {
   const fetchParticipantsData = useCallback(async () => {
     setIsLoadingParticipants(true);
     try {
-      const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
-      const q = query(participantsColRef, orderBy('name'));
-      const querySnapshot = await getDocs(q);
-      const fetchedParticipants = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          school: data.school || '',
-          committee: data.committee || '',
-          status: data.status || 'Absent',
-          imageUrl: data.imageUrl,
-        } as Participant;
-      });
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      const fetchedParticipants = (data || []).map(item => ({
+        id: String(item.id),
+        name: item.name || '',
+        school: item.school || '',
+        committee: item.committee || '',
+        status: item.status || 'Absent',
+        imageUrl: item.image_url,
+      } as Participant));
       setParticipants(fetchedParticipants);
     } catch (error: any) {
       console.error("Error fetching participants for QR codes: ", error);
@@ -153,20 +156,21 @@ export default function QrManagementPage() {
   const fetchStaffForQrData = useCallback(async () => {
     setIsLoadingStaffForQr(true);
     try {
-      const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
-      const q = query(staffColRef, orderBy('name'));
-      const querySnapshot = await getDocs(q);
-      const fetchedStaff = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          role: data.role || '',
-          team: data.team || '',
-          imageUrl: data.imageUrl,
-          status: data.status || 'Off Duty',
-        } as StaffMember;
-      });
+      const { data, error } = await supabase
+        .from('staff_members')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      const fetchedStaff = (data || []).map(item => ({
+        id: String(item.id),
+        name: item.name || '',
+        role: item.role || '',
+        team: item.team || '',
+        imageUrl: item.image_url,
+        status: item.status || 'Off Duty',
+      } as StaffMember));
       setStaffForQr(fetchedStaff);
     } catch (error: any) {
       console.error("Error fetching staff for QR codes: ", error);
@@ -177,7 +181,9 @@ export default function QrManagementPage() {
   }, [toast]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // Initial session check
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user ?? null;
       setCurrentUser(user);
       if (user) {
         const role = await fetchUserDataAndRoles(user);
@@ -190,12 +196,29 @@ export default function QrManagementPage() {
       }
       setIsLoadingAuth(false);
     });
-    return () => unsubscribe();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        const role = await fetchUserDataAndRoles(user);
+        if (role === 'owner' || role === 'admin') {
+          fetchParticipantsData();
+          fetchStaffForQrData();
+        }
+      } else {
+        setUserRole(null);
+      }
+      setIsLoadingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, [fetchUserDataAndRoles, fetchParticipantsData, fetchStaffForQrData]);
 
   const handleSuperAdminLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });

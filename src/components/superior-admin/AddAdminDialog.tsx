@@ -23,8 +23,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import type { AdminManagedUser } from '@/types';
 import { Checkbox } from '../ui/checkbox';
 import { Separator } from '../ui/separator';
@@ -34,7 +33,7 @@ const USERS_COLLECTION = 'users';
 const addAdminSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   displayName: z.string().optional(),
-  authUid: z.string().min(1, { message: 'Firebase Auth UID is required.' }),
+  authUid: z.string().min(1, { message: 'Supabase User UID is required.' }),
   canAccessSuperiorAdmin: z.boolean().default(false),
   permissions: z.object({
     canEditParticipants: z.boolean().default(false),
@@ -130,51 +129,67 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
         return;
       }
 
-      const userDocRef = doc(db, USERS_COLLECTION, trimmedAuthUid);
-
       try {
-        const userDocSnap = await getDoc(userDocRef);
+        const { data: userProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', trimmedAuthUid)
+          .maybeSingle();
+
         const currentEmail = email.toLowerCase().trim();
         const currentDisplayName = displayName?.trim() || null;
 
-        const updates: Partial<AdminManagedUser> = {
+        const updates: any = {
           email: currentEmail,
-          displayName: currentDisplayName,
-          canAccessSuperiorAdmin: canAccessSuperiorAdmin,
+          display_name: currentDisplayName,
+          can_access_superior_admin: canAccessSuperiorAdmin,
           permissions: permissions,
           role: 'admin',
-          updatedAt: serverTimestamp()
+          updated_at: new Date().toISOString()
         };
 
-        if (userDocSnap.exists()) {
-          // If email is being changed, check for conflicts
-          if (currentEmail !== userDocSnap.data().email) {
-            const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
-            const emailConflictSnapshot = await getDocs(emailConflictQuery);
-            if (!emailConflictSnapshot.empty && emailConflictSnapshot.docs[0].id !== trimmedAuthUid) {
+        if (userProfile) {
+          // Check for email conflict
+          if (currentEmail !== userProfile.email) {
+            const { data: conflict } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', currentEmail)
+              .eq('role', 'admin')
+              .maybeSingle();
+
+            if (conflict && conflict.id !== trimmedAuthUid) {
               toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
               return;
             }
           }
-          await updateDoc(userDocRef, updates);
+          const { error } = await supabase.from('profiles').update(updates).eq('id', trimmedAuthUid);
+          if (error) throw error;
           toast({ title: 'Admin Updated', description: `Details for user ${trimmedAuthUid} have been updated.` });
 
         } else { // Document does not exist, create it
-          // Check for email conflict before creating
-          const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
-          const emailConflictSnapshot = await getDocs(emailConflictQuery);
-          if (!emailConflictSnapshot.empty) {
+          // Check for email conflict
+          const { data: conflict } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', currentEmail)
+            .eq('role', 'admin')
+            .maybeSingle();
+
+          if (conflict) {
             toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
             return;
           }
 
           const firstLetter = (currentDisplayName || currentEmail || 'A').charAt(0).toUpperCase();
           const newAdminData = {
+            id: trimmedAuthUid,
             ...updates,
-            avatarUrl: `https://placehold.co/40x40.png?text=${firstLetter}`,
-            createdAt: serverTimestamp(),
+            image_url: `https://placehold.co/40x40.png?text=${firstLetter}`,
+            created_at: new Date().toISOString(),
           };
-          await setDoc(userDocRef, newAdminData);
+          const { error } = await supabase.from('profiles').insert(newAdminData);
+          if (error) throw error;
           toast({ title: 'Admin Role Granted', description: `User ${trimmedAuthUid} granted admin role and user record created.` });
         }
 
@@ -238,9 +253,9 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
               name="authUid"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Firebase Auth UID</FormLabel>
+                  <FormLabel>Supabase User UID</FormLabel>
                   <FormControl>
-                    <Input placeholder="User's Firebase Authentication UID" {...field} disabled={isPending || !!adminToEdit} />
+                    <Input placeholder="User's Supabase Authentication UID" {...field} disabled={isPending || !!adminToEdit} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -1,8 +1,6 @@
 
-import type { FieldValue as FirestoreFieldValue } from 'firebase/firestore';
-
 // Generic type for server timestamps used in writes
-export type FieldValueType = FirestoreFieldValue;
+export type FieldValueType = string | null;
 
 export type AttendanceStatus =
   | "Present"

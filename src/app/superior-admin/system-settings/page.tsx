@@ -33,9 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ShieldAlert, ArrowLeft, Settings, TriangleAlert, Home, LogOut, Loader2, Image as ImageIcon, Workflow, Calendar } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; 
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; 
-import { signOut } from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +41,7 @@ import {
   getDefaultAttendanceStatusSetting, 
   getDefaultStaffStatusSetting,
   getSystemLogoUrlSetting,
+  getCurrentConferenceDay,
   switchConferenceDayAction,
 } from '@/lib/actions';
 import type { AttendanceStatus, StaffAttendanceStatus } from '@/types';
@@ -88,11 +87,8 @@ export default function SystemSettingsPage() {
       setCurrentEventLogoUrl(logoUrl);
       
       // Fetch current conference day
-      const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-      const docSnap = await getDoc(configDocRef);
-      if (docSnap.exists() && docSnap.data().currentConferenceDay) {
-        setCurrentConferenceDay(docSnap.data().currentConferenceDay as 'day1' | 'day2');
-      }
+      const day = await getCurrentConferenceDay();
+      setCurrentConferenceDay(day);
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load system settings.', variant: 'destructive' });
     } finally {
@@ -108,7 +104,7 @@ export default function SystemSettingsPage() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -156,8 +152,21 @@ export default function SystemSettingsPage() {
   const handleSettingUpdate = async (settingKey: string, newValue: string | AttendanceStatus | StaffAttendanceStatus) => {
     startUpdateTransition(async () => {
       try {
-        const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-        await setDoc(configDocRef, { [settingKey]: newValue, updatedAt: serverTimestamp() }, { merge: true });
+        // Map setting keys to Supabase column names if necessary
+        const columnMap: Record<string, string> = {
+          'defaultAttendanceStatus': 'default_attendance_status',
+          'defaultStaffStatus': 'default_staff_status',
+          'eventLogoUrl': 'event_logo_url'
+        };
+
+        const columnName = columnMap[settingKey] || settingKey;
+
+        const { error } = await supabase
+          .from('system_config')
+          .update({ [columnName]: newValue, updated_at: new Date().toISOString() })
+          .eq('id', APP_SETTINGS_DOC_ID);
+
+        if (error) throw error;
         
         if (settingKey === 'defaultAttendanceStatus') setCurrentDefaultParticipantStatus(newValue as AttendanceStatus);
         if (settingKey === 'defaultStaffStatus') setCurrentDefaultStaffStatus(newValue as StaffAttendanceStatus);

@@ -24,9 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ShieldAlert, ArrowLeft, Users, TriangleAlert, Home, LogOut, Trash2, Loader2, Edit, UserPlus } from 'lucide-react';
-import { auth, db } from '@/lib/firebase'; 
-import { signOut } from 'firebase/auth';
-import { collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { OWNER_UID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -77,23 +75,26 @@ export default function AdminManagementPage() {
     if (userAppRole !== 'owner') return;
     setIsLoadingAdmins(true);
     try {
-      const usersColRef = collection(db, USERS_COLLECTION);
-      const q = query(usersColRef, where('role', '==', 'admin'), orderBy('email'));
-      const querySnapshot = await getDocs(q);
-      const admins = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id, 
-          email: data.email,
-          displayName: data.displayName,
-          role: data.role,
-          imageUrl: data.imageUrl,
-          canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
-          permissions: data.permissions,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as AdminManagedUser;
-      });
+      const { data: adminsData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'admin')
+        .order('email');
+
+      if (error) throw error;
+
+      const admins = (adminsData || []).map(profile => ({
+        id: profile.id,
+        email: profile.email,
+        displayName: profile.display_name,
+        role: profile.role,
+        imageUrl: profile.image_url,
+        canAccessSuperiorAdmin: profile.can_access_superior_admin === true,
+        permissions: profile.permissions,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at,
+      } as AdminManagedUser));
+
       setAdminUsers(admins);
     } catch (error: any) {
       console.error("Error fetching admins (client-side):", error);
@@ -117,7 +118,7 @@ export default function AdminManagementPage() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out: ", error);
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
@@ -133,15 +134,15 @@ export default function AdminManagementPage() {
     if (!userToRevoke) return;
     startTransitionAction(async () => {
       try {
-        const adminDocRef = doc(db, USERS_COLLECTION, userToRevoke.id);
-        const adminDocSnap = await getDoc(adminDocRef);
-        if (!adminDocSnap.exists()) {
-          toast({ title: 'Error', description: `Admin with UID ${userToRevoke.id} not found. Role might have already been revoked.`, variant: 'destructive'});
-        } else {
-          await deleteDoc(adminDocRef);
-          toast({ title: 'Admin Role Revoked', description: `Admin role revoked for ${userToRevoke.displayName || userToRevoke.email}.` });
-          fetchAdmins(); 
-        }
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role: 'user', can_access_superior_admin: false })
+          .eq('id', userToRevoke.id);
+
+        if (error) throw error;
+
+        toast({ title: 'Admin Role Revoked', description: `Admin role revoked for ${userToRevoke.displayName || userToRevoke.email}.` });
+        fetchAdmins();
       } catch (error: any) {
         console.error(`Client-side Error revoking admin role for UID ${userToRevoke.id}:`, error);
         toast({ 

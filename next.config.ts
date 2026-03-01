@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        'firebase-admin': false,
-      };
     }
     return config;
   },

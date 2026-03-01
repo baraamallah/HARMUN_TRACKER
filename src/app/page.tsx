@@ -2,7 +2,6 @@ import * as React from 'react';
 import { getSystemSchools, getSystemCommittees } from '@/lib/actions';
 import { ParticipantDashboardClient } from '@/components/participants/ParticipantDashboardClient';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
-import { auth } from '@/lib/firebase';
 import { redirect }from 'next/navigation';
 
 /**

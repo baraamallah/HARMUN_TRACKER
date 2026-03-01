@@ -33,8 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase'; 
-import { doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore'; 
+import { supabase } from '@/lib/supabase';
 
 
 interface StaffMemberActionsProps {
@@ -53,8 +52,13 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
   const handleMarkStatusClientSide = async (status: StaffAttendanceStatus) => {
     startTransition(async () => {
       try {
-        const staffMemberRef = doc(db, 'staff_members', staffMember.id);
-        await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
+        const { error } = await supabase
+          .from('staff_members')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', staffMember.id);
+
+        if (error) throw error;
+
         toast({
           title: 'Status Updated',
           description: `${staffMember.name}'s status set to ${status}.`,
@@ -74,8 +78,13 @@ export function StaffMemberActions({ staffMember, onEdit }: StaffMemberActionsPr
   const handleDelete = async () => {
     startDeleteTransition(async () => {
       try {
-        const staffMemberRef = doc(db, 'staff_members', staffMember.id);
-        await deleteDoc(staffMemberRef);
+        const { error } = await supabase
+          .from('staff_members')
+          .delete()
+          .eq('id', staffMember.id);
+
+        if (error) throw error;
+
         toast({
           title: 'Staff Member Deleted',
           description: `${staffMember.name} has been removed.`,

@@ -32,8 +32,7 @@ import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { useAuth } from '@/hooks/use-auth';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
@@ -73,7 +72,8 @@ export function TopNavbar() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     } catch (error) {
       console.error("Error signing out: ", error);
@@ -82,8 +82,8 @@ export function TopNavbar() {
   };
 
   const getAvatarFallback = () => {
-    if (loggedInUser?.displayName) {
-      return loggedInUser.displayName.substring(0, 2).toUpperCase();
+    if (loggedInUser?.user_metadata?.full_name) {
+      return loggedInUser.user_metadata.full_name.substring(0, 2).toUpperCase();
     }
     if (loggedInUser?.email) {
       return loggedInUser.email.substring(0, 2).toUpperCase();
@@ -154,7 +154,7 @@ export function TopNavbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={loggedInUser.photoURL || undefined} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} />
+                    <AvatarImage src={loggedInUser.user_metadata?.avatar_url || undefined} alt={loggedInUser.user_metadata?.full_name || loggedInUser.email || "User Avatar"} />
                     <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
                   </Avatar>
                 </Button>
@@ -163,7 +163,7 @@ export function TopNavbar() {
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">
-                      {loggedInUser.displayName || "User"}
+                      {loggedInUser.user_metadata?.full_name || "User"}
                     </p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {loggedInUser.email}

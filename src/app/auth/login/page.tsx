@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth'; // User type not directly needed here
-import { auth } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,7 +43,15 @@ function LoginPageInternal() {
     let currentErrorTitle = 'Login Error'; // Local variable for this scope
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
       toast({
         title: 'Login Successful',
         description: 'Welcome back! Redirecting to dashboard...',
@@ -53,37 +60,17 @@ function LoginPageInternal() {
     } catch (e: any) {
       let errorMessage = 'An unexpected error occurred during login. Please try again.';
 
-      if (e && typeof e.code === 'string') { // Check if it's a Firebase-like error with a code
-        if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-email', 'auth/user-disabled', 'auth/too-many-requests'].includes(e.code)) {
-          console.warn(`Firebase Auth Rejected Login (${e.code}): ${e.message}. Email attempted: ${email}`);
-        } else {
-          console.error(`Firebase Auth Error (${e.code}): ${e.message}. Email attempted: ${email}`, e);
-          setIsGenericError(true); // Mark as generic for other Firebase errors
-        }
+      if (e && e.message) {
+        errorMessage = e.message;
 
-        switch (e.code) {
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential': 
-            errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-            currentErrorTitle = 'Login Error';
-            break;
-          case 'auth/invalid-email':
-            errorMessage = 'The email address you entered is not valid. Please check the format.';
-            currentErrorTitle = 'Invalid Email';
-            break;
-          case 'auth/user-disabled':
-            errorMessage = 'This user account has been disabled. Please contact an administrator.';
-            currentErrorTitle = 'Account Disabled';
-            break;
-          case 'auth/too-many-requests':
-            errorMessage = 'Access to this account has been temporarily disabled due to many failed login attempts. You can try again later or reset your password.';
-            currentErrorTitle = 'Too Many Attempts';
-            break;
-          default:
-            errorMessage = `Login failed. Please try again. (Error code: ${e.code})`;
-            currentErrorTitle = 'Login Error';
-            setIsGenericError(true); // Also generic for unhandled codes
+        // Map Supabase error messages to titles if needed
+        if (e.message.includes('Invalid login credentials')) {
+          currentErrorTitle = 'Login Error';
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (e.message.includes('Email not confirmed')) {
+          currentErrorTitle = 'Email Not Confirmed';
+        } else {
+          setIsGenericError(true);
         }
       } else {
         console.error('An unexpected login error occurred:', e);

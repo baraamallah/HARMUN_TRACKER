@@ -23,8 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 
 export default function ParticipantProfilePage() {
   const params = useParams();
@@ -52,29 +51,33 @@ export default function ParticipantProfilePage() {
     if(isInitialLoad) setIsLoading(true);
     
     try {
-      const participantRef = doc(db, 'participants', id);
-      const docSnap = await getDoc(participantRef);
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
       let participantData: Participant | null = null;
-      if (docSnap.exists()) {
-          const data = docSnap.data();
+      if (data) {
           participantData = {
-            id: docSnap.id,
+            id: String(data.id),
             name: data.name || '',
             school: data.school || '',
             committee: data.committee || '',
             country: data.country,
             status: data.status || 'Absent',
-            imageUrl: data.imageUrl,
-            // Lazily loaded fields are initially omitted or set to null
-            notes: data.notes || '', // Still get initial value if present
-            additionalDetails: data.additionalDetails || '', // Still get initial value
-            classGrade: data.classGrade,
+            imageUrl: data.image_url,
+            notes: data.notes || '',
+            additionalDetails: data.additional_details || '',
+            classGrade: data.class_grade,
             email: data.email,
             phone: data.phone,
             attended: data.attended || false,
-            checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : (data.checkInTime || null),
-            createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            checkInTime: data.check_in_time,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
           } as Participant;
       }
 
@@ -113,14 +116,17 @@ export default function ParticipantProfilePage() {
       const fetchSecondaryData = async () => {
           setIsLoadingSecondary(true);
           try {
-              const participantRef = doc(db, 'participants', id);
-              const docSnap = await getDoc(participantRef);
-              if (docSnap.exists()) {
-                  const data = docSnap.data();
+              const { data, error } = await supabase
+                .from('participants')
+                .select('notes, additional_details')
+                .eq('id', id)
+                .single();
+
+              if (data && !error) {
                   setParticipant(p => p ? ({
                       ...p,
                       notes: data.notes || '',
-                      additionalDetails: data.additionalDetails || '',
+                      additionalDetails: data.additional_details || '',
                   }) : null);
               }
           } catch (error) {
@@ -146,8 +152,12 @@ export default function ParticipantProfilePage() {
     if (!participant) return;
     setIsSubmitting(true);
     try {
-      const participantRef = doc(db, 'participants', participant.id);
-      await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+      const { error } = await supabase
+        .from('participants')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', participant.id);
+
+      if (error) throw error;
 
       setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
       

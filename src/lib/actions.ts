@@ -2,24 +2,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from './firebase';
-import {
-  collection,
-  getDocs,
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  serverTimestamp as fsServerTimestamp,
-  getDoc,
-  FieldValue as FirestoreFieldValue,
-  updateDoc,
-  writeBatch,
-  setDoc,
-  addDoc,
-  getCountFromServer,
-} from 'firebase/firestore';
+import { supabase } from './supabase';
 import type { Participant, AttendanceStatus, StaffMember, FieldValueType, ActionResult, StaffAttendanceStatus, ActionResultStaff, AnalyticsData } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -35,80 +18,52 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
 // --- Data Transformation Helpers ---
 
 /**
- * Safely converts a Firestore Timestamp, a date string, or other values to an ISO string or null.
- * @param dateValue The value to convert.
- * @returns An ISO date string or null.
+ * Transforms raw Supabase participant data into a consistent, serializable Participant object.
  */
-function toISODateString(dateValue: any): string | null {
-  if (!dateValue) return null;
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate().toISOString();
-  }
-  if (typeof dateValue === 'string') {
-    // Basic check if it's already an ISO string
-    if (!isNaN(Date.parse(dateValue))) {
-       return new Date(dateValue).toISOString();
-    }
-  }
-  // For serverTimestamp() on write/update, this might be null on immediate read.
-  // Returning null is a safe default.
-  return null;
-}
-
-
-/**
- * Transforms raw Firestore participant data into a consistent, serializable Participant object.
- * @param docSnap A Firestore document snapshot.
- * @returns A Participant object with standardized data types.
- */
-function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Participant {
-    const data = docSnap.data();
+function transformParticipant(data: any): Participant {
     return {
-        id: String(docSnap.id),
+        id: String(data.id),
         name: data.name || '',
         school: data.school || '',
         committee: data.committee || '',
         country: data.country || '',
         status: data.status || 'Absent',
-        imageUrl: data.imageUrl,
+        imageUrl: data.image_url,
         notes: data.notes || '',
-        additionalDetails: data.additionalDetails || '',
-        classGrade: data.classGrade || '',
+        additionalDetails: data.additional_details || '',
+        classGrade: data.class_grade || '',
         email: data.email || '',
         phone: data.phone || '',
         attended: data.attended || false,
-        checkInTime: toISODateString(data.checkInTime),
-        dayAttendance: data.dayAttendance || { day1: false, day2: false },
+        checkInTime: data.check_in_time,
+        dayAttendance: data.day_attendance || { day1: false, day2: false },
         checkInTimes: {
-            day1: toISODateString(data.checkInTimes?.day1),
-            day2: toISODateString(data.checkInTimes?.day2),
+            day1: data.check_in_times?.day1,
+            day2: data.check_in_times?.day2,
         },
-        createdAt: toISODateString(data.createdAt),
-        updatedAt: toISODateString(data.updatedAt),
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
     };
 }
 
 /**
- * Transforms raw Firestore staff data into a consistent, serializable StaffMember object.
- * @param docSnap A Firestore document snapshot.
- * @returns A StaffMember object with standardized data types.
+ * Transforms raw Supabase staff data into a consistent, serializable StaffMember object.
  */
-function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMember {
-    const data = docSnap.data();
+function transformStaff(data: any): StaffMember {
     return {
-        id: String(docSnap.id),
+        id: String(data.id),
         name: data.name || '',
         role: data.role || '',
         department: data.department || '',
         team: data.team || '',
         email: data.email || '',
         phone: data.phone || '',
-        contactInfo: data.contactInfo || '',
+        contactInfo: data.contact_info || '',
         status: data.status || 'Off Duty',
-        imageUrl: data.imageUrl,
+        imageUrl: data.image_url,
         notes: data.notes || '',
-        createdAt: toISODateString(data.createdAt),
-        updatedAt: toISODateString(data.updatedAt),
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
     };
 }
 
@@ -118,12 +73,15 @@ function transformStaffDoc(docSnap: { id: string; data: () => any; }): StaffMemb
 export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceStatus> {
   console.log(`[Server Action - getDefaultAttendanceStatusSetting] Attempting to read default participant status.`);
   try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    const docSnap = await getDoc(configDocRef);
-    if (docSnap.exists() && docSnap.data().defaultAttendanceStatus) {
-      return docSnap.data().defaultAttendanceStatus as AttendanceStatus;
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('default_attendance_status')
+      .eq('id', APP_SETTINGS_DOC_ID)
+      .single();
+
+    if (data && !error) {
+      return data.default_attendance_status as AttendanceStatus;
     }
-    console.log(`[Server Action - getDefaultAttendanceStatusSetting] No setting found or field missing, returning 'Absent'.`);
     return 'Absent'; // Default fallback
   } catch (error) {
     console.error("[Server Action] Error fetching default participant attendance status setting: ", error);
@@ -134,12 +92,15 @@ export async function getDefaultAttendanceStatusSetting(): Promise<AttendanceSta
 export async function getDefaultStaffStatusSetting(): Promise<StaffAttendanceStatus> {
   console.log(`[Server Action - getDefaultStaffStatusSetting] Attempting to read default staff status.`);
   try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    const docSnap = await getDoc(configDocRef);
-    if (docSnap.exists() && docSnap.data().defaultStaffStatus) {
-      return docSnap.data().defaultStaffStatus as StaffAttendanceStatus;
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('default_staff_status')
+      .eq('id', APP_SETTINGS_DOC_ID)
+      .single();
+
+    if (data && !error) {
+      return data.default_staff_status as StaffAttendanceStatus;
     }
-    console.log(`[Server Action - getDefaultStaffStatusSetting] No setting found or field missing, returning 'Off Duty'.`);
     return 'Off Duty'; // Default fallback
   } catch (error) {
     console.error("[Server Action] Error fetching default staff status setting: ", error);
@@ -150,12 +111,15 @@ export async function getDefaultStaffStatusSetting(): Promise<StaffAttendanceSta
 export async function getSystemLogoUrlSetting(): Promise<string | null> {
   console.log(`[Server Action - getSystemLogoUrlSetting] Attempting to read event logo URL.`);
   try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    const docSnap = await getDoc(configDocRef);
-    if (docSnap.exists() && docSnap.data().eventLogoUrl) {
-      return docSnap.data().eventLogoUrl as string;
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('event_logo_url')
+      .eq('id', APP_SETTINGS_DOC_ID)
+      .single();
+
+    if (data && !error) {
+      return data.event_logo_url as string;
     }
-    console.log(`[Server Action - getSystemLogoUrlSetting] No logo URL setting found or field missing.`);
     return null;
   } catch (error) {
     console.error("[Server Action] Error fetching event logo URL setting: ", error);
@@ -166,12 +130,15 @@ export async function getSystemLogoUrlSetting(): Promise<string | null> {
 export async function getCurrentConferenceDay(): Promise<'day1' | 'day2'> {
   console.log(`[Server Action - getCurrentConferenceDay] Attempting to read current conference day.`);
   try {
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    const docSnap = await getDoc(configDocRef);
-    if (docSnap.exists() && docSnap.data().currentConferenceDay) {
-      return docSnap.data().currentConferenceDay as 'day1' | 'day2';
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('current_conference_day')
+      .eq('id', APP_SETTINGS_DOC_ID)
+      .single();
+
+    if (data && !error) {
+      return data.current_conference_day as 'day1' | 'day2';
     }
-    console.log(`[Server Action - getCurrentConferenceDay] No setting found, returning 'day1'.`);
     return 'day1'; // Default fallback
   } catch (error) {
     console.error("[Server Action] Error fetching current conference day setting: ", error);
@@ -183,154 +150,88 @@ export async function getCurrentConferenceDay(): Promise<'day1' | 'day2'> {
 
 export async function getParticipants(filters?: { school?: string; committee?: string; searchTerm?: string; status?: AttendanceStatus | 'All' }): Promise<Participant[]> {
   try {
-    const participantsColRef = collection(db, PARTICIPANTS_COLLECTION);
+    let query = supabase.from('participants').select('*');
     
-    const queryConstraints = [];
-    
-    // Apply only ONE server-side filter to avoid composite index requirements
-    // Priority: school > committee > status (most selective first)
     if (filters?.school && filters.school !== "All Schools") {
-      queryConstraints.push(where('school', '==', filters.school));
-    } else if (filters?.committee && filters.committee !== "All Committees") {
-      queryConstraints.push(where('committee', '==', filters.committee));
-    } else if (filters?.status && filters.status !== 'All') {
-      queryConstraints.push(where('status', '==', filters.status));
+      query = query.eq('school', filters.school);
     }
-
-    // Create query without orderBy to avoid composite index requirement
-    // Sorting will be done client-side after fetching
-    const q = queryConstraints.length > 0 
-      ? query(participantsColRef, ...queryConstraints)
-      : query(participantsColRef);
-
-    const querySnapshot = await getDocs(q);
-    let participantsData = querySnapshot.docs.map(docSnap => transformParticipantDoc(docSnap));
-
-    // Apply remaining filters client-side (in server action)
-    if (filters?.school && filters.school !== "All Schools") {
-      // School filter was applied server-side, now apply committee and status client-side
-      if (filters?.committee && filters.committee !== "All Committees") {
-        participantsData = participantsData.filter(p => p.committee === filters.committee);
-      }
-      if (filters?.status && filters.status !== 'All') {
-        participantsData = participantsData.filter(p => p.status === filters.status);
-      }
-    } else if (filters?.committee && filters.committee !== "All Committees") {
-      // Committee filter was applied server-side, now apply status client-side
-      if (filters?.status && filters.status !== 'All') {
-        participantsData = participantsData.filter(p => p.status === filters.status);
-      }
+    if (filters?.committee && filters.committee !== "All Committees") {
+      query = query.eq('committee', filters.committee);
     }
-    // If only status filter was applied, it was already done server-side
-
-    // Apply search filter client-side
+    if (filters?.status && filters.status !== 'All') {
+      query = query.eq('status', filters.status);
+    }
     if (filters?.searchTerm) {
-      const term = filters.searchTerm.toLowerCase();
-      participantsData = participantsData.filter(p =>
-        p.name.toLowerCase().includes(term) ||
-        p.school.toLowerCase().includes(term) ||
-        p.committee.toLowerCase().includes(term) ||
-        (p.country && p.country.toLowerCase().includes(term))
-      );
+      const term = `%${filters.searchTerm}%`;
+      query = query.or(`name.ilike.${term},school.ilike.${term},committee.ilike.${term},country.ilike.${term}`);
     }
 
-    // Sort client-side by name
-    participantsData.sort((a, b) => a.name.localeCompare(b.name));
+    const { data, error } = await query.order('name');
 
-    return participantsData;
+    if (error) throw error;
+
+    return (data || []).map(transformParticipant);
   } catch (error) {
       console.error("[Server Action - getParticipants] Error fetching participants. Filters:", filters, "Error:", error);
-      const firebaseError = error as { code?: string; message?: string };
-      let detailedMessage = `Failed to fetch participants. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
-      if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-        detailedMessage += " A Firestore index is required. The filters have been adjusted to work without requiring additional database configuration.";
-        console.warn("[Server Action] Composite index needed:", firebaseError.message);
-      } else if (firebaseError.code === 'permission-denied') {
-        detailedMessage += " Permission denied. Check Firestore rules.";
-      }
-      throw new Error(detailedMessage);
+      throw new Error(`Failed to fetch participants. ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 export async function getStaffMembers(filters?: { team?: string; searchTerm?: string; status?: StaffAttendanceStatus | 'All' }): Promise<StaffMember[]> {
     try {
-        const staffColRef = collection(db, STAFF_MEMBERS_COLLECTION);
-        const queryConstraints = [];
-
-        // Apply only ONE server-side filter to avoid composite index requirements
-        // Priority: team > status (most selective first)
-        if (filters?.team && filters.team !== "All Teams") {
-            queryConstraints.push(where('team', '==', filters.team));
-        } else if (filters?.status && filters.status !== 'All') {
-            queryConstraints.push(where('status', '==', filters.status));
-        }
+        let query = supabase.from('staff_members').select('*');
         
-        // Create query without orderBy to avoid composite index requirement
-        // Sorting will be done client-side after fetching
-        const q = queryConstraints.length > 0
-            ? query(staffColRef, ...queryConstraints)
-            : query(staffColRef);
-        const querySnapshot = await getDocs(q);
-
-        let staffData = querySnapshot.docs.map(docSnap => transformStaffDoc(docSnap));
-
-        // Apply remaining filters client-side (in server action)
         if (filters?.team && filters.team !== "All Teams") {
-            // Team filter was applied server-side, now apply status client-side
-            if (filters?.status && filters.status !== 'All') {
-                staffData = staffData.filter(s => s.status === filters.status);
-            }
+            query = query.eq('team', filters.team);
         }
-        // If only status filter was applied, it was already done server-side
-
-        // Apply search filter client-side
+        if (filters?.status && filters.status !== 'All') {
+            query = query.eq('status', filters.status);
+        }
         if (filters?.searchTerm) {
-            const term = filters.searchTerm.toLowerCase();
-            staffData = staffData.filter(s =>
-                s.name.toLowerCase().includes(term) ||
-                s.role.toLowerCase().includes(term) ||
-                (s.department && s.department.toLowerCase().includes(term)) ||
-                (s.team && s.team.toLowerCase().includes(term))
-            );
+            const term = `%${filters.searchTerm}%`;
+            query = query.or(`name.ilike.${term},role.ilike.${term},department.ilike.${term},team.ilike.${term}`);
         }
 
-        // Sort client-side by name
-        staffData.sort((a, b) => a.name.localeCompare(b.name));
+        const { data, error } = await query.order('name');
 
-        return staffData;
+        if (error) throw error;
+
+        return (data || []).map(transformStaff);
     } catch (error) {
         console.error("[Server Action - getStaffMembers] Error fetching staff. Filters:", filters, "Error:", error);
-        const firebaseError = error as { code?: string; message?: string };
-        let detailedMessage = `Failed to fetch staff members. Firebase Code: ${firebaseError.code || 'Unknown'}.`;
-        if (firebaseError.code === 'failed-precondition' || firebaseError.message?.includes('requires an index')) {
-            detailedMessage += " A Firestore index is required. The filters have been adjusted to work without requiring additional database configuration.";
-            console.warn("[Server Action] Composite index needed:", firebaseError.message);
-        }
-        throw new Error(detailedMessage);
+        throw new Error(`Failed to fetch staff members. ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
 export async function getStaffMemberById(id: string): Promise<StaffMember | null> {
   try {
-    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, id);
-    const docSnap = await getDoc(staffMemberRef);
-    return docSnap.exists() ? transformStaffDoc(docSnap) : null;
+    const { data, error } = await supabase
+      .from('staff_members')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return transformStaff(data);
   } catch (error) {
     console.error(`[Server Action - getStaffMemberById] Error fetching staff member by ID ${id}: `, error);
-    const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to fetch staff member (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`);
+    throw new Error(`Failed to fetch staff member.`);
   }
 }
 
 export async function getParticipantById(id: string): Promise<Participant | null> {
   try {
-    const participantRef = doc(db, PARTICIPANTS_COLLECTION, id);
-    const docSnap = await getDoc(participantRef);
-    return docSnap.exists() ? transformParticipantDoc(docSnap) : null;
+    const { data, error } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return transformParticipant(data);
   } catch (error) {
     console.error(`[Server Action - getParticipantById (Public/Fallback)] Error fetching participant by ID ${id}: `, error);
-    const firebaseError = error as { code?: string; message?: string };
-    throw new Error(`Failed to fetch participant (Server Action). Firebase Code: ${firebaseError.code || 'Unknown'}. Message: ${firebaseError.message || String(error)}.`);
+    throw new Error(`Failed to fetch participant.`);
   }
 }
 
@@ -338,80 +239,66 @@ export async function getParticipantById(id: string): Promise<Participant | null
 // System List Actions
 export async function getSystemSchools(): Promise<string[]> {
   try {
-    const schoolsColRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-    const schoolsSnapshot = await getDocs(query(schoolsColRef, orderBy('name')));
-    return schoolsSnapshot.docs.map(doc => doc.data().name as string);
+    const { data, error } = await supabase.from('schools').select('name').order('name');
+    if (error) throw error;
+    return (data || []).map(d => d.name);
   } catch (error) {
     console.error("[Server Action] Error fetching system schools: ", error);
-    throw new Error("Failed to fetch system schools (Server Action). Check Firestore rules and connectivity.");
+    throw new Error("Failed to fetch system schools.");
   }
 }
 
 export async function getSystemCommittees(): Promise<string[]> {
   try {
-    const committeesColRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-    const committeesSnapshot = await getDocs(query(committeesColRef, orderBy('name')));
-    return committeesSnapshot.docs.map(doc => doc.data().name as string);
+    const { data, error } = await supabase.from('committees').select('name').order('name');
+    if (error) throw error;
+    return (data || []).map(d => d.name);
   } catch (error) {
     console.error("[Server Action] Error fetching system committees: ", error);
-    throw new Error("Failed to fetch system committees (Server Action). Check Firestore rules and connectivity.");
+    throw new Error("Failed to fetch system committees.");
   }
 }
 
 export async function getSystemStaffTeams(): Promise<string[]> {
   try {
-    const staffTeamsColRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
-    const staffTeamsSnapshot = await getDocs(query(staffTeamsColRef, orderBy('name')));
-    return staffTeamsSnapshot.docs.map(doc => doc.data().name as string);
+    const { data, error } = await supabase.from('staff_teams').select('name').order('name');
+    if (error) throw error;
+    return (data || []).map(d => d.name);
   } catch (error) {
     console.error("[Server Action] Error fetching system staff teams: ", error);
-    throw new Error("Failed to fetch system staff teams (Server Action). Check Firestore rules and connectivity.");
+    throw new Error("Failed to fetch system staff teams.");
   }
 }
 
 export async function addSystemItems(items: { newSchools: string[], newCommittees: string[], newTeams: string[] }): Promise<{ success: boolean; message?: string }> {
   console.log("[Server Action: addSystemItems] Attempting to add new system items.", items);
-  const batch = writeBatch(db);
   const { newSchools, newCommittees, newTeams } = items;
 
   try {
     // Handle new schools
     if (newSchools.length > 0) {
-      const schoolsRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-      const existingSchools = (await getDocs(schoolsRef)).docs.map(d => d.data().name);
-      newSchools.forEach(schoolName => {
-        if (!existingSchools.includes(schoolName)) {
-          const docRef = doc(schoolsRef);
-          batch.set(docRef, { name: schoolName, createdAt: fsServerTimestamp() });
-        }
-      });
+      const { data: existing } = await supabase.from('schools').select('name');
+      const existingNames = (existing || []).map(d => d.name);
+      const toInsert = newSchools.filter(name => !existingNames.includes(name)).map(name => ({ name }));
+      if (toInsert.length > 0) await supabase.from('schools').insert(toInsert);
     }
 
     // Handle new committees
     if (newCommittees.length > 0) {
-      const committeesRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-      const existingCommittees = (await getDocs(committeesRef)).docs.map(d => d.data().name);
-      newCommittees.forEach(committeeName => {
-        if (!existingCommittees.includes(committeeName)) {
-          const docRef = doc(committeesRef);
-          batch.set(docRef, { name: committeeName, createdAt: fsServerTimestamp() });
-        }
-      });
+      const { data: existing } = await supabase.from('committees').select('name');
+      const existingNames = (existing || []).map(d => d.name);
+      const toInsert = newCommittees.filter(name => !existingNames.includes(name)).map(name => ({ name }));
+      if (toInsert.length > 0) await supabase.from('committees').insert(toInsert);
     }
 
     // Handle new staff teams
     if (newTeams.length > 0) {
-      const teamsRef = collection(db, SYSTEM_STAFF_TEAMS_COLLECTION);
-      const existingTeams = (await getDocs(teamsRef)).docs.map(d => d.data().name);
-      newTeams.forEach(teamName => {
-        if (!existingTeams.includes(teamName)) {
-          const docRef = doc(teamsRef);
-          batch.set(docRef, { name: teamName, createdAt: fsServerTimestamp() });
-        }
-      });
+      const { data: existing } = await supabase.from('staff_teams').select('name');
+      const existingNames = (existing || []).map(d => d.name);
+      const toInsert = newTeams.filter(name => !existingNames.includes(name)).map(name => ({ name }));
+      if (toInsert.length > 0) await supabase.from('staff_teams').insert(toInsert);
     }
 
-    await batch.commit();
     console.log("[Server Action: addSystemItems] Successfully added new system items.");
     revalidatePath('/'); // Revalidate relevant paths
     revalidatePath('/staff');
@@ -515,45 +402,51 @@ export async function quickSetParticipantStatusAction(
   }
 
   try {
-    const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    const participantSnap = await getDoc(participantRef);
+    const { data: participantData, error: fetchError } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('id', participantId)
+      .single();
 
-    if (!participantSnap.exists()) {
+    if (fetchError || !participantData) {
       return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
     }
 
-    const participantData = participantSnap.data();
     const updates: { [key: string]: any } = {
       status: newStatus,
-      updatedAt: fsServerTimestamp(),
+      updated_at: new Date().toISOString(),
     };
 
     // Get current conference day
     const currentDay = await getCurrentConferenceDay();
 
-    // ALWAYS mark day attendance when status is updated (Feature 2)
-    const dayAttendance = participantData.dayAttendance || { day1: false, day2: false };
+    // ALWAYS mark day attendance when status is updated
+    const dayAttendance = participantData.day_attendance || { day1: false, day2: false };
     dayAttendance[currentDay] = true;
-    updates.dayAttendance = dayAttendance;
+    updates.day_attendance = dayAttendance;
 
     if (options?.isCheckIn && newStatus === 'Present') {
       updates.attended = true;
-      if (!participantData.attended || !participantData.checkInTime) {
-        updates.checkInTime = fsServerTimestamp();
+      if (!participantData.attended || !participantData.check_in_time) {
+        updates.check_in_time = new Date().toISOString();
       }
       
       // Update day-specific check-in time
-      const checkInTimes = participantData.checkInTimes || {};
+      const checkInTimes = participantData.check_in_times || {};
       if (!checkInTimes[currentDay]) {
-        checkInTimes[currentDay] = fsServerTimestamp();
-        updates.checkInTimes = checkInTimes;
+        checkInTimes[currentDay] = new Date().toISOString();
+        updates.check_in_times = checkInTimes;
       }
     }
 
-    await updateDoc(participantRef, updates);
+    const { data: updatedData, error: updateError } = await supabase
+      .from('participants')
+      .update(updates)
+      .eq('id', participantId)
+      .select()
+      .single();
 
-    const updatedSnap = await getDoc(participantRef);
-    const updatedParticipant = transformParticipantDoc(updatedSnap);
+    if (updateError) throw updateError;
 
     revalidatePath(`/checkin`, 'page');
     revalidatePath(`/participants/${participantId}`);
@@ -564,20 +457,11 @@ export async function quickSetParticipantStatusAction(
     return {
       success: true,
       message: `Status for ${participantData.name} updated to ${newStatus}.`,
-      participant: updatedParticipant,
+      participant: transformParticipant(updatedData),
     };
   } catch (error: any) {
     console.error(`[Server Action - quickSetParticipantStatusAction] Error for ID ${participantId}, status ${newStatus}:`, error);
-    let message = 'An error occurred while updating participant status. Please try again.';
-    let errorType = 'generic_error';
-    if (error.code === 'permission-denied') {
-      message = `Permission Denied: Could not update participant status. Please ensure you are logged in.`;
-      errorType = 'permission_denied';
-    } else if (error.code) {
-      message = `Update failed. Error: ${error.code}. Please try again.`;
-      errorType = error.code;
-    }
-    return { success: false, message, errorType };
+    return { success: false, message: error.message || 'An error occurred while updating participant status.', errorType: 'generic_error' };
   }
 }
 
@@ -587,24 +471,21 @@ export async function resetParticipantAttendanceAction(participantId: string): P
   }
 
   try {
-    const participantRef = doc(db, PARTICIPANTS_COLLECTION, participantId);
-    const participantSnap = await getDoc(participantRef);
-
-    if (!participantSnap.exists()) {
-      return { success: false, message: `Participant with ID "${participantId}" not found.`, errorType: 'not_found' };
-    }
-
     const updates = {
       status: 'Absent' as AttendanceStatus,
       attended: false,
-      checkInTime: null,
-      updatedAt: fsServerTimestamp(),
+      check_in_time: null,
+      updated_at: new Date().toISOString(),
     };
 
-    await updateDoc(participantRef, updates);
+    const { data, error } = await supabase
+      .from('participants')
+      .update(updates)
+      .eq('id', participantId)
+      .select()
+      .single();
 
-    const updatedSnap = await getDoc(participantRef);
-    const updatedParticipant = transformParticipantDoc(updatedSnap);
+    if (error) throw error;
     
     revalidatePath(`/checkin`, 'page');
     revalidatePath(`/participants/${participantId}`);
@@ -614,8 +495,8 @@ export async function resetParticipantAttendanceAction(participantId: string): P
 
     return {
       success: true,
-      message: `Attendance for ${updatedParticipant.name} has been reset.`,
-      participant: updatedParticipant,
+      message: `Attendance for ${data.name} has been reset.`,
+      participant: transformParticipant(data),
     };
   } catch (error: any) {
     console.error(`[Server Action - resetParticipantAttendanceAction] Error for ID ${participantId}:`, error);
@@ -632,23 +513,19 @@ export async function quickSetStaffStatusAction(
   }
 
   try {
-    const staffMemberRef = doc(db, STAFF_MEMBERS_COLLECTION, staffId);
-    const staffMemberSnap = await getDoc(staffMemberRef);
-
-    if (!staffMemberSnap.exists()) {
-      return { success: false, message: `Staff member with ID "${staffId}" not found.`, errorType: 'not_found' };
-    }
-
-    const staffMemberData = staffMemberSnap.data();
     const updates = {
       status: newStatus,
-      updatedAt: fsServerTimestamp(),
+      updated_at: new Date().toISOString(),
     };
 
-    await updateDoc(staffMemberRef, updates);
+    const { data, error } = await supabase
+      .from('staff_members')
+      .update(updates)
+      .eq('id', staffId)
+      .select()
+      .single();
 
-    const updatedSnap = await getDoc(staffMemberRef);
-    const updatedStaffMember = transformStaffDoc(updatedSnap);
+    if (error) throw error;
 
     revalidatePath(`/staff-checkin`, 'page');
     revalidatePath(`/staff/${staffId}`);
@@ -658,21 +535,12 @@ export async function quickSetStaffStatusAction(
 
     return {
       success: true,
-      message: `Status for ${staffMemberData.name} updated to ${newStatus}.`,
-      staffMember: updatedStaffMember,
+      message: `Status for ${data.name} updated to ${newStatus}.`,
+      staffMember: transformStaff(data),
     };
   } catch (error: any) {
     console.error(`[Server Action - quickSetStaffStatusAction] Error for ID ${staffId}, status ${newStatus}:`, error);
-    let message = 'An error occurred while updating staff status. Please try again.';
-    let errorType = 'generic_error';
-    if (error.code === 'permission-denied') {
-      message = `Permission Denied on '${STAFF_MEMBERS_COLLECTION}' collection: Could not update staff status. This action may require administrator privileges or adjustments to Firestore security rules to allow status updates by general authenticated users.`;
-      errorType = 'permission_denied';
-    } else if (error.code) {
-      message = `Update failed on '${STAFF_MEMBERS_COLLECTION}'. Error: ${error.code}. Please check server logs and try again.`;
-      errorType = error.code;
-    }
-    return { success: false, message, errorType };
+    return { success: false, message: error.message || 'An error occurred while updating staff status.', errorType: 'generic_error' };
   }
 }
 
@@ -685,54 +553,39 @@ export async function switchConferenceDayAction(
   console.log(`[Server Action - switchConferenceDayAction] Switching to ${newDay}`);
   
   try {
-    // Get current day first
     const currentDay = await getCurrentConferenceDay();
-    
-    if (currentDay === newDay) {
-      return { success: true, message: `Already on ${newDay}` };
-    }
+    if (currentDay === newDay) return { success: true, message: `Already on ${newDay}` };
 
-    // Get default status for resetting
     const defaultStatus = await getDefaultAttendanceStatusSetting();
 
-    // Archive current participants and reset statuses
-    const participantsRef = collection(db, PARTICIPANTS_COLLECTION);
-    const participantsSnapshot = await getDocs(participantsRef);
-    
-    const batch = writeBatch(db);
-    let archiveCount = 0;
+    const { data: participants, error: fetchError } = await supabase.from('participants').select('id, status, status_history');
+    if (fetchError) throw fetchError;
 
-    participantsSnapshot.docs.forEach((docSnap) => {
-      const participantRef = doc(db, PARTICIPANTS_COLLECTION, docSnap.id);
-      
-      // Archive the current status in a history field (optional)
-      const currentData = docSnap.data();
-      const archiveEntry = {
-        status: currentData.status,
-        day: currentDay,
-        timestamp: fsServerTimestamp(),
-      };
-      
-      // Reset status to default (e.g., "Didn't Arrive Yet" or "Absent")
-      batch.update(participantRef, {
-        status: defaultStatus,
-        updatedAt: fsServerTimestamp(),
-        [`statusHistory.${currentDay}`]: archiveEntry,
-      });
-      
-      archiveCount++;
-    });
+    const updates = (participants || []).map(p => ({
+      id: p.id,
+      status: defaultStatus,
+      updated_at: new Date().toISOString(),
+      status_history: {
+        ...(p.status_history || {}),
+        [currentDay]: {
+          status: p.status,
+          day: currentDay,
+          timestamp: new Date().toISOString()
+        }
+      }
+    }));
 
-    // Update the conference day setting
-    const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
-    batch.update(configDocRef, {
-      currentConferenceDay: newDay,
-      updatedAt: fsServerTimestamp(),
-    });
+    // Chunk updates if needed (Supabase has limits)
+    const { error: updateError } = await supabase.from('participants').upsert(updates);
+    if (updateError) throw updateError;
 
-    await batch.commit();
+    const { error: configError } = await supabase
+      .from('system_config')
+      .update({ current_conference_day: newDay, updated_at: new Date().toISOString() })
+      .eq('id', APP_SETTINGS_DOC_ID);
 
-    // Revalidate all relevant paths
+    if (configError) throw configError;
+
     revalidatePath('/');
     revalidatePath('/checkin');
     revalidatePath('/public');
@@ -741,86 +594,52 @@ export async function switchConferenceDayAction(
 
     return {
       success: true,
-      message: `Switched to ${newDay}. ${archiveCount} participants archived and reset to "${defaultStatus}".`,
-      archiveCount,
+      message: `Switched to ${newDay}. ${updates.length} participants archived and reset to "${defaultStatus}".`,
+      archiveCount: updates.length,
     };
   } catch (error: any) {
     console.error('[Server Action - switchConferenceDayAction] Error:', error);
-    return {
-      success: false,
-      message: `Failed to switch conference day: ${error.message}`,
-    };
+    return { success: false, message: `Failed to switch conference day: ${error.message}` };
   }
 }
 
 export async function getAllAnalyticsData(): Promise<AnalyticsData> {
   try {
-    const participantsCollectionRef = collection(db, PARTICIPANTS_COLLECTION);
-    const staffCollectionRef = collection(db, STAFF_MEMBERS_COLLECTION);
-    const schoolsCollectionRef = collection(db, SYSTEM_SCHOOLS_COLLECTION);
-    const committeesCollectionRef = collection(db, SYSTEM_COMMITTEES_COLLECTION);
-
-    let participantsSnapshot;
-    try {
-      participantsSnapshot = await getDocs(participantsCollectionRef);
-    } catch (e: any) {
-      throw new Error(`Failed to fetch participants: ${e.message}`);
-    }
-
-    const totalParticipants = participantsSnapshot.size;
+    const [
+      { count: totalParticipants },
+      { count: totalStaff },
+      { count: totalSchools },
+      { count: totalCommittees },
+      { data: participants },
+      { data: staff }
+    ] = await Promise.all([
+      supabase.from('participants').select('*', { count: 'exact', head: true }),
+      supabase.from('staff_members').select('*', { count: 'exact', head: true }),
+      supabase.from('schools').select('*', { count: 'exact', head: true }),
+      supabase.from('committees').select('*', { count: 'exact', head: true }),
+      supabase.from('participants').select('committee, status'),
+      supabase.from('staff_members').select('team, status')
+    ]);
 
     const committeeCounts: { [key: string]: number } = {};
     const statusCounts: { [key: string]: number } = {};
-    
-    participantsSnapshot.docs.forEach(doc => {
-      const p = doc.data();
-      if (p.committee) {
-        committeeCounts[p.committee] = (committeeCounts[p.committee] || 0) + 1;
-      }
-      if (p.status) {
-        statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
-      }
+    (participants || []).forEach(p => {
+      if (p.committee) committeeCounts[p.committee] = (committeeCounts[p.committee] || 0) + 1;
+      if (p.status) statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
     });
-
-    let staffSnapshot;
-    try {
-      staffSnapshot = await getDocs(staffCollectionRef);
-    } catch (e: any) {
-      throw new Error(`Failed to fetch staff members: ${e.message}`);
-    }
-    const totalStaff = staffSnapshot.size;
 
     const staffStatusCounts: { [key: string]: number } = {};
     const staffTeamCounts: { [key: string]: number } = {};
-
-    staffSnapshot.docs.forEach(doc => {
-      const s = doc.data();
-      if (s.status) {
-        staffStatusCounts[s.status] = (staffStatusCounts[s.status] || 0) + 1;
-      }
-      if (s.team) {
-        staffTeamCounts[s.team] = (staffTeamCounts[s.team] || 0) + 1;
-      }
+    (staff || []).forEach(s => {
+      if (s.status) staffStatusCounts[s.status] = (staffStatusCounts[s.status] || 0) + 1;
+      if (s.team) staffTeamCounts[s.team] = (staffTeamCounts[s.team] || 0) + 1;
     });
 
-    let totalSchools, totalCommittees;
-    try {
-      const [schoolsSnap, committeesSnap] = await Promise.all([
-        getCountFromServer(schoolsCollectionRef),
-        getCountFromServer(committeesCollectionRef),
-      ]);
-      totalSchools = schoolsSnap.data().count;
-      totalCommittees = committeesSnap.data().count;
-    } catch (e: any) {
-      throw new Error(`Failed to fetch system counts (schools, committees): ${e.message}`);
-    }
-
-
     return {
-      totalParticipants,
-      totalStaff,
-      totalSchools,
-      totalCommittees,
+      totalParticipants: totalParticipants || 0,
+      totalStaff: totalStaff || 0,
+      totalSchools: totalSchools || 0,
+      totalCommittees: totalCommittees || 0,
       participantsByCommittee: Object.entries(committeeCounts).map(([committee, count]) => ({ committee, count })).sort((a, b) => b.count - a.count),
       statusDistribution: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
       staffStatusDistribution: Object.entries(staffStatusCounts).map(([status, count]) => ({ status, count })),
@@ -828,6 +647,6 @@ export async function getAllAnalyticsData(): Promise<AnalyticsData> {
     };
   } catch (error: any) {
     console.error("[Server Action - getAllAnalyticsData] Error fetching comprehensive analytics: ", error);
-    throw new Error(`Failed to fetch analytics data. Check server logs for details. Original error: ${error.message}`);
+    throw new Error(`Failed to fetch analytics data.`);
   }
 }

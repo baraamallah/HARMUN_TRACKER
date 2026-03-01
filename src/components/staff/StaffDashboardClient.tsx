@@ -40,8 +40,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
 import { ExportStaffExcelButton } from '@/components/staff/ExportStaffExcelButton';
-import { writeBatch, doc, serverTimestamp, query, collection, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
 
 interface StaffDashboardClientProps {
@@ -107,43 +106,20 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
   React.useEffect(() => {
     fetchData();
-  }, [fetchData]);
 
-  // Real-time listener for auto-refresh
-  const fetchDataRef = React.useRef(fetchData);
-  React.useEffect(() => {
-    fetchDataRef.current = fetchData;
-  }, [fetchData]);
-
-  React.useEffect(() => {
     if (isAuthLoading || !user) return;
 
-    const staffRef = collection(db, 'staff_members');
-    const q = query(staffRef, orderBy('createdAt', 'desc'));
+    const channel = supabase
+      .channel('staff-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_members' }, () => {
+        fetchData();
+      })
+      .subscribe();
 
-    let isFirstSnapshot = true;
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        if (isFirstSnapshot) {
-          isFirstSnapshot = false;
-          return;
-        }
-
-        const changes = snapshot.docChanges();
-        if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
-          console.log('Staff real-time update detected:', changes.length, 'changes');
-          fetchDataRef.current();
-        }
-      },
-      (error) => {
-        console.error('Staff real-time listener error:', error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [isAuthLoading, user]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthLoading, user, fetchData]);
 
   // Pagination calculation
   const totalPages = Math.ceil(staffMembers.length / pageSize);
@@ -207,11 +183,13 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     if (selectedStaffMemberIds.length === 0) return;
     setIsBulkUpdating(true);
     try {
-      const batch = writeBatch(db);
-      selectedStaffMemberIds.forEach(id => {
-        batch.update(doc(db, "staff_members", id), { status, updatedAt: serverTimestamp() });
-      });
-      await batch.commit();
+      const { error } = await supabase
+        .from('staff_members')
+        .update({ status, updated_at: new Date().toISOString() })
+        .in('id', selectedStaffMemberIds);
+
+      if (error) throw error;
+
       toast({ title: "Bulk Update Successful", description: `${selectedStaffMemberIds.length} staff member(s) updated to ${status}.` });
       fetchData();
       setSelectedStaffMemberIds([]);
@@ -232,11 +210,13 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     if (selectedStaffMemberIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const batch = writeBatch(db);
-      selectedStaffMemberIds.forEach(id => {
-        batch.delete(doc(db, "staff_members", id));
-      });
-      await batch.commit();
+      const { error } = await supabase
+        .from('staff_members')
+        .delete()
+        .in('id', selectedStaffMemberIds);
+
+      if (error) throw error;
+
       toast({ title: "Bulk Delete Successful", description: `${selectedStaffMemberIds.length} staff member(s) deleted.` });
       fetchData();
       setSelectedStaffMemberIds([]);

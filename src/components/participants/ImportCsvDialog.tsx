@@ -16,8 +16,7 @@ import { UploadCloud, AlertTriangle, Info, Loader2, FileText, CheckCircle, XCirc
 import { addSystemItems, validateParticipantImportData, getDefaultAttendanceStatusSetting, type ParticipantImportValidationResult } from '@/lib/actions';
 import type { Participant } from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { db } from '@/lib/firebase';
-import { collection as fsCollection, doc as fsDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -190,10 +189,10 @@ export function ImportCsvDialog({ onImportSuccess }: { onImportSuccess?: () => v
 
       try {
         const defaultStatus = await getDefaultAttendanceStatusSetting();
-        const batch = writeBatch(db);
         let importCount = 0;
         let skippedMissing = 0;
         let skippedExisting = 0;
+        const participantsToInsert: any[] = [];
 
         for (const [index, row] of parsedData.entries()) {
           const name = row.name?.trim();
@@ -207,8 +206,13 @@ export function ImportCsvDialog({ onImportSuccess }: { onImportSuccess?: () => v
 
           let id = row.id?.trim();
           if (id) {
-            const docSnap = await getDoc(fsDoc(db, 'participants', id));
-            if (docSnap.exists()) {
+            const { data: existing } = await supabase
+              .from('participants')
+              .select('id')
+              .eq('id', id)
+              .maybeSingle();
+
+            if (existing) {
               skippedExisting++;
               continue;
             }
@@ -216,29 +220,36 @@ export function ImportCsvDialog({ onImportSuccess }: { onImportSuccess?: () => v
             id = uuidv4();
           }
 
-          const newParticipant: Omit<Participant, 'id'> = {
+          participantsToInsert.push({
+            id,
             name, school, committee,
             country: row.country?.trim() || '',
-            classGrade: (row.classgrade || row.class || row.grade || '').trim(),
+            class_grade: (row.classgrade || row.class || row.grade || '').trim(),
             email: row.email?.trim() || '',
             phone: row.phone?.trim() || '',
             notes: row.notes?.trim() || '',
-            additionalDetails: (row.additionaldetails || '').trim(),
+            additional_details: (row.additionaldetails || '').trim(),
             status: defaultStatus,
-            imageUrl: `https://placehold.co/40x40.png?text=${(name || 'P').substring(0,2).toUpperCase()}`,
+            image_url: `https://placehold.co/40x40.png?text=${(name || 'P').substring(0,2).toUpperCase()}`,
             attended: false,
-            checkInTime: null,
-            dayAttendance: { day1: false, day2: false },
-            checkInTimes: { day1: null, day2: null },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          };
-          batch.set(fsDoc(db, 'participants', id), newParticipant);
+            check_in_time: null,
+            day_attendance: { day1: false, day2: false },
+            check_in_times: { day1: null, day2: null },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
           importCount++;
           setImportProgress(((index + 1) / parsedData.length) * 100);
         }
 
-        await batch.commit();
+        if (participantsToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('participants')
+            .insert(participantsToInsert);
+
+          if (insertError) throw insertError;
+        }
+
         setSummary({ 
           importedCount: importCount, 
           skippedMissingFields: skippedMissing, 

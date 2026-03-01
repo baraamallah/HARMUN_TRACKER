@@ -35,8 +35,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { getDefaultAttendanceStatusSetting } from '@/lib/actions';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
@@ -168,36 +167,41 @@ export function ParticipantForm({
           school: data.school.trim(),
           committee: data.committee.trim(),
           country: data.country?.trim() || '',
-          classGrade: data.classGrade?.trim() || '',
+          class_grade: data.classGrade?.trim() || '',
           email: data.email?.trim() || '',
           phone: data.phone?.trim() || '',
           notes: data.notes?.trim() || '',
-          additionalDetails: data.additionalDetails?.trim() || '',
-          updatedAt: serverTimestamp(),
+          additional_details: data.additionalDetails?.trim() || '',
+          updated_at: new Date().toISOString(),
         };
 
         const formImageUrl = data.imageUrl?.trim();
         if (!formImageUrl) {
           const nameInitial = (data.name.trim() || 'P').substring(0, 2).toUpperCase();
-          submissionData.imageUrl = `https://placehold.co/40x40.png?text=${nameInitial}`;
+          submissionData.image_url = `https://placehold.co/40x40.png?text=${nameInitial}`;
         } else {
-          submissionData.imageUrl = formImageUrl;
+          submissionData.image_url = formImageUrl;
         }
 
         if (participantToEdit) {
-          const participantRef = doc(db, 'participants', participantToEdit.id);
-          submissionData.status = participantToEdit.status;
-          submissionData.attended = participantToEdit.attended || false;
-          submissionData.checkInTime = participantToEdit.checkInTime || null;
-          await updateDoc(participantRef, submissionData);
+          const { error } = await supabase
+            .from('participants')
+            .update(submissionData)
+            .eq('id', participantToEdit.id);
+
+          if (error) throw error;
           toast({ title: 'Participant Updated', description: `${data.name} has been updated.` });
         } else {
           let participantIdToUse = data.id?.trim();
 
           if (participantIdToUse) {
-            const newParticipantRef = doc(db, 'participants', participantIdToUse);
-            const docSnap = await getDoc(newParticipantRef);
-            if (docSnap.exists()) {
+            const { data: existing, error: checkError } = await supabase
+              .from('participants')
+              .select('id')
+              .eq('id', participantIdToUse)
+              .maybeSingle();
+
+            if (existing) {
               toast({
                 title: 'Error: ID already exists',
                 description: `A participant with ID "${participantIdToUse}" already exists. Please use a unique ID or leave it blank for auto-generation.`,
@@ -209,15 +213,19 @@ export function ParticipantForm({
             participantIdToUse = uuidv4();
           }
 
+          submissionData.id = participantIdToUse;
           submissionData.status = defaultStatus;
           submissionData.attended = false;
-          submissionData.checkInTime = null;
-          submissionData.dayAttendance = { day1: false, day2: false };
-          submissionData.checkInTimes = { day1: null, day2: null };
-          submissionData.createdAt = serverTimestamp();
+          submissionData.check_in_time = null;
+          submissionData.day_attendance = { day1: false, day2: false };
+          submissionData.check_in_times = { day1: null, day2: null };
+          submissionData.created_at = new Date().toISOString();
 
-          const newParticipantRefWithId = doc(db, 'participants', participantIdToUse);
-          await setDoc(newParticipantRefWithId, submissionData);
+          const { error: insertError } = await supabase
+            .from('participants')
+            .insert(submissionData);
+
+          if (insertError) throw insertError;
           toast({ title: 'Participant Added', description: `${data.name} (ID: ${participantIdToUse}) has been added.` });
         }
         onOpenChange(false);

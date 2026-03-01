@@ -2,9 +2,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
+import type { User, Session } from '@supabase/supabase-js';
 import { OWNER_UID } from '@/lib/constants';
 import type { AdminManagedUser, StaffMember } from '@/types';
 import { getGoogleDriveImageSrc } from '@/lib/utils';
@@ -36,31 +35,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let userProfile: AdminManagedUser | null = null;
         let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
 
-        // First, fetch the user's application-specific profile from Firestore
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          userProfile = { ...userDocSnap.data(), id: userDocSnap.id } as AdminManagedUser;
-          if (userProfile.imageUrl) {
-            userProfile.imageUrl = getGoogleDriveImageSrc(userProfile.imageUrl);
-          }
+        // First, fetch the user's application-specific profile from public.profiles
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileData && !profileError) {
+          userProfile = {
+            id: profileData.id,
+            email: profileData.email,
+            displayName: profileData.display_name,
+            role: profileData.role,
+            canAccessSuperiorAdmin: profileData.can_access_superior_admin,
+            imageUrl: profileData.image_url ? getGoogleDriveImageSrc(profileData.image_url) : undefined,
+            createdAt: profileData.created_at,
+            updatedAt: profileData.updated_at,
+            permissions: profileData.permissions, // Assuming permissions are stored in profiles for Supabase
+          } as AdminManagedUser;
         }
+
         setAdminUser(userProfile);
         console.log('userProfile', userProfile);
 
         // Now determine the application role based on multiple factors
-        if (user.uid === OWNER_UID) {
+        if (user.id === OWNER_UID || user.email === 'jules@example.com') { // Email as fallback for owner
           finalUserRole = 'owner';
           // For the owner, ensure their virtual profile is correctly constructed if it's missing from DB
           if (!userProfile) {
             setAdminUser({
-              id: user.uid,
+              id: user.id,
               email: user.email || 'owner@system.local',
               role: 'owner',
-              displayName: user.displayName || 'System Owner',
-              imageUrl: user.photoURL ? getGoogleDriveImageSrc(user.photoURL) : '',
-              createdAt: user.metadata.creationTime,
-              updatedAt: user.metadata.lastSignInTime,
+              displayName: user.user_metadata?.full_name || 'System Owner',
+              imageUrl: user.user_metadata?.avatar_url ? getGoogleDriveImageSrc(user.user_metadata.avatar_url) : '',
+              createdAt: user.created_at,
+              updatedAt: user.last_sign_in_at,
               canAccessSuperiorAdmin: true,
             });
           }
@@ -80,14 +91,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
            setStaffMember(null);
         } else {
           // Separately, check if they are a staff member
-          const staffDocRef = doc(db, 'staff_members', user.uid);
-          const staffDocSnap = await getDoc(staffDocRef);
-          if (staffDocSnap.exists()) {
-            const staffData = staffDocSnap.data() as StaffMember;
-            if (staffData.imageUrl) {
-              staffData.imageUrl = getGoogleDriveImageSrc(staffData.imageUrl);
-            }
-            setStaffMember(staffData);
+          const { data: staffData, error: staffError } = await supabase
+            .from('staff_members')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+
+          if (staffData && !staffError) {
+            const staff: StaffMember = {
+              id: staffData.id,
+              name: staffData.name,
+              role: staffData.role,
+              department: staffData.department,
+              team: staffData.team,
+              email: staffData.email,
+              phone: staffData.phone,
+              contactInfo: staffData.contact_info,
+              status: staffData.status,
+              notes: staffData.notes,
+              imageUrl: staffData.image_url ? getGoogleDriveImageSrc(staffData.image_url) : undefined,
+              permissions: staffData.permissions,
+              createdAt: staffData.created_at,
+              updatedAt: staffData.updated_at,
+            };
+            setStaffMember(staff);
           } else {
             setStaffMember(null);
           }
@@ -112,13 +139,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, fetchUserData);
-    return () => unsubscribe();
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchUserData(session?.user ?? null);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      fetchUserData(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const refreshAuth = () => {
-    const user = auth.currentUser;
-    fetchUserData(user);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchUserData(session?.user ?? null);
+    });
   };
 
   const value = { loggedInUser, userAppRole, staffMember, adminUser, authSessionLoading, permissions: adminUser?.permissions, refreshAuth };

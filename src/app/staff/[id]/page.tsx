@@ -23,8 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, getDoc, Timestamp as FirestoreTimestampType } from 'firebase/firestore'; 
+import { supabase } from '@/lib/supabase';
 
 export default function StaffMemberProfilePage() {
   const params = useParams();
@@ -49,27 +48,31 @@ export default function StaffMemberProfilePage() {
     }
     if(isInitialLoad) setIsLoading(true);
     try {
-      const staffMemberRef = doc(db, 'staff_members', id);
-      const staffDocSnap = await getDoc(staffMemberRef);
+      const { data, error } = await supabase
+        .from('staff_members')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
       let fetchedStaffData: StaffMember | null = null;
 
-      if (staffDocSnap.exists()) {
-        const data = staffDocSnap.data();
+      if (data) {
         fetchedStaffData = {
-          id: staffDocSnap.id,
+          id: String(data.id),
           name: data.name || '',
           role: data.role || '',
           department: data.department,
           team: data.team,
           email: data.email,
           phone: data.phone,
-          contactInfo: data.contactInfo,
+          contactInfo: data.contact_info,
           status: data.status || 'Off Duty',
-          imageUrl: data.imageUrl,
-          // Lazily loaded fields are initially omitted or set to null
+          imageUrl: data.image_url,
           notes: data.notes || '',
-          createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
         } as StaffMember;
       }
       
@@ -107,10 +110,13 @@ export default function StaffMemberProfilePage() {
     const fetchSecondaryData = async () => {
         setIsLoadingSecondary(true);
         try {
-            const staffRef = doc(db, 'staff_members', id);
-            const docSnap = await getDoc(staffRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+            const { data, error } = await supabase
+              .from('staff_members')
+              .select('notes')
+              .eq('id', id)
+              .single();
+
+            if (data && !error) {
                 setStaffMember(sm => sm ? ({ ...sm, notes: data.notes || '' }) : null);
             }
         } catch (error) {
@@ -134,8 +140,12 @@ export default function StaffMemberProfilePage() {
     if (!staffMember) return;
     setIsSubmittingStatus(true);
     try {
-      const staffMemberRef = doc(db, 'staff_members', staffMember.id);
-      await updateDoc(staffMemberRef, { status, updatedAt: serverTimestamp() });
+      const { error } = await supabase
+        .from('staff_members')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', staffMember.id);
+
+      if (error) throw error;
       
       setStaffMember(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
       toast({
