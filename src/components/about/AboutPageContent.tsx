@@ -25,24 +25,24 @@ interface TeamMember {
 
 const teamMembers: TeamMember[] = [
     {
-        name: 'Conference Director',
-        role: 'Leadership',
+        name: 'Name 1',
+        role: 'Conference Director',
         email: 'director@harmun.org',
     },
     {
-        name: 'Secretary General',
-        role: 'Administration',
+        name: 'Name 2',
+        role: 'Secretary General',
         email: 'secgen@harmun.org',
     },
     {
-        name: 'Technical Team',
-        role: 'Technology',
+        name: 'Name 3',
+        role: 'Technical Team',
         email: 'tech@harmun.org',
     },
     {
-        name: 'Logistics Coordinator',
-        role: 'Operations',
-        email: 'logistics@harmun.org',
+        name: 'Baraa El-Mallah',
+        role: 'Head Of Logistics',
+        email: 'baraa.elmallah@rhhs.edu.lb',
     },
 ];
 
@@ -58,6 +58,9 @@ export function AboutPageContent() {
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
                     HARMUN Attendance Tracker
                 </h1>
+                <p className="text-2xl font-medium text-foreground max-w-3xl mx-auto mt-6 mb-2">
+                    HARMUN is the official Model United Nations (MUN) conference organized by Rafic Hariri High School.
+                </p>
                 <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                     Empowering delegates through technology and innovation in Model United Nations conferences
                 </p>
@@ -87,10 +90,10 @@ export function AboutPageContent() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-muted-foreground">
-                            Conference Venue
+                            Rafic Hariri High School
                         </p>
                         <p className="text-sm text-muted-foreground mt-2">
-                            State-of-the-art facilities for delegates
+                            Saida, Lebanon
                         </p>
                     </CardContent>
                 </Card>
@@ -102,10 +105,7 @@ export function AboutPageContent() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-muted-foreground">
-                            Multiple Schools & Committees
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-2">
-                            Bringing together future leaders
+                            Multiple Schools & Individuals & Universities
                         </p>
                     </CardContent>
                 </Card>
@@ -237,7 +237,7 @@ export function AboutPageContent() {
             {/* Footer Note */}
             <div className="text-center text-sm text-muted-foreground py-8">
                 <p>
-                    Built with ❤️ for the Model United Nations community
+                    Built with ❤️ for the Model United Nations Community by the HARMUN Logistics Team
                 </p>
             </div>
         </div>

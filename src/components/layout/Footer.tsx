@@ -17,7 +17,7 @@ const FOOTER_CONFIG = {
   socials: [
     { name: 'Facebook', icon: Facebook, href: 'https://www.facebook.com/RaficHaririHighSchool' },
     { name: 'Twitter', icon: Twitter, href: 'https://x.com/RHHS_Saida' },
-    { name: 'Instagram', icon: Instagram, href: 'https://www.instagram.com/rhhs_saida' },
+    { name: 'Instagram', icon: Instagram, href: 'https://www.instagram.com/rhhs.un.society' },
   ],
 
   // Bottom text
