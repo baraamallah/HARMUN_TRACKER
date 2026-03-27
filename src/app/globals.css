@@ -115,6 +115,6 @@ body {
 
 @media (max-width: 640px) {
   :root {
-    font-size: 110%; /* Scale everything up slightly on mobile */
+    font-size: 100%; /* Reset to standard 100% */
   }
 }

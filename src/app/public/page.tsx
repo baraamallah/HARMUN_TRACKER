@@ -1,10 +1,27 @@
-
 'use client';
 
 import * as React from 'react';
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ListFilter, CheckSquare, Square, Loader2, Clock, CalendarDays, Filter, Calendar } from 'lucide-react';
+import { 
+  Users, 
+  Search, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Calendar, 
+  Filter, 
+  ListFilter,
+  CheckSquare,
+  Square,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Loader2,
+  Clock,
+  CalendarDays
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -409,63 +426,69 @@ export default function PublicDashboardPage() {
 
         {/* Pagination Controls */}
         {!isLoadingData && filteredParticipants.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredParticipants.length)} of {filteredParticipants.length} participants
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 border-t bg-muted/20 rounded-xl mt-4">
+            <div className="flex items-center gap-2 order-2 sm:order-1">
+              <span className="text-xs sm:text-sm text-muted-foreground font-medium">
+                Showing <span className="text-foreground font-bold">{((currentPage - 1) * pageSize) + 1}</span> to <span className="text-foreground font-bold">{Math.min(currentPage * pageSize, filteredParticipants.length)}</span> of <span className="text-foreground font-bold">{filteredParticipants.length}</span>
               </span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 order-1 sm:order-2 w-full sm:w-auto">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Per page:</span>
+                <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider hidden xs:inline">Lines:</span>
                 <Select value={pageSize.toString()} onValueChange={(val) => setPageSize(Number(val))}>
-                  <SelectTrigger className="w-[80px]">
+                  <SelectTrigger className="w-[70px] h-8 text-xs font-bold border-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
+                    {[5, 10, 25, 50, 100].map(v => <SelectItem key={v} value={v.toString()}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 bg-background border-2 rounded-xl p-0.5 shadow-sm">
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
+                  title="First Page"
                 >
-                  First
+                  <ChevronsLeft className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
+                  title="Previous Page"
                 >
-                  Previous
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm text-muted-foreground px-3">
-                  Page {currentPage} of {totalPages}
-                </span>
+                <div className="px-3 flex items-center gap-1 font-mono text-xs font-black bg-muted/50 h-8 rounded-md border shadow-inner">
+                  <span className="text-primary">{currentPage}</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span>{totalPages}</span>
+                </div>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
+                  title="Next Page"
                 >
-                  Next
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage === totalPages}
+                  title="Last Page"
                 >
-                  Last
+                  <ChevronsRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
