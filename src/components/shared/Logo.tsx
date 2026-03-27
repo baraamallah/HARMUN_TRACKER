@@ -40,7 +40,7 @@ export function Logo({ size = 'md', variant = 'default', className }: LogoProps)
       className={cn("flex items-center gap-2 group", className)}>
       <>
         <Users className={cn(iconBaseClasses, iconSizeClasses)} />
-        <h1 className={textBaseClasses}>
+        <h1 className={cn(textBaseClasses, "hidden xs:block")}>
           MUN Tracker
         </h1>
       </>

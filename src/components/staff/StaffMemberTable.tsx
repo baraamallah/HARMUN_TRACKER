@@ -75,7 +75,7 @@ export function StaffMemberTable({
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border shadow-sm overflow-hidden">
+      <div className="rounded-lg border shadow-sm overflow-x-auto">
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
@@ -123,7 +123,7 @@ export function StaffMemberTable({
   }
 
   return (
-    <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
+    <div className="rounded-lg border shadow-sm overflow-x-auto bg-card">
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow>

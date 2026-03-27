@@ -56,7 +56,7 @@ export function PublicAttendanceTable({ participants, isLoading }: PublicAttenda
 
   if (isLoading) {
     return (
-      <div className="rounded-md border shadow-sm">
+      <div className="rounded-md border shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -92,7 +92,7 @@ export function PublicAttendanceTable({ participants, isLoading }: PublicAttenda
   }
 
   return (
-    <div className="rounded-md border shadow-sm bg-card">
+    <div className="rounded-md border shadow-sm bg-card overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
