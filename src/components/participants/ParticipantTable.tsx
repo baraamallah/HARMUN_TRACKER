@@ -19,6 +19,7 @@ import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
 import { ArrowUpDown, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ParticipantTableProps {
   participants: Participant[];
@@ -207,37 +208,62 @@ export const ParticipantTable = React.memo(({
             {visibleColumns.avatar && <TableHead className="pl-2 pr-2 md:pl-6 w-[60px] md:w-[70px]">Avatar</TableHead>}
             {visibleColumns.name && (
               <TableHead className="min-w-[150px]">
-                <Button variant="ghost" onClick={() => handleSort('name')} className="px-1 group">
-                  Name {renderSortIcon('name')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" onClick={() => handleSort('name')} className="px-1 group">
+                      Name {renderSortIcon('name')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sort by Name</TooltipContent>
+                </Tooltip>
               </TableHead>
             )}
             {visibleColumns.school && (
               <TableHead className="hidden md:table-cell min-w-[150px]">
-                <Button variant="ghost" onClick={() => handleSort('school')} className="px-1 group">
-                  School {renderSortIcon('school')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" onClick={() => handleSort('school')} className="px-1 group">
+                      School {renderSortIcon('school')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sort by School</TooltipContent>
+                </Tooltip>
               </TableHead>
             )}
             {visibleColumns.committee && (
               <TableHead className="hidden lg:table-cell min-w-[150px]">
-                <Button variant="ghost" onClick={() => handleSort('committee')} className="px-1 group">
-                  Committee {renderSortIcon('committee')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" onClick={() => handleSort('committee')} className="px-1 group">
+                      Committee {renderSortIcon('committee')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sort by Committee</TooltipContent>
+                </Tooltip>
               </TableHead>
             )}
             {visibleColumns.country && (
               <TableHead className="hidden md:table-cell min-w-[120px]">
-                <Button variant="ghost" onClick={() => handleSort('country')} className="px-1 group">
-                  Country {renderSortIcon('country')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" onClick={() => handleSort('country')} className="px-1 group">
+                      Country {renderSortIcon('country')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sort by Country</TooltipContent>
+                </Tooltip>
               </TableHead>
             )}
             {visibleColumns.status && (
               <TableHead className="min-w-[120px]">
-                <Button variant="ghost" onClick={() => handleSort('status')} className="px-1 group">
-                  Status {renderSortIcon('status')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" onClick={() => handleSort('status')} className="px-1 group">
+                      Status {renderSortIcon('status')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sort by Status</TooltipContent>
+                </Tooltip>
               </TableHead>
             )}
             {visibleColumns.actions && <TableHead className="text-right w-[80px] pr-4 md:pr-6">Actions</TableHead>}

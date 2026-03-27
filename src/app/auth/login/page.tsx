@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/shared/Logo';
-import { AlertCircle, LogIn } from 'lucide-react';
+import { AlertCircle, LogIn, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -166,13 +166,24 @@ function LoginPageInternal() {
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex-col items-center gap-3 pb-8 text-sm">
-        <p className="text-muted-foreground">
-          No admin account? Contact the superior administrator.
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          View public attendance data <Link href="/public" className="font-medium text-primary hover:underline">here</Link> (no login required).
-        </p>
+      <CardFooter className="flex-col gap-4 pb-8 pt-2">
+        <div className="w-full h-px bg-border mb-2" />
+        <div className="flex flex-col gap-3 w-full">
+          <Button variant="outline" asChild className="w-full">
+            <Link href="/public">
+              <Eye className="mr-2 h-4 w-4" />
+              View Public Attendance
+            </Link>
+          </Button>
+          <div className="text-center space-y-1">
+            <p className="text-sm text-muted-foreground">
+              No admin account? <span className="font-medium text-foreground">Contact Support</span>
+            </p>
+            <p className="text-xs text-muted-foreground px-4">
+              Reach out to <a href="mailto:baraa.elmallah@gmail.com" className="underline hover:text-primary transition-colors">baraa.elmallah@gmail.com</a> for access.
+            </p>
+          </div>
+        </div>
       </CardFooter>
     </Card>
   );
