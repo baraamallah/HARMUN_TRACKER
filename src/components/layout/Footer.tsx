@@ -65,10 +65,10 @@ export function Footer() {
                 href={social.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary transition-colors"
+                className="text-muted-foreground hover:text-primary transition-all duration-300 transform hover:-translate-y-1 hover:scale-110"
                 aria-label={social.name}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-7 w-7 drop-shadow-sm" />
               </Link>
             );
           })}
