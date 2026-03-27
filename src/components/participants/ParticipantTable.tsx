@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox'; // Added Checkbox
+import { Checkbox } from '@/components/ui/checkbox';
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
 import { ParticipantActions } from './ParticipantActions';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,76 @@ interface ParticipantTableProps {
 type SortKey = keyof Pick<Participant, 'name' | 'school' | 'committee' | 'country' | 'status'>;
 type SortOrder = 'asc' | 'desc';
 
-export function ParticipantTable({
+// Memoized individual row to prevent unnecessary re-renders of all rows
+// when only one row's selection status changes.
+const ParticipantRow = React.memo(({
+  participant,
+  visibleColumns,
+  isSelected,
+  onSelectParticipant,
+  onEditParticipant
+}: {
+  participant: Participant;
+  visibleColumns: VisibleColumns;
+  isSelected: boolean;
+  onSelectParticipant: (id: string, checked: boolean) => void;
+  onEditParticipant: (p: Participant) => void;
+}) => {
+  return (
+    <TableRow
+      className="hover:bg-muted/30 transition-colors"
+      data-state={isSelected ? 'selected' : undefined}
+    >
+      {visibleColumns.selection && (
+        <TableCell className="pl-4">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => onSelectParticipant(participant.id, Boolean(checked))}
+            aria-label={`Select participant ${participant.name}`}
+          />
+        </TableCell>
+      )}
+      {visibleColumns.avatar && (
+        <TableCell className="pl-2 pr-2 md:pl-6">
+           <Link
+             href={`/participants/${participant.id}`}
+             aria-label={`View profile of ${participant.name}`}>
+            <Avatar className="h-10 w-10 border hover:ring-2 hover:ring-primary transition-all">
+              <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
+              <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          </Link>
+        </TableCell>
+      )}
+      {visibleColumns.name && (
+        <TableCell className="font-medium text-foreground">
+          <Link
+            href={`/participants/${participant.id}`}
+            className="hover:underline text-primary">
+            {participant.name}
+          </Link>
+        </TableCell>
+      )}
+      {visibleColumns.school && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.school}</TableCell>}
+      {visibleColumns.committee && <TableCell className="hidden lg:table-cell text-muted-foreground">{participant.committee}</TableCell>}
+      {visibleColumns.country && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.country || 'N/A'}</TableCell>}
+      {visibleColumns.status && (
+        <TableCell>
+          <AttendanceStatusBadge status={participant.status} />
+        </TableCell>
+      )}
+      {visibleColumns.actions && (
+        <TableCell className="text-right pr-4 md:pr-6">
+          <ParticipantActions participant={participant} onEdit={onEditParticipant} />
+        </TableCell>
+      )}
+    </TableRow>
+  );
+});
+
+ParticipantRow.displayName = 'ParticipantRow';
+
+export const ParticipantTable = React.memo(({
   participants,
   isLoading,
   onEditParticipant,
@@ -43,7 +112,7 @@ export function ParticipantTable({
   onSelectParticipant,
   onSelectAll,
   isAllSelected
-}: ParticipantTableProps) {
+}: ParticipantTableProps) => {
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
   const [sortOrder, setSortOrder] = React.useState<SortOrder>('asc');
 
@@ -176,58 +245,19 @@ export function ParticipantTable({
         </TableHeader>
         <TableBody>
           {sortedParticipants.map((participant) => (
-            <TableRow
+            <ParticipantRow
               key={participant.id}
-              className="hover:bg-muted/30 transition-colors"
-              data-state={selectedParticipants.includes(participant.id) ? 'selected' : undefined}
-            >
-              {visibleColumns.selection && (
-                <TableCell className="pl-4">
-                  <Checkbox
-                    checked={selectedParticipants.includes(participant.id)}
-                    onCheckedChange={(checked) => onSelectParticipant(participant.id, Boolean(checked))}
-                    aria-label={`Select participant ${participant.name}`}
-                  />
-                </TableCell>
-              )}
-              {visibleColumns.avatar && (
-                <TableCell className="pl-2 pr-2 md:pl-6">
-                   <Link
-                     href={`/participants/${participant.id}`}
-                     aria-label={`View profile of ${participant.name}`}>
-                    <Avatar className="h-10 w-10 border hover:ring-2 hover:ring-primary transition-all">
-                      <AvatarImage src={participant.imageUrl} alt={participant.name} data-ai-hint="person avatar" />
-                      <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                  </Link>
-                </TableCell>
-              )}
-              {visibleColumns.name && (
-                <TableCell className="font-medium text-foreground">
-                  <Link
-                    href={`/participants/${participant.id}`}
-                    className="hover:underline text-primary">
-                    {participant.name}
-                  </Link>
-                </TableCell>
-              )}
-              {visibleColumns.school && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.school}</TableCell>}
-              {visibleColumns.committee && <TableCell className="hidden lg:table-cell text-muted-foreground">{participant.committee}</TableCell>}
-              {visibleColumns.country && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.country || 'N/A'}</TableCell>}
-              {visibleColumns.status && (
-                <TableCell>
-                  <AttendanceStatusBadge status={participant.status} />
-                </TableCell>
-              )}
-              {visibleColumns.actions && (
-                <TableCell className="text-right pr-4 md:pr-6">
-                  <ParticipantActions participant={participant} onEdit={onEditParticipant} />
-                </TableCell>
-              )}
-            </TableRow>
+              participant={participant}
+              visibleColumns={visibleColumns}
+              isSelected={selectedParticipants.includes(participant.id)}
+              onSelectParticipant={onSelectParticipant}
+              onEditParticipant={onEditParticipant}
+            />
           ))}
         </TableBody>
       </Table>
     </div>
   );
-}
+});
+
+ParticipantTable.displayName = 'ParticipantTable';

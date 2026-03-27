@@ -235,23 +235,23 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     };
   }, [participants]);
 
-  const handleAddParticipant = () => {
+  const handleAddParticipant = React.useCallback(() => {
     setParticipantToEdit(null);
     setIsFormOpen(true);
-  };
+  }, []);
 
-  const handleEditParticipant = (participant: Participant) => {
+  const handleEditParticipant = React.useCallback((participant: Participant) => {
     setParticipantToEdit(participant);
     setIsFormOpen(true);
-  };
+  }, []);
 
-  const handleSelectParticipant = (participantId: string, isSelected: boolean) => {
+  const handleSelectParticipant = React.useCallback((participantId: string, isSelected: boolean) => {
     setSelectedParticipantIds(prev => isSelected ? [...prev, participantId] : prev.filter(id => id !== participantId));
-  };
+  }, []);
 
-  const handleSelectAll = (isSelected: boolean) => {
+  const handleSelectAll = React.useCallback((isSelected: boolean) => {
     setSelectedParticipantIds(isSelected ? displayedParticipants.map(p => p.id) : []);
-  };
+  }, [displayedParticipants]);
 
   const isAllSelected = displayedParticipants.length > 0 && displayedParticipants.every(p => selectedParticipantIds.includes(p.id));
 

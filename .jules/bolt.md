@@ -1,0 +1,3 @@
+## 2025-05-15 - [React Performance Optimization in Participant Dashboard]
+**Learning:** In a data-heavy application using real-time Firestore listeners, frequent state updates (e.g., search, selection, pagination) can trigger costly re-renders of the entire component tree. Memoizing child components like `ParticipantTable` and individual `ParticipantRow` significantly reduces the rendering workload by ensuring only the affected rows update.
+**Action:** Always wrap list items and table rows in `React.memo` when the parent component manages selection state or other frequent updates. Use `useCallback` for event handlers passed to these memoized components.
