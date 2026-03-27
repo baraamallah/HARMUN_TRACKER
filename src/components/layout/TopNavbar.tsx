@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   LogIn,
   Users2,
+  CalendarDays,
   QrCode,
   Clipboard,
   BarChart,
@@ -47,6 +48,7 @@ interface NavItem {
 
 const baseNavItems: NavItem[] = [
   { href: '/', icon: Home, label: 'Dashboard', tooltip: 'Participant Dashboard' },
+  { href: '/in-session', icon: CalendarDays, label: 'In Session', tooltip: 'Committee Session Management' },
   { href: '/staff', icon: Users2, label: 'Staff', tooltip: 'Staff Management' },
   { href: '/checkin', icon: QrCode, label: 'Check-in', tooltip: 'Participant Check-in / Status Update' },
   { href: '/staff-checkin', icon: Clipboard, label: 'Staff Status', tooltip: 'Staff Status Update Page' },
@@ -93,7 +95,15 @@ export function TopNavbar() {
   }
 
   const navItemsToRender = React.useMemo(() => {
+    if (userAppRole === 'session_manager') {
+      return [baseNavItems[1]]; // Only "In Session"
+    }
+
     let items = [...baseNavItems];
+
+    // For non-session managers, remove "In Session" from the list unless they are owner/admin
+    // Actually, maybe admins should see it too.
+
     if (userAppRole === 'owner') {
       items.push(...adminNavItems);
       items.push(...ownerOnlyNavItems);
@@ -104,6 +114,9 @@ export function TopNavbar() {
       if (permissions?.canAccessAnalytics) {
         items.push(adminNavItems[1]);
       }
+    } else {
+      // Regular users or non-logged in: remove "In Session" and "Staff" etc.
+      items = items.filter(i => i.href === '/');
     }
 
     const uniqueItems = items.filter((item, index, self) =>

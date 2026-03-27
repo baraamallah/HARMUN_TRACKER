@@ -11,7 +11,7 @@ import { getGoogleDriveImageSrc } from '@/lib/utils';
 
 interface AuthContextType {
   loggedInUser: User | null;
-  userAppRole: 'owner' | 'admin' | 'user' | null;
+  userAppRole: 'owner' | 'admin' | 'session_manager' | 'user' | null;
   staffMember: StaffMember | null;
   adminUser: AdminManagedUser | null;
   authSessionLoading: boolean;
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
-  const [userAppRole, setUserAppRole] = useState<'owner' | 'admin' | 'user' | null>(null);
+  const [userAppRole, setUserAppRole] = useState<'owner' | 'admin' | 'session_manager' | 'user' | null>(null);
   const [staffMember, setStaffMember] = useState<StaffMember | null>(null);
   const [adminUser, setAdminUser] = useState<AdminManagedUser | null>(null);
   const [authSessionLoading, setAuthSessionLoading] = useState(true);
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoggedInUser(user);
       try {
         let userProfile: AdminManagedUser | null = null;
-        let finalUserRole: 'owner' | 'admin' | 'user' = 'user';
+        let finalUserRole: 'owner' | 'admin' | 'session_manager' | 'user' = 'user';
 
         // First, fetch the user's application-specific profile from Firestore
         const userDocRef = doc(db, 'users', user.uid);
@@ -70,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userProfile.canAccessSuperiorAdmin) {
             finalUserRole = 'owner';
           }
+        } else if (userProfile?.role === 'session_manager') {
+          finalUserRole = 'session_manager';
         }
         
         setUserAppRole(finalUserRole);

@@ -28,6 +28,14 @@ import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serv
 import type { AdminManagedUser } from '@/types';
 import { Checkbox } from '../ui/checkbox';
 import { Separator } from '../ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { getSystemCommittees } from '@/lib/actions';
 
 const USERS_COLLECTION = 'users';
 
@@ -35,6 +43,8 @@ const addAdminSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   displayName: z.string().optional(),
   authUid: z.string().min(1, { message: 'Firebase Auth UID is required.' }),
+  role: z.enum(['admin', 'session_manager']).default('admin'),
+  defaultCommittee: z.string().optional(),
   canAccessSuperiorAdmin: z.boolean().default(false),
   permissions: z.object({
     canEditParticipants: z.boolean().default(false),
@@ -59,6 +69,19 @@ interface AddAdminDialogProps {
 export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded }: AddAdminDialogProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [committees, setCommittees] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function fetchCommittees() {
+      try {
+        const committeeList = await getSystemCommittees();
+        setCommittees(committeeList);
+      } catch (error) {
+        console.error("Error fetching committees:", error);
+      }
+    }
+    fetchCommittees();
+  }, []);
 
   const form = useForm<AddAdminFormData>({
     resolver: zodResolver(addAdminSchema),
@@ -66,6 +89,8 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
       email: '',
       displayName: '',
       authUid: '',
+      role: 'admin',
+      defaultCommittee: '',
       canAccessSuperiorAdmin: false,
       permissions: {
         canEditParticipants: false,
@@ -86,6 +111,8 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           email: adminToEdit.email,
           displayName: adminToEdit.displayName || '',
           authUid: adminToEdit.id,
+          role: (adminToEdit.role as 'admin' | 'session_manager') || 'admin',
+          defaultCommittee: adminToEdit.defaultCommittee || '',
           canAccessSuperiorAdmin: adminToEdit.canAccessSuperiorAdmin || false,
           permissions: {
             canEditParticipants: adminToEdit.permissions?.canEditParticipants || false,
@@ -102,6 +129,8 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           email: '',
           displayName: '',
           authUid: '',
+          role: 'admin',
+          defaultCommittee: '',
           canAccessSuperiorAdmin: false,
           permissions: {
             canEditParticipants: false,
@@ -119,7 +148,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
 
   const onSubmit = (data: AddAdminFormData) => {
     startTransition(async () => {
-      const { email, displayName, authUid, canAccessSuperiorAdmin, permissions } = data;
+      const { email, displayName, authUid, role, defaultCommittee, canAccessSuperiorAdmin, permissions } = data;
       if (!email || !authUid) {
         toast({ title: 'Error', description: 'Email and Auth UID are required.', variant: 'destructive' });
         return;
@@ -142,14 +171,15 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           displayName: currentDisplayName,
           canAccessSuperiorAdmin: canAccessSuperiorAdmin,
           permissions: permissions,
-          role: 'admin',
-          updatedAt: serverTimestamp()
+          role: role,
+          defaultCommittee: defaultCommittee || undefined,
+          updatedAt: serverTimestamp() as any
         };
 
         if (userDocSnap.exists()) {
           // If email is being changed, check for conflicts
           if (currentEmail !== userDocSnap.data().email) {
-            const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
+            const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', 'in', ['admin', 'session_manager']));
             const emailConflictSnapshot = await getDocs(emailConflictQuery);
             if (!emailConflictSnapshot.empty && emailConflictSnapshot.docs[0].id !== trimmedAuthUid) {
               toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
@@ -161,7 +191,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
 
         } else { // Document does not exist, create it
           // Check for email conflict before creating
-          const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', '==', 'admin'));
+          const emailConflictQuery = query(collection(db, USERS_COLLECTION), where('email', '==', currentEmail), where('role', 'in', ['admin', 'session_manager']));
           const emailConflictSnapshot = await getDocs(emailConflictQuery);
           if (!emailConflictSnapshot.empty) {
             toast({ title: 'Error', description: `Email ${currentEmail} is already associated with another admin.`, variant: 'destructive' });
@@ -198,11 +228,11 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
       if (!open) form.reset();
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{adminToEdit ? 'Edit Admin' : 'Grant Admin Role'}</DialogTitle>
+          <DialogTitle>{adminToEdit ? 'Edit User' : 'Grant Admin/Manager Role'}</DialogTitle>
           <DialogDescription>
-            {adminToEdit ? 'Update the details and permissions for this administrator.' : 'Enter the email and Firebase Auth UID of an existing Firebase Authentication user to grant them admin privileges.'}
+            {adminToEdit ? 'Update the details and permissions for this administrator or session manager.' : 'Enter the email and Firebase Auth UID of an existing Firebase Authentication user to grant them admin or session manager privileges.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -246,6 +276,63 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>User Role</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={isPending}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="session_manager">Session Manager</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {form.watch('role') === 'session_manager' && (
+              <FormField
+                control={form.control}
+                name="defaultCommittee"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Default Committee (for Session Manager)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      disabled={isPending}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a committee" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {committees.map((committee) => (
+                          <SelectItem key={committee} value={committee}>
+                            {committee}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <Separator />
 
