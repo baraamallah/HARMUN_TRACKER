@@ -260,7 +260,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Edit Participants</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -274,7 +274,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Delete Participants</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -288,7 +288,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Create Staff</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -302,7 +302,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Edit Staff</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -316,7 +316,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Delete Staff</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -330,7 +330,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Access Analytics</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -344,7 +344,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                       <FormLabel>Manage QR Codes</FormLabel>
                     </div>
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -367,7 +367,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                   <FormControl>
                     <Checkbox
                       checked={field.value}
-                      onCheckedChange={field.onChange}
+                      onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))}
                       disabled={isPending}
                     />
                   </FormControl>

@@ -47,8 +47,8 @@ service cloud.firestore {
     // Users collection – keep tighter: only owner can write,
     // but anyone can read their own doc.
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if false;
+      allow read: if request.auth != null && (request.auth.uid == userId || request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2');
+      allow write: if request.auth != null && request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2';
     }
   }
 }
