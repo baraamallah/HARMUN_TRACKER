@@ -68,7 +68,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (request.auth.uid == userId || isOwner());
       allow update: if isSignedIn() && (
         isOwner() ||
-        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionNotes', 'defaultCommittee', 'updatedAt']))
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionNotes', 'defaultCommittee', 'receiveNotifications', 'updatedAt']))
       );
       allow write: if isOwner();
     }
