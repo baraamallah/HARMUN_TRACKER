@@ -64,18 +64,18 @@ export function NotificationCenter({ alerts, onMarkBack }: NotificationCenterPro
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative h-10 w-10 sm:h-9 sm:w-9"
           aria-label={`Notifications${count > 0 ? ` (${count} overdue)` : ''}`}
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-6 w-6 sm:h-5 sm:w-5" />
           {count > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse">
+            <span className="absolute top-0 right-0 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse ring-2 ring-background">
               {count > 9 ? '9+' : count}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0 shadow-xl">
+      <PopoverContent align="end" className="w-[calc(100vw-1rem)] sm:w-80 p-0 shadow-2xl border-2">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/40">
           <div className="flex items-center gap-2">

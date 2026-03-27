@@ -238,7 +238,7 @@ export default function AdminManagementPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
-        <div className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto flex h-16 sm:h-20 items-center justify-between px-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <ShieldAlert className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -256,7 +256,7 @@ export default function AdminManagementPage() {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 container mx-auto py-4 sm:py-8 px-2 sm:px-6 lg:px-8">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-2xl">Manage Administrator Accounts</CardTitle>

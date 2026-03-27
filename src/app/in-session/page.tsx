@@ -218,38 +218,40 @@ export default function InSessionPage() {
 
   return (
     <AppLayoutClientShell>
-      <div className="space-y-6">
-        {/* ── Persistent Restroom Alert Banner (Session Manager only) ── */}
+      <div className="space-y-3 sm:space-y-6 -mx-1 sm:mx-0">
         {userAppRole === 'session_manager' && alerts.length > 0 && (
-          <div className="sticky top-0 z-40 w-full">
-            <div className="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-600 p-3 shadow-lg">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 animate-pulse" />
+          <div className="sticky top-0 z-40 w-full px-1">
+            <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/60 dark:border-amber-600 p-2 sm:p-3 shadow-xl backdrop-blur-md">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="flex-shrink-0 mt-1">
+                  <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600 dark:text-amber-400 animate-pulse" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-amber-800 dark:text-amber-300 mb-2">
-                    🚻 {alerts.length} student{alerts.length > 1 ? 's' : ''} overdue in restroom
-                  </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm sm:text-base font-black text-amber-900 dark:text-amber-100 uppercase tracking-tight">
+                      🚻 {alerts.length} OVERDUE In Restroom
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {alerts.map(alert => (
                       <div
                         key={alert.participantId}
-                        className="flex items-center gap-2 bg-white dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-1.5"
+                        className="flex items-center justify-between gap-2 bg-white dark:bg-amber-900/40 border-2 border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1.5 shadow-sm"
                       >
-                        <RestroomIcon className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">{alert.participantName}</span>
-                        <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 font-mono font-bold">
-                          <Clock className="h-3 w-3" />
-                          <ElapsedLabel startTime={alert.startTime.toISOString()} />
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-100 truncate">{alert.participantName}</span>
+                          <span className="flex items-center gap-1 text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-mono font-black shrink-0">
+                            <Clock className="h-3 w-3" />
+                            <ElapsedLabel startTime={alert.startTime.toISOString()} />
+                          </span>
+                        </div>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-[10px] border-green-500 text-green-700 dark:text-green-400 hover:bg-green-500/10"
+                          variant="default"
+                          className="h-7 px-2 text-[10px] font-bold bg-green-600 hover:bg-green-700 text-white shrink-0"
                           onClick={() => handleMarkBack(alert.participantId)}
                         >
-                          Back ✓
+                          BACK ✓
                         </Button>
                       </div>
                     ))}
@@ -261,9 +263,9 @@ export default function InSessionPage() {
         )}
 
         {/* ── Page Header ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 px-1">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">In Session Management</h1>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-foreground uppercase">Session Dashboard</h1>
             <p className="text-muted-foreground">
               {selectedCommittee ? (
                 <span>Committee: <span className="font-semibold text-foreground">{selectedCommittee}</span></span>
@@ -288,10 +290,10 @@ export default function InSessionPage() {
         <Card className="shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <Users className="h-5 w-5 text-primary" />
-                    Participants ({filteredParticipants.length})
-                  </CardTitle>
+            <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Attendees ({filteredParticipants.length})
+            </CardTitle>
                   <div className="relative w-full md:w-64">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -349,100 +351,79 @@ export default function InSessionPage() {
                           <div
                             key={participant.id}
                             className={cn(
-                              'flex items-center justify-between p-3 rounded-lg border transition-all hover:shadow-sm',
-                              selectedIds.includes(participant.id) ? 'bg-primary/5 border-primary/30' : 'bg-card border-border',
-                              isOverdue ? 'border-amber-400 dark:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20' : ''
+                              'flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 rounded-xl border transition-all hover:shadow-md',
+                              selectedIds.includes(participant.id) ? 'bg-primary/10 border-primary/40' : 'bg-card border-border',
+                              isOverdue ? 'border-amber-500 shadow-amber-500/10 bg-amber-50/50 dark:bg-amber-900/10' : ''
                             )}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 mb-2 sm:mb-0">
                               <Checkbox
+                                className="h-5 w-5"
                                 checked={selectedIds.includes(participant.id)}
                                 onCheckedChange={() => toggleSelect(participant.id)}
                               />
-                              <div className="min-w-0">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <p className={cn(
-                                      'font-semibold text-sm sm:text-base cursor-default truncate',
-                                      isOverdue ? 'text-amber-700 dark:text-amber-400' : ''
-                                    )}>
-                                      {participant.name}
-                                      {isInRestroom && (
-                                        <RestroomIcon className="inline h-4 w-4 ml-1.5 text-amber-500 align-text-bottom" />
-                                      )}
-                                    </p>
-                                  </TooltipTrigger>
-                                  {isInRestroom && participant.restroomBreakStartTime && (
-                                    <TooltipContent side="right" className="text-xs">
-                                      <div className="flex items-center gap-1.5">
-                                        <Clock className="h-3 w-3" />
-                                        <span>In restroom for <b><ElapsedLabel startTime={participant.restroomBreakStartTime} /></b></span>
-                                      </div>
-                                    </TooltipContent>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                  <span className={cn(
+                                    'font-black text-sm sm:text-lg tracking-tight truncate',
+                                    isOverdue ? 'text-amber-800 dark:text-amber-200' : ''
+                                  )}>
+                                    {participant.name}
+                                  </span>
+                                  {isInRestroom && (
+                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] sm:text-xs font-bold ring-1 ring-amber-500/30">
+                                      <Clock className="h-3 w-3" />
+                                      <ElapsedLabel startTime={participant.restroomBreakStartTime!} />
+                                    </div>
                                   )}
-                                </Tooltip>
-                                <p className="text-xs text-muted-foreground truncate">{participant.school}</p>
+                                </div>
+                                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{participant.school}</p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-0 pt-2 sm:pt-0">
                               <Badge
                                 variant={
                                   participant.status === 'Present' ? 'default' :
                                   participant.status === 'Absent' ? 'destructive' : 'secondary'
                                 }
-                                className="hidden sm:flex items-center gap-1 text-xs"
+                                className="flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0 h-6"
                               >
                                 {getStatusIcon(participant.status)}
-                                {participant.status === 'Restroom Break' ? 'Restroom' : participant.status}
+                                {participant.status === 'Restroom Break' ? 'Toilet' : participant.status}
                               </Badge>
 
-                              {/* Quick action buttons */}
-                              <div className="flex items-center gap-1">
-                                {/* Present */}
+                              <div className="flex items-center gap-1.5">
                                 <Button
                                   variant={participant.status === 'Present' ? 'default' : 'outline'}
-                                  size="icon"
-                                  className="h-8 w-8 rounded-full"
+                                  size="sm"
+                                  className="h-9 w-9 p-0 rounded-xl"
                                   onClick={() => updateParticipantStatus(participant.id, 'Present')}
                                   disabled={isBulkUpdating}
-                                  title="Mark Present"
                                 >
-                                  <CheckCircle className="h-4 w-4" />
+                                  <CheckCircle className="h-5 w-5" />
                                 </Button>
-                                {/* Absent */}
                                 <Button
                                   variant={participant.status === 'Absent' ? 'destructive' : 'outline'}
-                                  size="icon"
-                                  className="h-8 w-8 rounded-full"
+                                  size="sm"
+                                  className="h-9 w-9 p-0 rounded-xl"
                                   onClick={() => updateParticipantStatus(participant.id, 'Absent')}
                                   disabled={isBulkUpdating}
-                                  title="Mark Absent"
                                 >
-                                  <XCircle className="h-4 w-4" />
+                                  <XCircle className="h-5 w-5" />
                                 </Button>
-                                {/* Restroom Toggle */}
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant={isInRestroom ? 'secondary' : 'outline'}
-                                      size="icon"
-                                      className={cn(
-                                        'h-8 w-8 rounded-full',
-                                        isInRestroom
-                                          ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-200'
-                                          : ''
-                                      )}
-                                      onClick={() => handleRestroomToggle(participant)}
-                                      disabled={isBulkUpdating}
-                                    >
-                                      <RestroomIcon className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom" className="text-xs">
-                                    {isInRestroom ? 'Mark as Back (Present)' : 'Send to Restroom Break'}
-                                  </TooltipContent>
-                                </Tooltip>
+                                <Button
+                                  variant={isInRestroom ? 'secondary' : 'outline'}
+                                  size="sm"
+                                  className={cn(
+                                    'h-9 w-9 p-0 rounded-xl',
+                                    isInRestroom ? 'bg-amber-500/20 border-amber-500 text-amber-700 dark:text-amber-300' : ''
+                                  )}
+                                  onClick={() => handleRestroomToggle(participant)}
+                                  disabled={isBulkUpdating}
+                                >
+                                  <RestroomIcon className="h-5 w-5" />
+                                </Button>
                               </div>
                             </div>
                           </div>

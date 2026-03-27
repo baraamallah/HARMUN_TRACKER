@@ -243,7 +243,7 @@ export default function SystemSettingsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background to-muted/50">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-lg">
-        <div className="container mx-auto flex h-16 sm:h-20 items-center justify-between px-3 sm:px-4 lg:px-8 gap-2">
+        <div className="container mx-auto flex h-16 sm:h-20 items-center justify-between px-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <ShieldAlert className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate">
@@ -259,7 +259,7 @@ export default function SystemSettingsPage() {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto py-4 sm:py-6 lg:py-8 px-3 sm:px-4 lg:px-8">
+      <main className="flex-1 container mx-auto py-4 sm:py-8 px-2 sm:px-6 lg:px-8">
         <Card className="shadow-lg">
           <CardHeader className="px-4 sm:px-6">
             <CardTitle className="text-xl sm:text-2xl">Configure System Settings</CardTitle>

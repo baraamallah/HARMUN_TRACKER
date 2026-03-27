@@ -187,7 +187,7 @@ export function TopNavbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto flex h-16 items-center justify-between px-2 sm:px-6 lg:px-8">
         <div className="flex items-center"><Logo /></div>
 
         <div className="hidden md:flex items-center space-x-4"><NavLinks /></div>
