@@ -36,6 +36,7 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
   href: string;
@@ -113,23 +114,38 @@ export function TopNavbar() {
   }, [userAppRole, permissions]);
 
   const NavLinks = ({ isMobile = false }) => (
-    <nav className={cn('items-center space-x-4', isMobile ? 'flex flex-col space-y-2 space-x-0' : 'hidden md:flex')}>
-      {navItemsToRender.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={cn(
-            'flex items-center px-3 py-2 rounded-md text-sm font-medium',
-            pathname === item.href
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          )}
-          onClick={() => isMobile && setIsMobileMenuOpen(false)}
-        >
-          <item.icon className="h-5 w-5 mr-2" />
-          <span>{item.label}</span>
-        </Link>
-      ))}
+    <nav className={cn('items-center space-x-1', isMobile ? 'flex flex-col space-y-2 space-x-0' : 'hidden md:flex')}>
+      {navItemsToRender.map((item) => {
+        const content = (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              'flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-in-out hover:scale-[1.02]',
+              pathname === item.href
+                ? 'bg-primary/10 text-primary shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            )}
+            onClick={() => isMobile && setIsMobileMenuOpen(false)}
+          >
+            <item.icon className={cn("h-5 w-5 mr-2", pathname === item.href ? "text-primary" : "")} />
+            <span>{item.label}</span>
+          </Link>
+        );
+
+        if (isMobile) return content;
+
+        return (
+          <Tooltip key={item.href}>
+            <TooltipTrigger asChild>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{item.tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
     </nav>
   );
 

@@ -32,6 +32,7 @@ import {
   Wrench, LogOutIcon, Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 // Removed: import { deleteParticipant } from '@/lib/actions'; 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -108,12 +109,19 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isUpdatingStatus || isDeleting}>
-            {(isUpdatingStatus || isDeleting) ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
-            <span className="sr-only">Open menu for {participant.name}</span>
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isUpdatingStatus || isDeleting}>
+                {(isUpdatingStatus || isDeleting) ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                <span className="sr-only">Open menu for {participant.name}</span>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            Actions
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel>Actions for {participant.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
