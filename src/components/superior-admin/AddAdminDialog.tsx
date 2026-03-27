@@ -28,6 +28,7 @@ import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs, serv
 import type { AdminManagedUser } from '@/types';
 import { Checkbox } from '../ui/checkbox';
 import { Separator } from '../ui/separator';
+import { Users, Users2, ShieldAlert } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -338,120 +339,142 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
             <Separator />
 
             <div className="space-y-4">
-              <h4 className="text-md font-medium">Permissions</h4>
-              <FormField
-                control={form.control}
-                name="permissions.canEditParticipants"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Edit Participants</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canDeleteParticipants"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Delete Participants</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canCreateStaff"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Create Staff</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canEditStaff"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Edit Staff</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canDeleteStaff"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Delete Staff</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canAccessAnalytics"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Access Analytics</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canManageQRCodes"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Manage QR Codes</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="permissions.canReceiveNotifications"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-amber-500/10 p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-amber-800 dark:text-amber-300">🚻 Receive Restroom Notifications</FormLabel>
-                      <p className="text-xs text-amber-700 dark:text-amber-400">Shows a bell icon in the navbar when participants overstay restroom breaks.</p>
-                    </div>
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+            <Separator />
+            
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Permission Groups</h4>
+              </div>
+              
+              {/* Attendance Group */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-bold">Attendance & Participants</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <FormField
+                    control={form.control}
+                    name="permissions.canEditParticipants"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Edit Participants</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="permissions.canDeleteParticipants"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Delete Participants</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="permissions.canManageQRCodes"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer text-sm">Manage QR Codes</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Staff Group */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <Users2 className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-bold">Staff Management</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <FormField
+                    control={form.control}
+                    name="permissions.canCreateStaff"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Create Staff</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="permissions.canEditStaff"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Edit Staff</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="permissions.canDeleteStaff"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Delete Staff</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Advanced Group */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <ShieldAlert className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm font-bold">Advanced & Analytics</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <FormField
+                    control={form.control}
+                    name="permissions.canAccessAnalytics"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                        <FormLabel className="font-medium cursor-pointer">Access Analytics</FormLabel>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="permissions.canReceiveNotifications"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-amber-500/5 p-3 hover:bg-amber-500/10 transition-colors border-amber-200 dark:border-amber-900/50">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-bold text-amber-800 dark:text-amber-300">🚻 Restroom Alerts</FormLabel>
+                          <p className="text-[10px] text-amber-700 dark:text-amber-400">Receive bell notifications for overdue restroom breaks.</p>
+                        </div>
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md border-amber-400" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
             </div>
 
 

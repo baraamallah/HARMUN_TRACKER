@@ -279,97 +279,164 @@ export default function AdminManagementPage() {
               {isLoadingAdmins ? (
                 <div className="space-y-4">
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} className="flex items-center space-x-4 p-3 border rounded-md">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <div className="space-y-1">
-                            <Skeleton className="h-4 w-40" />
-                            <Skeleton className="h-3 w-60" />
+                    <div key={i} className="flex items-center space-x-4 p-4 border rounded-xl bg-card/50 shadow-sm animate-pulse">
+                        <div className="h-12 w-12 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-2">
+                            <div className="h-4 w-32 bg-muted rounded" />
+                            <div className="h-3 w-48 bg-muted rounded" />
                         </div>
-                        <Skeleton className="h-8 w-20 ml-auto" />
                     </div>
                   ))}
                 </div>
               ) : adminUsers.length > 0 ? (
-                <div className="overflow-x-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[60px]">Avatar</TableHead>
-                        <TableHead>Name/Email</TableHead>
-                        <TableHead>Role / Committee</TableHead>
-                        <TableHead>Permissions</TableHead>
-                        <TableHead>Granted At</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {adminUsers.map((admin) => (
-                        <TableRow key={admin.id}>
-                          <TableCell>
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={admin.imageUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} alt={admin.displayName || admin.email || 'Admin'} data-ai-hint="user avatar" />
-                              <AvatarFallback>{(admin.displayName?.[0] || admin.email?.[0] || 'A').toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{admin.displayName || admin.email}</div>
-                            {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <Badge variant={admin.role === 'admin' ? 'default' : 'outline'} className="w-fit capitalize">
-                                {admin.role?.replace('_', ' ')}
-                              </Badge>
+                <div className="space-y-4">
+                  {/* Mobile Card View */}
+                  <div className="grid grid-cols-1 gap-4 sm:hidden">
+                    {adminUsers.map((admin) => (
+                      <Card key={admin.id} className="overflow-hidden border-2 hover:border-primary/50 transition-colors shadow-sm">
+                        <div className="p-4 sm:p-6">
+                          <div className="flex items-start justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-12 w-12 border-2 border-primary/10">
+                                <AvatarImage src={admin.imageUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} />
+                                <AvatarFallback>{(admin.displayName?.[0] || admin.email?.[0] || 'A').toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h4 className="font-bold text-foreground leading-tight">{admin.displayName || 'No Name'}</h4>
+                                <p className="text-xs text-muted-foreground truncate max-w-[150px]">{admin.email}</p>
+                              </div>
+                            </div>
+                            <Badge variant={admin.role === 'admin' ? 'default' : 'outline'} className="capitalize shadow-sm">
+                              {admin.role?.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap gap-1.5 min-h-[24px]">
+                              {admin.canAccessSuperiorAdmin && <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">SUP</Badge>}
+                              {Object.values(admin.permissions || {}).filter(Boolean).length > 0 && (
+                                <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 h-5 px-1.5 text-[10px]">
+                                  {Object.values(admin.permissions || {}).filter(Boolean).length} Permissions
+                                </Badge>
+                              )}
                               {admin.role === 'session_manager' && admin.defaultCommittee && (
-                                <span className="text-xs text-muted-foreground">
-                                  Committee: {admin.defaultCommittee}
-                                </span>
+                                <Badge variant="outline" className="h-5 px-1.5 text-[10px] truncate max-w-[120px]">
+                                  {admin.defaultCommittee}
+                                </Badge>
                               )}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {admin.canAccessSuperiorAdmin && <Badge variant="destructive">Superior</Badge>}
-                              {admin.permissions?.canEditParticipants && <Badge variant="secondary">Edit Participants</Badge>}
-                              {admin.permissions?.canDeleteParticipants && <Badge variant="secondary">Delete Participants</Badge>}
-                              {admin.permissions?.canCreateStaff && <Badge variant="secondary">Create Staff</Badge>}
-                              {admin.permissions?.canEditStaff && <Badge variant="secondary">Edit Staff</Badge>}
-                              {admin.permissions?.canDeleteStaff && <Badge variant="secondary">Delete Staff</Badge>}
-                              {admin.permissions?.canAccessAnalytics && <Badge variant="secondary">Analytics</Badge>}
-                              {admin.permissions?.canManageQRCodes && <Badge variant="secondary">QR Codes</Badge>}
+                            
+                            <div className="flex items-center justify-between pt-2 border-t mt-2">
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
+                                Joined {formatDateString(admin.createdAt)}
+                              </span>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="h-9 w-9 rounded-lg"
+                                  onClick={() => handleOpenEditDialog(admin)}
+                                  disabled={isPendingAction}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-9 w-9 rounded-lg"
+                                  onClick={() => confirmRevokeAdmin(admin)}
+                                  disabled={isPendingAction}
+                                >
+                                  {isPendingAction && userToRevoke?.id === admin.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                </Button>
+                              </div>
                             </div>
-                          </TableCell>
-                           <TableCell className="text-sm text-muted-foreground">
-                            {formatDateString(admin.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-right space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-blue-500 hover:text-blue-600 h-8 w-8"
-                              onClick={() => handleOpenEditDialog(admin)}
-                              disabled={isPendingAction}
-                              title="Edit Admin"
-                            >
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit Admin</span>
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-destructive hover:text-destructive/80 h-8 w-8" 
-                              onClick={() => confirmRevokeAdmin(admin)}
-                              disabled={isPendingAction}
-                              title="Revoke Admin Role"
-                            >
-                              {isPendingAction && userToRevoke?.id === admin.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                              <span className="sr-only">Revoke Admin Role</span>
-                            </Button>
-                          </TableCell>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border-2 shadow-sm bg-background">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="w-[60px] pl-6">Avatar</TableHead>
+                          <TableHead>User Identity</TableHead>
+                          <TableHead>Role / Committee</TableHead>
+                          <TableHead>Permissions Overview</TableHead>
+                          <TableHead>Granted</TableHead>
+                          <TableHead className="text-right pr-6">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {adminUsers.map((admin) => (
+                          <TableRow key={admin.id} className="hover:bg-muted/30 transition-colors">
+                            <TableCell className="pl-6">
+                              <Avatar className="h-10 w-10 border">
+                                <AvatarImage src={admin.imageUrl || `https://placehold.co/40x40.png?text=${(admin.displayName || admin.email || 'A')?.[0].toUpperCase()}`} />
+                                <AvatarFallback>{(admin.displayName?.[0] || admin.email?.[0] || 'A').toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-foreground">{admin.displayName || 'No Name'}</span>
+                                <span className="text-xs text-muted-foreground">{admin.email}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                <Badge variant={admin.role === 'admin' ? 'default' : 'outline'} className="w-fit capitalize shadow-sm">
+                                  {admin.role?.replace('_', ' ')}
+                                </Badge>
+                                {admin.role === 'session_manager' && admin.defaultCommittee && (
+                                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">
+                                    {admin.defaultCommittee}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {admin.canAccessSuperiorAdmin && <Badge variant="destructive" className="text-[10px] px-1.5 h-5">SUP</Badge>}
+                                {Object.entries(admin.permissions || {}).map(([key, value]) => 
+                                  value && (
+                                    <Badge key={key} variant="secondary" className="text-[10px] px-1.5 h-5 bg-background border">
+                                      {key.replace('can', '').replace(/([A-Z])/g, ' $1').trim()}
+                                    </Badge>
+                                  )
+                                )}
+                              </div>
+                            </TableCell>
+                             <TableCell className="text-xs font-medium text-muted-foreground">
+                              {formatDateString(admin.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-right pr-6 space-x-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                                onClick={() => handleOpenEditDialog(admin)}
+                                disabled={isPendingAction}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-colors" 
+                                onClick={() => confirmRevokeAdmin(admin)}
+                                disabled={isPendingAction}
+                              >
+                                {isPendingAction && userToRevoke?.id === admin.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-10 border rounded-md">
