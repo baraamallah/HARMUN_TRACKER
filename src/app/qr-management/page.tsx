@@ -43,6 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Progress } from '@/components/ui/progress';
 import { Footer } from '@/components/layout/Footer';
 
 const PARTICIPANTS_COLLECTION = 'participants';
@@ -82,6 +83,9 @@ export default function QrManagementPage() {
   const [appBaseUrl, setAppBaseUrl] = useState('');
   const [previewItem, setPreviewItem] = useState<Participant | StaffMember | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
 
   const participantSchools = [
     'All Schools',
@@ -227,6 +231,7 @@ export default function QrManagementPage() {
 
   const generateQRCodeBlob = async (data: string, logoUrl?: string) => {
     const qrOptions: QRCodeStylingOptions = {
+      data,
       width: 600,
       height: 600,
       margin: 20,
@@ -303,6 +308,8 @@ export default function QrManagementPage() {
       return;
     }
 
+    setGenerationProgress(0);
+    setGenerationStatus('Initializing...');
     if (type === 'participant') setIsZippingParticipants(true);
     if (type === 'staff') setIsZippingStaff(true);
 
@@ -311,7 +318,10 @@ export default function QrManagementPage() {
     const zip = new JSZip();
 
     try {
+      let processed = 0;
       for (const item of items) {
+        setGenerationStatus(`Generating QR for ${item.name}...`);
+        
         const qrData = type === 'participant'
           ? `${appBaseUrl}/checkin?id=${item.id}`
           : `${appBaseUrl}/staff-checkin?id=${item.id}`;
@@ -322,9 +332,16 @@ export default function QrManagementPage() {
           const fileName = `${type}_${item.name.replace(/\s+/g, '_')}.png`;
           zip.file(fileName, combinedBlob);
         }
+        processed++;
+        setGenerationProgress((processed / items.length) * 50); // first 50% is image generation
       }
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      setGenerationStatus('Compressing ZIP file...');
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+         setGenerationProgress(50 + (metadata.percent / 2)); // last 50% is zipping
+      });
+      
       saveAs(zipBlob, `HARMUN_${type}_Labeled_QRs.zip`);
       toast({ title: 'Download Ready', description: `Successfully generated ${items.length} labeled QR codes.` });
 
@@ -334,6 +351,8 @@ export default function QrManagementPage() {
     } finally {
       if (type === 'participant') setIsZippingParticipants(false);
       if (type === 'staff') setIsZippingStaff(false);
+      setGenerationProgress(0);
+      setGenerationStatus('');
     }
   };
 
@@ -702,6 +721,23 @@ export default function QrManagementPage() {
             </div>
             <div className="flex justify-center gap-4">
                <Button onClick={() => setIsPreviewOpen(false)}>Close Preview</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isZippingParticipants || isZippingStaff} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle>Generating QR Codes</DialogTitle>
+              <DialogDescription>
+                Please wait while we prepare your high-quality labeled QR codes.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 space-y-4">
+              <Progress value={generationProgress} className="h-4" />
+              <p className="text-sm text-center text-muted-foreground font-medium animate-pulse">
+                {generationStatus || 'Working...'} {Math.round(generationProgress)}%
+              </p>
             </div>
           </DialogContent>
         </Dialog>

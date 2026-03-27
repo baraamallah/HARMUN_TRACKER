@@ -36,7 +36,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           ) : (
             <Logo />
           )}
-          <ThemeToggleButton />
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/public/about" 
+              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+            >
+              About
+            </Link>
+            <ThemeToggleButton />
+          </div>
         </div>
       </header>
 
