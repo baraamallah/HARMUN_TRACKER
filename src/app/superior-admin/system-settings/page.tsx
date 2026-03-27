@@ -66,6 +66,8 @@ export default function SystemSettingsPage() {
   const [currentDefaultParticipantStatus, setCurrentDefaultParticipantStatus] = useState<AttendanceStatus | null>(null);
   const [currentDefaultStaffStatus, setCurrentDefaultStaffStatus] = useState<StaffAttendanceStatus | null>(null);
   const [currentConferenceDay, setCurrentConferenceDay] = useState<'day1' | 'day2'>('day1');
+  const [restroomAlertThresholdMinutes, setRestroomAlertThresholdMinutes] = useState<number>(10);
+  const [thresholdInput, setThresholdInput] = useState<string>('10');
   
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isUpdatingSetting, startUpdateTransition] = useTransition();
@@ -88,6 +90,11 @@ export default function SystemSettingsPage() {
       const docSnap = await getDoc(configDocRef);
       if (docSnap.exists() && docSnap.data().currentConferenceDay) {
         setCurrentConferenceDay(docSnap.data().currentConferenceDay as 'day1' | 'day2');
+      }
+      if (docSnap.exists() && docSnap.data().restroomAlertThresholdMinutes) {
+        const savedMinutes = docSnap.data().restroomAlertThresholdMinutes as number;
+        setRestroomAlertThresholdMinutes(savedMinutes);
+        setThresholdInput(String(savedMinutes));
       }
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load system settings.', variant: 'destructive' });
@@ -351,7 +358,49 @@ export default function SystemSettingsPage() {
                 {isUpdatingSetting && currentDefaultStaffStatus !== null && <p className="text-xs sm:text-sm text-blue-500 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
             </div>
 
-            
+            {/* Restroom Alert Threshold */}
+            <div className="space-y-3 p-3 sm:p-4 border rounded-lg shadow-sm bg-amber-50/50 dark:bg-amber-950/10">
+              <Label className="text-base sm:text-lg font-semibold flex items-center">
+                <span className="mr-2">🚻</span> Restroom Alert Threshold
+              </Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Alert session managers and admins when a participant has been in a Restroom Break longer than this many minutes.
+              </p>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min={1}
+                  max={60}
+                  className="w-28"
+                  value={thresholdInput}
+                  onChange={e => setThresholdInput(e.target.value)}
+                  disabled={isUpdatingSetting}
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+                <Button
+                  size="sm"
+                  disabled={isUpdatingSetting || thresholdInput === String(restroomAlertThresholdMinutes)}
+                  onClick={async () => {
+                    const val = parseInt(thresholdInput, 10);
+                    if (isNaN(val) || val < 1) return;
+                    try {
+                      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+                      const { db } = await import('@/lib/firebase');
+                      const configRef = doc(db, 'system_config', 'main_settings');
+                      await setDoc(configRef, { restroomAlertThresholdMinutes: val, updatedAt: serverTimestamp() }, { merge: true });
+                      setRestroomAlertThresholdMinutes(val);
+                      toast({ title: 'Threshold Saved', description: `Restroom alert threshold set to ${val} minute${val !== 1 ? 's' : ''}.` });
+                    } catch (err: any) {
+                      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                    }
+                  }}
+                >
+                  {isUpdatingSetting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                </Button>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-400">Currently set to <b>{restroomAlertThresholdMinutes} minute{restroomAlertThresholdMinutes !== 1 ? 's' : ''}</b></p>
+            </div>
+
             <div className="mt-8 p-4 border border-dashed rounded-lg text-center">
                 <Settings size={48} className="mx-auto text-muted-foreground opacity-30 mb-2" />
                 <p className="text-muted-foreground">More system settings will be available here in the future.</p>

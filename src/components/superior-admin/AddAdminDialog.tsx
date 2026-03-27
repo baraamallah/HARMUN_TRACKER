@@ -54,6 +54,7 @@ const addAdminSchema = z.object({
     canDeleteStaff: z.boolean().default(false),
     canAccessAnalytics: z.boolean().default(false),
     canManageQRCodes: z.boolean().default(false),
+    canReceiveNotifications: z.boolean().default(false),
   }).default({}),
 });
 
@@ -436,7 +437,23 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="permissions.canReceiveNotifications"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-amber-500/10 p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-amber-800 dark:text-amber-300">🚻 Receive Restroom Notifications</FormLabel>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">Shows a bell icon in the navbar when participants overstay restroom breaks.</p>
+                    </div>
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </div>
+
 
             <Separator />
             

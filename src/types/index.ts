@@ -39,6 +39,7 @@ export interface Participant {
   };
   createdAt?: string | FieldValueType | null | undefined;
   updatedAt?: string | FieldValueType | null | undefined;
+  restroomBreakStartTime?: string | null;
 }
 
 export type StaffAttendanceStatus =
@@ -121,6 +122,7 @@ export interface AdminManagedUser {
     canDeleteStaff: boolean;
     canAccessAnalytics: boolean;
     canManageQRCodes: boolean;
+    canReceiveNotifications: boolean;
   };
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;

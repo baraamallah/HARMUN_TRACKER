@@ -16,7 +16,6 @@ import {
   BarChart,
   User,
   Menu,
-  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,11 +32,15 @@ import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
 import { useAuth } from '@/hooks/use-auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { useRestroomAlerts } from '@/hooks/use-restroom-alerts';
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import type { Participant } from '@/types';
 
 interface NavItem {
   href: string;
@@ -63,16 +66,61 @@ const ownerOnlyNavItems: NavItem[] = [
   { href: '/superior-admin', icon: ShieldCheck, label: 'Superior Admin', tooltip: 'Superior Admin Panel' },
 ];
 
-const publicNavItems: NavItem[] = [
-  { href: '/public', icon: Eye, label: 'Public View', tooltip: 'Public Participant View' },
-  { href: '/about', icon: Info, label: 'About', tooltip: 'About HARMUN' },
-];
-
 export function TopNavbar() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { loggedInUser, userAppRole, permissions, authSessionLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  // ── Notification Center: fetch all restroom-break participants ──────────
+  const [allParticipants, setAllParticipants] = React.useState<Participant[]>([]);
+  const [alertThresholdMs, setAlertThresholdMs] = React.useState(10 * 60 * 1000);
+
+  const showNotifications =
+    userAppRole === 'owner' ||
+    (userAppRole === 'admin' && permissions?.canReceiveNotifications === true);
+
+  React.useEffect(() => {
+    if (!showNotifications) return;
+
+    // Fetch threshold from system config
+    import('@/lib/firebase').then(({ db }) => {
+      import('firebase/firestore').then(({ doc, getDoc }) => {
+        const configRef = doc(db, 'system_config', 'main_settings');
+        getDoc(configRef).then(snap => {
+          if (snap.exists() && snap.data().restroomAlertThresholdMinutes) {
+            setAlertThresholdMs(snap.data().restroomAlertThresholdMinutes * 60 * 1000);
+          }
+        }).catch(console.error);
+      });
+    });
+
+    // Real-time listener for all participants in Restroom Break
+    const participantsRef = collection(db, 'participants');
+    const q = query(participantsRef, where('status', '==', 'Restroom Break'));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
+      setAllParticipants(data);
+    });
+    return () => unsubscribe();
+  }, [showNotifications]);
+
+  const adminAlerts = useRestroomAlerts(allParticipants, alertThresholdMs);
+
+  const handleMarkBack = async (participantId: string) => {
+    try {
+      await updateDoc(doc(db, 'participants', participantId), {
+        status: 'Present',
+        restroomBreakStartTime: null,
+        updatedAt: serverTimestamp(),
+      });
+      toast({ title: 'Participant Returned', description: 'Status updated to Present.' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'Could not update status.', variant: 'destructive' });
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleLogout = async () => {
     try {
@@ -85,49 +133,31 @@ export function TopNavbar() {
   };
 
   const getAvatarFallback = () => {
-    if (loggedInUser?.displayName) {
-      return loggedInUser.displayName.substring(0, 2).toUpperCase();
-    }
-    if (loggedInUser?.email) {
-      return loggedInUser.email.substring(0, 2).toUpperCase();
-    }
-    return "U";
-  }
+    if (loggedInUser?.displayName) return loggedInUser.displayName.substring(0, 2).toUpperCase();
+    if (loggedInUser?.email) return loggedInUser.email.substring(0, 2).toUpperCase();
+    return 'U';
+  };
 
   const navItemsToRender = React.useMemo(() => {
-    if (userAppRole === 'session_manager') {
-      return [baseNavItems[1]]; // Only "In Session"
-    }
+    if (userAppRole === 'session_manager') return [baseNavItems[1]]; // Only "In Session"
 
     let items = [...baseNavItems];
-
-    // For non-session managers, remove "In Session" from the list unless they are owner/admin
-    // Actually, maybe admins should see it too.
-
     if (userAppRole === 'owner') {
       items.push(...adminNavItems);
       items.push(...ownerOnlyNavItems);
     } else if (userAppRole === 'admin') {
-      if (permissions?.canManageQRCodes) {
-        items.push(adminNavItems[0]);
-      }
-      if (permissions?.canAccessAnalytics) {
-        items.push(adminNavItems[1]);
-      }
+      if (permissions?.canManageQRCodes) items.push(adminNavItems[0]);
+      if (permissions?.canAccessAnalytics) items.push(adminNavItems[1]);
     } else {
-      // Regular users or non-logged in: remove "In Session" and "Staff" etc.
       items = items.filter(i => i.href === '/');
     }
 
-    const uniqueItems = items.filter((item, index, self) =>
-      index === self.findIndex((t) => t.href === item.href)
-    );
-    return uniqueItems;
+    return items.filter((item, index, self) => index === self.findIndex(t => t.href === item.href));
   }, [userAppRole, permissions]);
 
   const NavLinks = ({ isMobile = false }) => (
     <nav className={cn('items-center space-x-1', isMobile ? 'flex flex-col space-y-2 space-x-0' : 'hidden md:flex')}>
-      {navItemsToRender.map((item) => {
+      {navItemsToRender.map(item => {
         const content = (
           <Link
             key={item.href}
@@ -140,21 +170,15 @@ export function TopNavbar() {
             )}
             onClick={() => isMobile && setIsMobileMenuOpen(false)}
           >
-            <item.icon className={cn("h-5 w-5 mr-2", pathname === item.href ? "text-primary" : "")} />
+            <item.icon className={cn('h-5 w-5 mr-2', pathname === item.href ? 'text-primary' : '')} />
             <span>{item.label}</span>
           </Link>
         );
-
         if (isMobile) return content;
-
         return (
           <Tooltip key={item.href}>
-            <TooltipTrigger asChild>
-              {content}
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>{item.tooltip}</p>
-            </TooltipContent>
+            <TooltipTrigger asChild>{content}</TooltipTrigger>
+            <TooltipContent side="bottom"><p>{item.tooltip}</p></TooltipContent>
           </Tooltip>
         );
       })}
@@ -164,16 +188,17 @@ export function TopNavbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center">
-          <Logo />
-        </div>
+        <div className="flex items-center"><Logo /></div>
 
-        <div className="hidden md:flex items-center space-x-4">
-          <NavLinks />
-        </div>
+        <div className="hidden md:flex items-center space-x-4"><NavLinks /></div>
 
         <div className="flex items-center space-x-2">
           <ThemeToggleButton />
+
+          {/* Admin Notification Center */}
+          {!authSessionLoading && loggedInUser && showNotifications && (
+            <NotificationCenter alerts={adminAlerts} onMarkBack={handleMarkBack} />
+          )}
 
           {authSessionLoading ? (
             <Skeleton className="h-10 w-10 rounded-full" />
@@ -182,7 +207,7 @@ export function TopNavbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={loggedInUser.photoURL || undefined} alt={loggedInUser.displayName || loggedInUser.email || "User Avatar"} />
+                    <AvatarImage src={loggedInUser.photoURL || undefined} alt={loggedInUser.displayName || loggedInUser.email || 'User Avatar'} />
                     <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
                   </Avatar>
                 </Button>
@@ -190,12 +215,8 @@ export function TopNavbar() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {loggedInUser.displayName || "User"}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {loggedInUser.email}
-                    </p>
+                    <p className="text-sm font-medium leading-none">{loggedInUser.displayName || 'User'}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{loggedInUser.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 {userAppRole && <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground -mt-1 capitalize">Role: {userAppRole}</DropdownMenuLabel>}
@@ -203,29 +224,25 @@ export function TopNavbar() {
                 {userAppRole === 'owner' && (
                   <DropdownMenuItem asChild>
                     <Link href="/superior-admin/profile">
-                      <User className="mr-2 h-4 w-4" />
-                      <span>My Profile</span>
+                      <User className="mr-2 h-4 w-4" /><span>My Profile</span>
                     </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild>
                   <Link href="/public">
-                    <Eye className="mr-2 h-4 w-4" />
-                    <span>Public View</span>
+                    <Eye className="mr-2 h-4 w-4" /><span>Public View</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
+                  <LogOut className="mr-2 h-4 w-4" /><span>Logout</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <Button asChild variant="outline">
               <Link href={`/auth/login?redirect=${pathname}`}>
-                <LogIn className="mr-2 h-4 w-4" />
-                <span>Sign In</span>
+                <LogIn className="mr-2 h-4 w-4" /><span>Sign In</span>
               </Link>
             </Button>
           )}
@@ -239,9 +256,7 @@ export function TopNavbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right">
-                <div className="flex flex-col space-y-4 pt-6">
-                  <NavLinks isMobile />
-                </div>
+                <div className="flex flex-col space-y-4 pt-6"><NavLinks isMobile /></div>
               </SheetContent>
             </Sheet>
           </div>

@@ -4,48 +4,67 @@ import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import {
-  getParticipants,
-  getSystemCommittees
-} from '@/lib/actions';
+import { getSystemCommittees } from '@/lib/actions';
 import type { Participant, AttendanceStatus } from '@/types';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription
+  Card, CardContent, CardHeader, CardTitle
 } from '@/components/ui/card';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
-  Loader2,
-  Users,
-  Save,
-  CheckCircle,
-  XCircle,
-  Coffee,
-  UserRound,
-  Wrench,
-  LogOutIcon,
-  AlertOctagon,
-  Search
+  Tooltip, TooltipContent, TooltipTrigger
+} from '@/components/ui/tooltip';
+import {
+  Loader2, Users, CheckCircle, XCircle, Search, AlertTriangle, Clock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, writeBatch, serverTimestamp, onSnapshot, query, where, collection } from 'firebase/firestore';
+import {
+  doc, updateDoc, writeBatch, serverTimestamp, onSnapshot, query, where,
+  collection, getDoc
+} from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
+import { useRestroomAlerts, formatElapsed } from '@/hooks/use-restroom-alerts';
+
+// ─── Restroom Icon ────────────────────────────────────────────────────────────
+function RestroomIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="5" r="1" />
+      <circle cx="15" cy="5" r="1" />
+      <path d="M7 8h4l-1 6H8L7 8Z" />
+      <path d="M13 8h2l1.5 3.5L18 8" />
+      <path d="M16.5 11.5V20" />
+      <path d="M9 14v6" />
+      <path d="M11 14v6" />
+    </svg>
+  );
+}
+
+// ─── Elapsed label (live) ─────────────────────────────────────────────────────
+function ElapsedLabel({ startTime }: { startTime: string }) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const ms = Date.now() - new Date(startTime).getTime();
+      setLabel(formatElapsed(ms));
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+  return <span>{label}</span>;
+}
+
+const SYSTEM_CONFIG_COLLECTION = 'system_config';
+const APP_SETTINGS_DOC_ID = 'main_settings';
+const DEFAULT_THRESHOLD_MS = 10 * 60 * 1000;
 
 export default function InSessionPage() {
   const { adminUser, userAppRole, authSessionLoading } = useAuth();
@@ -59,11 +78,20 @@ export default function InSessionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [sessionNotes, setSessionNotes] = useState('');
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [thresholdMs, setThresholdMs] = useState(DEFAULT_THRESHOLD_MS);
 
-  // Redirect if not session manager or admin
+  // ── Load threshold from Firestore ────────────────────────────────────────
+  useEffect(() => {
+    const configRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
+    getDoc(configRef).then(snap => {
+      if (snap.exists() && snap.data().restroomAlertThresholdMinutes) {
+        setThresholdMs(snap.data().restroomAlertThresholdMinutes * 60 * 1000);
+      }
+    }).catch(console.error);
+  }, []);
+
+  // ── Redirect if not authorised ───────────────────────────────────────────
   useEffect(() => {
     if (!authSessionLoading) {
       if (!userAppRole || (userAppRole !== 'session_manager' && userAppRole !== 'admin' && userAppRole !== 'owner')) {
@@ -72,91 +100,57 @@ export default function InSessionPage() {
     }
   }, [userAppRole, authSessionLoading, router]);
 
-  // Set default committee and notes from user profile
+  // ── Populate committee defaults ─────────────────────────────────────────
   useEffect(() => {
     if (adminUser) {
-      if (adminUser.defaultCommittee && !selectedCommittee) {
-        setSelectedCommittee(adminUser.defaultCommittee);
-      }
-      setSessionNotes(adminUser.sessionNotes || '');
+      if (adminUser.defaultCommittee && !selectedCommittee) setSelectedCommittee(adminUser.defaultCommittee);
     }
   }, [adminUser, selectedCommittee]);
 
-  // Fetch committees
+  // ── Fetch committees ─────────────────────────────────────────────────────
   useEffect(() => {
-    async function fetchCommittees() {
-      try {
-        const list = await getSystemCommittees();
-        setCommittees(list);
-      } catch (error) {
-        console.error("Error fetching committees:", error);
-      }
-    }
-    fetchCommittees();
+    getSystemCommittees().then(setCommittees).catch(console.error);
   }, []);
 
-  // Real-time listener for participants
+  // ── Real-time participant listener ───────────────────────────────────────
   useEffect(() => {
     if (!selectedCommittee) return;
-
     setIsLoading(true);
-    const participantsRef = collection(db, 'participants');
-    const q = query(participantsRef, where('committee', '==', selectedCommittee));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Participant[];
-
-      // Sort by name
+    const q = query(collection(db, 'participants'), where('committee', '==', selectedCommittee));
+    const unsub = onSnapshot(q, snap => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
       data.sort((a, b) => a.name.localeCompare(b.name));
       setParticipants(data);
       setIsLoading(false);
-    }, (error) => {
-      console.error("Error listening to participants:", error);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    }, err => { console.error(err); setIsLoading(false); });
+    return () => unsub();
   }, [selectedCommittee]);
 
-  const handleSaveNotes = async () => {
-    if (!adminUser?.id) return;
-    setIsSavingNotes(true);
-    try {
-      const userRef = doc(db, 'users', adminUser.id);
-      await updateDoc(userRef, {
-        sessionNotes: sessionNotes,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Notes Saved", description: "Your session notes have been updated." });
-    } catch (error) {
-      console.error("Error saving notes:", error);
-      toast({ title: "Error", description: "Failed to save notes.", variant: "destructive" });
-    } finally {
-      setIsSavingNotes(false);
-    }
-  };
+  // ── Overdue restroom alerts (for the persistent banner) ──────────────────
+  const alerts = useRestroomAlerts(participants, thresholdMs);
+
+  // ── Save notes is no longer needed ──
 
   const handleCommitteeChange = async (newCommittee: string) => {
     setSelectedCommittee(newCommittee);
     if (!adminUser?.id || userAppRole !== 'session_manager') return;
-
     setIsUpdatingCommittee(true);
     try {
-      const userRef = doc(db, 'users', adminUser.id);
-      await updateDoc(userRef, {
-        defaultCommittee: newCommittee,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Default Committee Updated", description: `"${newCommittee}" is now your default committee.` });
-    } catch (error) {
-      console.error("Error updating default committee:", error);
-    } finally {
-      setIsUpdatingCommittee(false);
-    }
+      await updateDoc(doc(db, 'users', adminUser.id), { defaultCommittee: newCommittee, updatedAt: serverTimestamp() });
+    } catch (err) { console.error(err); }
+    finally { setIsUpdatingCommittee(false); }
   };
+
+  // Core single-participant update – handles restroomBreakStartTime automatically
+  const updateParticipantStatus = useCallback(async (id: string, status: AttendanceStatus) => {
+    const updates: Record<string, unknown> = { status, updatedAt: serverTimestamp() };
+    if (status === 'Restroom Break') {
+      updates.restroomBreakStartTime = new Date().toISOString();
+    } else {
+      updates.restroomBreakStartTime = null;
+    }
+    await updateDoc(doc(db, 'participants', id), updates);
+  }, []);
 
   const handleBulkStatusUpdate = async (status: AttendanceStatus) => {
     if (selectedIds.length === 0) return;
@@ -164,37 +158,43 @@ export default function InSessionPage() {
     try {
       const batch = writeBatch(db);
       selectedIds.forEach(id => {
-        batch.update(doc(db, "participants", id), {
-          status,
-          updatedAt: serverTimestamp()
-        });
+        const updates: Record<string, unknown> = { status, updatedAt: serverTimestamp() };
+        if (status === 'Restroom Break') updates.restroomBreakStartTime = new Date().toISOString();
+        else updates.restroomBreakStartTime = null;
+        batch.update(doc(db, 'participants', id), updates);
       });
       await batch.commit();
-      toast({
-        title: "Bulk Update Successful",
-        description: `${selectedIds.length} participant(s) updated to ${status}.`
-      });
+      toast({ title: 'Bulk Update Successful', description: `${selectedIds.length} participant(s) → ${status}.` });
       setSelectedIds([]);
-    } catch (error: any) {
-      console.error("Bulk update failed:", error);
-      toast({ title: "Bulk Update Failed", description: error.message, variant: "destructive" });
-    } finally {
-      setIsBulkUpdating(false);
+    } catch (err: any) {
+      toast({ title: 'Bulk Update Failed', description: err.message, variant: 'destructive' });
+    } finally { setIsBulkUpdating(false); }
+  };
+
+  const handleRestroomToggle = async (participant: Participant) => {
+    const newStatus: AttendanceStatus = participant.status === 'Restroom Break' ? 'Present' : 'Restroom Break';
+    try {
+      await updateParticipantStatus(participant.id, newStatus);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleMarkBack = async (participantId: string) => {
+    try {
+      await updateParticipantStatus(participantId, 'Present');
+      toast({ title: 'Marked as Back', description: 'Status updated to Present.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredParticipants.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredParticipants.map(p => p.id));
-    }
+    setSelectedIds(selectedIds.length === filteredParticipants.length ? [] : filteredParticipants.map(p => p.id));
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const filteredParticipants = participants.filter(p =>
@@ -219,30 +219,73 @@ export default function InSessionPage() {
   return (
     <AppLayoutClientShell>
       <div className="space-y-6">
+        {/* ── Persistent Restroom Alert Banner (Session Manager only) ── */}
+        {userAppRole === 'session_manager' && alerts.length > 0 && (
+          <div className="sticky top-0 z-40 w-full">
+            <div className="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-600 p-3 shadow-lg">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 animate-pulse" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-300 mb-2">
+                    🚻 {alerts.length} student{alerts.length > 1 ? 's' : ''} overdue in restroom
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {alerts.map(alert => (
+                      <div
+                        key={alert.participantId}
+                        className="flex items-center gap-2 bg-white dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-1.5"
+                      >
+                        <RestroomIcon className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">{alert.participantName}</span>
+                        <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 font-mono font-bold">
+                          <Clock className="h-3 w-3" />
+                          <ElapsedLabel startTime={alert.startTime.toISOString()} />
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[10px] border-green-500 text-green-700 dark:text-green-400 hover:bg-green-500/10"
+                          onClick={() => handleMarkBack(alert.participantId)}
+                        >
+                          Back ✓
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Page Header ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">In Session Management</h1>
-            <p className="text-muted-foreground">Manage your committee session participants and notes.</p>
+            <p className="text-muted-foreground">
+              {selectedCommittee ? (
+                <span>Committee: <span className="font-semibold text-foreground">{selectedCommittee}</span></span>
+              ) : 'Select a committee to manage participants.'}
+            </p>
           </div>
-          <div className="w-full md:w-64 flex items-center gap-2">
-            {isUpdatingCommittee && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Select value={selectedCommittee} onValueChange={handleCommitteeChange} disabled={isUpdatingCommittee}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select Committee" />
-              </SelectTrigger>
-              <SelectContent>
-                {committees.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Only admins/owners can switch committees; session managers are locked to their own */}
+          {userAppRole !== 'session_manager' && (
+            <div className="w-full md:w-64 flex items-center gap-2">
+              {isUpdatingCommittee && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <Select value={selectedCommittee} onValueChange={handleCommitteeChange} disabled={isUpdatingCommittee}>
+                <SelectTrigger><SelectValue placeholder="Select Committee" /></SelectTrigger>
+                <SelectContent>
+                  {committees.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main List Area */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="shadow-md">
+        {/* ── Full-width participant list ── */}
+        <Card className="shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <CardTitle className="text-xl flex items-center gap-2">
@@ -255,7 +298,7 @@ export default function InSessionPage() {
                       placeholder="Search students..."
                       className="pl-9"
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={e => setSearchTerm(e.target.value)}
                     />
                   </div>
                 </div>
@@ -278,7 +321,6 @@ export default function InSessionPage() {
                           {selectedIds.length} Selected
                         </span>
                       </div>
-
                       <div className="flex flex-wrap gap-1">
                         {ALL_ATTENDANCE_STATUSES_OPTIONS.map(opt => (
                           <Button
@@ -298,127 +340,133 @@ export default function InSessionPage() {
 
                     {/* Participant List */}
                     <div className="grid gap-2">
-                      {filteredParticipants.map(participant => (
-                        <div
-                          key={participant.id}
-                          className={cn(
-                            "flex items-center justify-between p-3 rounded-lg border transition-all hover:shadow-sm",
-                            selectedIds.includes(participant.id) ? "bg-primary/5 border-primary/30" : "bg-card border-border"
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Checkbox
-                              checked={selectedIds.includes(participant.id)}
-                              onCheckedChange={() => toggleSelect(participant.id)}
-                            />
-                            <div>
-                              <p className="font-semibold text-sm sm:text-base">{participant.name}</p>
-                              <p className="text-xs text-muted-foreground">{participant.school}</p>
+                      {filteredParticipants.map(participant => {
+                        const isInRestroom = participant.status === 'Restroom Break';
+                        const isOverdue = alerts.some(a => a.participantId === participant.id);
+                        const alert = alerts.find(a => a.participantId === participant.id);
+
+                        return (
+                          <div
+                            key={participant.id}
+                            className={cn(
+                              'flex items-center justify-between p-3 rounded-lg border transition-all hover:shadow-sm',
+                              selectedIds.includes(participant.id) ? 'bg-primary/5 border-primary/30' : 'bg-card border-border',
+                              isOverdue ? 'border-amber-400 dark:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20' : ''
+                            )}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Checkbox
+                                checked={selectedIds.includes(participant.id)}
+                                onCheckedChange={() => toggleSelect(participant.id)}
+                              />
+                              <div className="min-w-0">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <p className={cn(
+                                      'font-semibold text-sm sm:text-base cursor-default truncate',
+                                      isOverdue ? 'text-amber-700 dark:text-amber-400' : ''
+                                    )}>
+                                      {participant.name}
+                                      {isInRestroom && (
+                                        <RestroomIcon className="inline h-4 w-4 ml-1.5 text-amber-500 align-text-bottom" />
+                                      )}
+                                    </p>
+                                  </TooltipTrigger>
+                                  {isInRestroom && participant.restroomBreakStartTime && (
+                                    <TooltipContent side="right" className="text-xs">
+                                      <div className="flex items-center gap-1.5">
+                                        <Clock className="h-3 w-3" />
+                                        <span>In restroom for <b><ElapsedLabel startTime={participant.restroomBreakStartTime} /></b></span>
+                                      </div>
+                                    </TooltipContent>
+                                  )}
+                                </Tooltip>
+                                <p className="text-xs text-muted-foreground truncate">{participant.school}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Badge
+                                variant={
+                                  participant.status === 'Present' ? 'default' :
+                                  participant.status === 'Absent' ? 'destructive' : 'secondary'
+                                }
+                                className="hidden sm:flex items-center gap-1 text-xs"
+                              >
+                                {getStatusIcon(participant.status)}
+                                {participant.status === 'Restroom Break' ? 'Restroom' : participant.status}
+                              </Badge>
+
+                              {/* Quick action buttons */}
+                              <div className="flex items-center gap-1">
+                                {/* Present */}
+                                <Button
+                                  variant={participant.status === 'Present' ? 'default' : 'outline'}
+                                  size="icon"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={() => updateParticipantStatus(participant.id, 'Present')}
+                                  disabled={isBulkUpdating}
+                                  title="Mark Present"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                                {/* Absent */}
+                                <Button
+                                  variant={participant.status === 'Absent' ? 'destructive' : 'outline'}
+                                  size="icon"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={() => updateParticipantStatus(participant.id, 'Absent')}
+                                  disabled={isBulkUpdating}
+                                  title="Mark Absent"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                                {/* Restroom Toggle */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant={isInRestroom ? 'secondary' : 'outline'}
+                                      size="icon"
+                                      className={cn(
+                                        'h-8 w-8 rounded-full',
+                                        isInRestroom
+                                          ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-200'
+                                          : ''
+                                      )}
+                                      onClick={() => handleRestroomToggle(participant)}
+                                      disabled={isBulkUpdating}
+                                    >
+                                      <RestroomIcon className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" className="text-xs">
+                                    {isInRestroom ? 'Mark as Back (Present)' : 'Send to Restroom Break'}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-3">
-                            <Badge
-                              variant={
-                                participant.status === 'Present' ? 'default' :
-                                participant.status === 'Absent' ? 'destructive' : 'secondary'
-                              }
-                              className="hidden sm:flex items-center gap-1"
-                            >
-                              {getStatusIcon(participant.status)}
-                              {participant.status}
-                            </Badge>
-
-                            {/* Quick status toggle for single student */}
-                            <div className="flex items-center gap-1">
-                               <Button
-                                variant={participant.status === 'Present' ? 'default' : 'outline'}
-                                size="icon"
-                                className="h-8 w-8 rounded-full"
-                                onClick={() => {
-                                  setSelectedIds([participant.id]);
-                                  handleBulkStatusUpdate('Present');
-                                }}
-                                disabled={isBulkUpdating}
-                               >
-                                 <CheckCircle className="h-4 w-4" />
-                               </Button>
-                               <Button
-                                variant={participant.status === 'Absent' ? 'destructive' : 'outline'}
-                                size="icon"
-                                className="h-8 w-8 rounded-full"
-                                onClick={() => {
-                                  setSelectedIds([participant.id]);
-                                  handleBulkStatusUpdate('Absent');
-                                }}
-                                disabled={isBulkUpdating}
-                               >
-                                 <XCircle className="h-4 w-4" />
-                               </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
                   <div className="text-center py-12 border-2 border-dashed rounded-lg">
                     <Users className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-                    <p className="text-muted-foreground">No participants found in this committee.</p>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      {selectedCommittee ? (
+                        'No participants found in this committee.'
+                      ) : userAppRole === 'session_manager' ? (
+                        'Your assigned committee is not set. Please contact a Superior Admin to assign your committee in your account settings.'
+                      ) : (
+                        'Please select a committee from the dropdown above to manage participants.'
+                      )}
+                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </div>
-
-          {/* Sidebar Area */}
-          <div className="space-y-6">
-            <Card className="shadow-md border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Save className="h-5 w-5 text-primary" />
-                  Session Notes
-                </CardTitle>
-                <CardDescription>
-                  Personal notes for your session. These are saved to your account.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="Write your session notes here... (e.g. outstanding delegates, issues, etc.)"
-                  className="min-h-[300px] bg-background resize-none focus-visible:ring-primary"
-                  value={sessionNotes}
-                  onChange={(e) => setSessionNotes(e.target.value)}
-                />
-                <Button
-                  className="w-full"
-                  onClick={handleSaveNotes}
-                  disabled={isSavingNotes}
-                >
-                  {isSavingNotes ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save Session Notes
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-md">
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Guide</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <p>• Use the checkboxes to select multiple students for bulk status changes.</p>
-                <p>• The top bar allows you to set status for all selected students at once.</p>
-                <p>• Use the search bar to quickly find specific students.</p>
-                <p>• Notes are private to your account and persistent across sessions.</p>
-              </CardContent>
-            </Card>
-          </div>
         </div>
-      </div>
     </AppLayoutClientShell>
   );
 }
