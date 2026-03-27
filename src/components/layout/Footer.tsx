@@ -28,22 +28,34 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t bg-background">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <footer className="border-t bg-gradient-to-b from-background to-muted/20">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Logos Section */}
-        <div className="flex flex-wrap items-center justify-center gap-8 mb-8">
-          {PUBLIC_EVENT_CONFIG.heroImagePaths.map((src, index) => (
-            <div
-              key={`footer-logo-${index}`}
-              className="flex items-center justify-center w-32 h-20 bg-muted dark:bg-muted-foreground/20 rounded-lg p-2"
-            >
-              <img src={src} alt={`Footer Logo ${index + 1}`} className="w-full h-full object-contain" />
-            </div>
-          ))}
+        <div className="mb-12">
+          <p className="text-center text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-8 italic opacity-70">
+            Powered by & Supported by
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12">
+            {PUBLIC_EVENT_CONFIG.heroImagePaths.map((src, index) => (
+              <div
+                key={`footer-logo-${index}`}
+                className="group relative flex items-center justify-center w-28 h-20 sm:w-36 sm:h-24 transition-all duration-300 ease-out grayscale hover:grayscale-0"
+              >
+                <div className="absolute inset-0 bg-primary/5 rounded-2xl scale-0 group-hover:scale-100 transition-transform duration-500" />
+                <img
+                   src={src}
+                   alt={`Footer Logo ${index + 1}`}
+                   className="relative z-10 w-full h-full object-contain transition-transform duration-300 group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md"
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
+        <div className="h-px w-24 bg-primary/20 mx-auto mb-8" />
+
         {/* Social Media Links */}
-        <div className="flex items-center justify-center gap-6 mb-6">
+        <div className="flex items-center justify-center gap-8 mb-8">
           {FOOTER_CONFIG.socials.map((social) => {
             if (social.href === '#') return null;
             const Icon = social.icon;
@@ -63,8 +75,13 @@ export function Footer() {
         </div>
 
         {/* Copyright */}
-        <div className="text-center text-sm text-muted-foreground">
-          <p>© {currentYear} {FOOTER_CONFIG.brandName}. {FOOTER_CONFIG.reservedRightsText}</p>
+        <div className="text-center">
+          <p className="text-sm font-medium text-muted-foreground">
+            © {currentYear} <span className="text-primary font-bold">{FOOTER_CONFIG.brandName}</span>. {FOOTER_CONFIG.reservedRightsText}
+          </p>
+          <p className="text-[10px] text-muted-foreground/60 mt-2 tracking-widest uppercase font-black italic">
+            Developed for Excellence in MUN Operations
+          </p>
         </div>
       </div>
     </footer>

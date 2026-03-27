@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, Filter } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Loader2, TriangleAlert, Home, LogOut, QrCode as QrCodeIcon, Search, Users, Download, FileArchive, Filter, Eye, CheckCircle2, Info } from 'lucide-react';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -35,6 +35,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Footer } from '@/components/layout/Footer';
 
 const PARTICIPANTS_COLLECTION = 'participants';
 const STAFF_MEMBERS_COLLECTION = 'staff_members';
@@ -71,6 +80,8 @@ export default function QrManagementPage() {
   const [isZippingStaff, setIsZippingStaff] = useState(false);
 
   const [appBaseUrl, setAppBaseUrl] = useState('');
+  const [previewItem, setPreviewItem] = useState<Participant | StaffMember | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const participantSchools = [
     'All Schools',
@@ -214,34 +225,90 @@ export default function QrManagementPage() {
     (selectedStaffTeam === 'All Teams' || s.team === selectedStaffTeam)
   );
 
+  const generateQRCodeBlob = async (data: string, logoUrl?: string) => {
+    const qrOptions: QRCodeStylingOptions = {
+      width: 600,
+      height: 600,
+      margin: 20,
+      qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
+      imageOptions: { hideBackgroundDots: true, imageSize: 0.3, margin: 10, crossOrigin: 'anonymous' },
+      dotsOptions: { type: 'rounded', color: '#1a1a1a' },
+      backgroundOptions: { color: '#ffffff' },
+      cornersSquareOptions: { type: 'extra-rounded', color: '#000000' },
+      cornersDotOptions: { type: 'dot', color: '#000000' },
+      image: logoUrl,
+    };
+    const qrInstance = new QRCodeStyling(qrOptions);
+    return await qrInstance.getRawData('png');
+  };
+
+  const combineQRWithText = async (item: Participant | StaffMember, qrBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        const textHeight = 120;
+        canvas.width = img.width;
+        canvas.height = img.height + textHeight;
+
+        // Background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw QR
+        ctx.drawImage(img, 0, 0);
+
+        // Draw Name
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 44px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(item.name.toUpperCase(), canvas.width / 2, img.height + 50);
+
+        // Draw Subtitle (School or Team)
+        ctx.font = '32px sans-serif';
+        ctx.fillStyle = '#666666';
+        const subtitle = 'school' in item ? (item as Participant).school : (item as StaffMember).team || (item as StaffMember).role;
+        if (subtitle) {
+          ctx.fillText(subtitle, canvas.width / 2, img.height + 95);
+        }
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob as Blob);
+          else reject(new Error('Canvas toBlob failed'));
+        }, 'image/png');
+      };
+      img.onerror = () => reject(new Error('Failed to load QR image'));
+      img.src = URL.createObjectURL(qrBlob as Blob);
+    });
+  };
+
+  const handlePreview = async (item: Participant | StaffMember) => {
+    setPreviewItem(item);
+    setIsPreviewOpen(true);
+  };
+
   const generateAndDownloadZip = async (items: Array<Participant | StaffMember>, type: 'participant' | 'staff') => {
     if (!appBaseUrl) {
-      toast({ title: 'Error', description: 'Application base URL not available. Cannot generate QR links.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Application base URL not available.', variant: 'destructive' });
       return;
     }
     if (items.length === 0) {
-      toast({ title: 'No Data', description: `No ${type}s match the current filters to generate QRs for.`, variant: 'default' });
+      toast({ title: 'No Data', description: `No ${type}s match filters.`, variant: 'default' });
       return;
     }
 
     if (type === 'participant') setIsZippingParticipants(true);
     if (type === 'staff') setIsZippingStaff(true);
 
-    toast({ title: 'Processing QR Codes', description: `Generating QR codes for ${items.length} ${type}(s). This may take a moment...` });
+    toast({ title: 'Generating High-Quality QRs', description: `Processing ${items.length} ${type}(s) with labels...` });
 
     const zip = new JSZip();
-    const qrOptionsBase: Omit<QRCodeStylingOptions, 'data'> = {
-      width: 300,
-      height: 300,
-      margin: 10,
-      qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
-      imageOptions: { hideBackgroundDots: true, imageSize: 0.35, margin: 8, crossOrigin: 'anonymous' },
-      dotsOptions: { type: 'rounded', color: '#2E7D32' },
-      backgroundOptions: { color: '#ffffff' },
-      cornersSquareOptions: { type: 'extra-rounded', color: '#1976D2' },
-      cornersDotOptions: { type: 'dot', color: '#388E3C' },
-      image: eventLogoUrl,
-    };
 
     try {
       for (const item of items) {
@@ -249,21 +316,21 @@ export default function QrManagementPage() {
           ? `${appBaseUrl}/checkin?id=${item.id}`
           : `${appBaseUrl}/staff-checkin?id=${item.id}`;
         
-        const qrInstance = new QRCodeStyling({ ...qrOptionsBase, data: qrData });
-        const blob = await qrInstance.getRawData('png');
-        if (blob) {
-          const fileName = `${type === 'participant' ? 'Participant' : 'Staff'}_${item.name.replace(/s+/g, '_')}_${item.id}.png`;
-          zip.file(fileName, blob);
+        const qrBlob = await generateQRCodeBlob(qrData, eventLogoUrl);
+        if (qrBlob) {
+          const combinedBlob = await combineQRWithText(item, qrBlob as Blob);
+          const fileName = `${type}_${item.name.replace(/\s+/g, '_')}.png`;
+          zip.file(fileName, combinedBlob);
         }
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipBlob, `HARMUN_${type}_qrcodes.zip`);
-      toast({ title: 'Download Started', description: `ZIP file with ${type} QR codes is being downloaded.` });
+      saveAs(zipBlob, `HARMUN_${type}_Labeled_QRs.zip`);
+      toast({ title: 'Download Ready', description: `Successfully generated ${items.length} labeled QR codes.` });
 
     } catch (error: any) {
       console.error(`Error generating ZIP for ${type}s:`, error);
-      toast({ title: 'ZIP Generation Failed', description: error.message || `Could not create ZIP file for ${type} QR codes.`, variant: 'destructive' });
+      toast({ title: 'Generation Failed', description: error.message || 'Could not create labeled QRs.', variant: 'destructive' });
     } finally {
       if (type === 'participant') setIsZippingParticipants(false);
       if (type === 'staff') setIsZippingStaff(false);
@@ -353,6 +420,42 @@ export default function QrManagementPage() {
       </header>
 
       <main className="flex-1 container mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Participants</p>
+                <p className="text-2xl font-bold">{participants.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <ShieldAlert className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Staff</p>
+                <p className="text-2xl font-bold">{staffForQr.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-primary/5 border-primary/20 text-primary-foreground bg-primary">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-full text-white">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary-foreground/80 uppercase tracking-wider">System Status</p>
+                <p className="text-2xl font-bold">Ready</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Tabs defaultValue="participants" className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:w-1/2 lg:w-1/3 mx-auto mb-8">
             <TabsTrigger value="participants" className="data-[state=active]:shadow-md transition-all">Participant QRs</TabsTrigger>
@@ -420,11 +523,18 @@ export default function QrManagementPage() {
                   <Button 
                     onClick={() => generateAndDownloadZip(filteredParticipantsForQr, 'participant')}
                     disabled={isLoadingParticipants || isZippingParticipants || filteredParticipantsForQr.length === 0 || !appBaseUrl}
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto font-semibold"
                   >
                     {isZippingParticipants ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
-                    Download All QRs ({filteredParticipantsForQr.length})
+                    Generate & Download {filteredParticipantsForQr.length} QRs
                   </Button>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-4 rounded-lg flex items-start gap-3 mb-6">
+                   <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                   <p className="text-sm text-blue-700 dark:text-blue-300">
+                     Each generated QR code image will now include the <strong>person's name and school</strong> directly below the code for easier identification during printing and distribution.
+                   </p>
                 </div>
                 
                 {isLoadingParticipants ? (
@@ -433,14 +543,21 @@ export default function QrManagementPage() {
                     Loading participants...
                   </div>
                 ) : filteredParticipantsForQr.length > 0 && appBaseUrl ? (
-                  <div className="text-center py-6 text-muted-foreground bg-muted/50 rounded-lg">
-                    <QrCodeIcon className="h-16 w-16 mx-auto mb-4 opacity-60" />
-                    <p className="text-lg">
-                      {filteredParticipantsForQr.length} participant(s) found matching your criteria.
-                    </p>
-                    <p className="text-sm">
-                      Click "Download All QRs" to generate a ZIP file.
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto p-2 border rounded-lg bg-muted/20">
+                    {filteredParticipantsForQr.map(p => (
+                      <Card key={p.id} className="overflow-hidden hover:ring-2 ring-primary/50 transition-all cursor-pointer group" onClick={() => handlePreview(p)}>
+                        <div className="p-4 flex flex-col items-center text-center">
+                          <div className="w-24 h-24 bg-white p-2 rounded border group-hover:scale-105 transition-transform">
+                             <QrCodeIcon className="w-full h-full text-muted-foreground/30" />
+                          </div>
+                          <p className="mt-3 font-semibold truncate w-full">{p.name}</p>
+                          <p className="text-xs text-muted-foreground truncate w-full">{p.school}</p>
+                          <Button variant="ghost" size="sm" className="mt-2 h-8 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Eye className="h-3 w-3 mr-1" /> Preview
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                 ) : filteredParticipantsForQr.length === 0 && !isLoadingParticipants ? (
                   <div className="text-center py-10 text-muted-foreground">
@@ -517,11 +634,18 @@ export default function QrManagementPage() {
                   <Button 
                     onClick={() => generateAndDownloadZip(filteredStaffForQr, 'staff')}
                     disabled={isLoadingStaffForQr || isZippingStaff || filteredStaffForQr.length === 0 || !appBaseUrl}
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto font-semibold"
                   >
                     {isZippingStaff ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileArchive className="mr-2 h-5 w-5" />}
-                    Download All QRs ({filteredStaffForQr.length})
+                    Generate & Download {filteredStaffForQr.length} QRs
                   </Button>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-4 rounded-lg flex items-start gap-3 mb-6">
+                   <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                   <p className="text-sm text-blue-700 dark:text-blue-300">
+                     Each generated QR code image will now include the <strong>staff member's name and team</strong> directly below the code for easier identification.
+                   </p>
                 </div>
 
                 {isLoadingStaffForQr ? (
@@ -530,14 +654,21 @@ export default function QrManagementPage() {
                     Loading staff members...
                   </div>
                 ) : filteredStaffForQr.length > 0 && appBaseUrl ? (
-                  <div className="text-center py-6 text-muted-foreground bg-muted/50 rounded-lg">
-                    <QrCodeIcon className="h-16 w-16 mx-auto mb-4 opacity-60" />
-                    <p className="text-lg">
-                      {filteredStaffForQr.length} staff member(s) found matching your criteria.
-                    </p>
-                    <p className="text-sm">
-                      Click "Download All QRs" to generate a ZIP file.
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto p-2 border rounded-lg bg-muted/20">
+                    {filteredStaffForQr.map(s => (
+                      <Card key={s.id} className="overflow-hidden hover:ring-2 ring-primary/50 transition-all cursor-pointer group" onClick={() => handlePreview(s)}>
+                        <div className="p-4 flex flex-col items-center text-center">
+                          <div className="w-24 h-24 bg-white p-2 rounded border group-hover:scale-105 transition-transform">
+                             <QrCodeIcon className="w-full h-full text-muted-foreground/30" />
+                          </div>
+                          <p className="mt-3 font-semibold truncate w-full">{s.name}</p>
+                          <p className="text-xs text-muted-foreground truncate w-full">{s.team || s.role}</p>
+                          <Button variant="ghost" size="sm" className="mt-2 h-8 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Eye className="h-3 w-3 mr-1" /> Preview
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                 ) : filteredStaffForQr.length === 0 && !isLoadingStaffForQr ? (
                     <div className="text-center py-10 text-muted-foreground">
@@ -552,19 +683,87 @@ export default function QrManagementPage() {
           </TabsContent>
         </Tabs>
 
-        <footer className="py-10 border-t mt-16 bg-background/80">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-md text-muted-foreground">
-              {QR_FOOTER_CONFIG.brandName} &copy; {new Date().getFullYear()}
-            </p>
-            {currentUser && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {userRole === 'owner' ? `Owner UID: ${OWNER_UID}` : `Admin: ${currentUser.email}`}
-              </p>
-            )}
-          </div>
-        </footer>
+        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>QR Code Preview</DialogTitle>
+              <DialogDescription>
+                Labels are automatically added during the batch download process.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-lg border-2 border-dashed">
+               {previewItem && appBaseUrl && (
+                  <QRPreviewComponent
+                    item={previewItem}
+                    baseUrl={appBaseUrl}
+                    logoUrl={eventLogoUrl}
+                  />
+               )}
+            </div>
+            <div className="flex justify-center gap-4">
+               <Button onClick={() => setIsPreviewOpen(false)}>Close Preview</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <div className="mt-16">
+          <Footer />
+        </div>
       </main>
+    </div>
+  );
+}
+
+function QRPreviewComponent({ item, baseUrl, logoUrl }: { item: Participant | StaffMember, baseUrl: string, logoUrl?: string }) {
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let currentUrl: string | null = null;
+    const generatePreview = async () => {
+      const isParticipant = 'school' in item;
+      const data = isParticipant
+        ? `${baseUrl}/checkin?id=${item.id}`
+        : `${baseUrl}/staff-checkin?id=${item.id}`;
+
+      const qrOptions: QRCodeStylingOptions = {
+        width: 300,
+        height: 300,
+        margin: 10,
+        qrOptions: { typeNumber: 0, mode: 'Byte', errorCorrectionLevel: 'H' },
+        imageOptions: { hideBackgroundDots: true, imageSize: 0.3, margin: 5, crossOrigin: 'anonymous' },
+        dotsOptions: { type: 'rounded', color: '#1a1a1a' },
+        backgroundOptions: { color: '#ffffff' },
+        cornersSquareOptions: { type: 'extra-rounded', color: '#000000' },
+        cornersDotOptions: { type: 'dot', color: '#000000' },
+        image: logoUrl,
+      };
+      const qrInstance = new QRCodeStyling(qrOptions);
+      qrInstance.update({ data });
+      const blob = await qrInstance.getRawData('png');
+      if (blob) {
+        currentUrl = URL.createObjectURL(blob as Blob);
+        setQrSrc(currentUrl);
+      }
+    };
+    generatePreview();
+    return () => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, [item, baseUrl, logoUrl]);
+
+  return (
+    <div className="flex flex-col items-center bg-white p-4 rounded-lg shadow-sm">
+      {qrSrc ? (
+        <img src={qrSrc} alt="QR Code Preview" className="w-48 h-48" />
+      ) : (
+        <div className="w-48 h-48 flex items-center justify-center">
+          <Loader2 className="animate-spin text-primary" />
+        </div>
+      )}
+      <p className="mt-4 font-bold text-black uppercase">{item.name}</p>
+      <p className="text-sm text-gray-500 font-medium">
+        {'school' in item ? item.school : (item as StaffMember).team || (item as StaffMember).role}
+      </p>
     </div>
   );
 }
