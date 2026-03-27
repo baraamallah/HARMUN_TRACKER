@@ -2,6 +2,7 @@ import * as React from 'react';
 import { getSystemStaffTeams } from '@/lib/actions';
 import { StaffDashboardClient } from '@/components/staff/StaffDashboardClient';
 import { AppLayoutClientShell } from '@/components/layout/AppLayoutClientShell';
+import { ClientRedirect } from '@/components/auth/ClientRedirect';
 
 /**
  * Server component for the Staff Dashboard.
@@ -13,6 +14,7 @@ export default async function StaffDashboardPage() {
 
     return (
         <AppLayoutClientShell>
+            <ClientRedirect />
             <StaffDashboardClient
                 // Pass empty initial staff; client will fetch them.
                 initialStaffMembers={[]}

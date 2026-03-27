@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { getParticipantById } from '@/lib/actions';
 import { quickSetParticipantStatusClient, resetParticipantAttendanceClient } from '@/lib/checkin-client';
+import { ClientRedirect } from '@/components/auth/ClientRedirect';
 import { format, parseISO, isValid } from 'date-fns';
 
 const ALL_ATTENDANCE_STATUSES_OPTIONS: { status: AttendanceStatus; label: string; icon: React.ElementType }[] = [
@@ -344,6 +345,7 @@ function CheckinPageContent() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-3 sm:p-4">
+      <ClientRedirect />
       <Card className={cn("w-full max-w-lg shadow-xl border-t-8 transition-colors duration-300", cardBorderColor)}>
         <CardHeader className="items-center text-center pt-6 sm:pt-8 px-4">
             <div className="mb-3 sm:mb-4"><Logo size="md"/></div>

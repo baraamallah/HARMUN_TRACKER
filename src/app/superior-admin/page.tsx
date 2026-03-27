@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User, BarChart, QrCode } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
+import { ShieldAlert, LogOut, Settings, Users, DatabaseZap, TriangleAlert, Home, BookOpenText, Landmark, PlusCircle, ExternalLink, Settings2, UserPlus, ScrollText, Loader2, Trash2, Edit, Users2 as StaffIcon, Network, User, BarChart, QrCode, CalendarDays } from 'lucide-react'; // Removed QrCodeIcon, Search, Clipboard
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, Timestamp, where, deleteDoc, doc, getDoc as fsGetDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -539,6 +539,27 @@ export default function SuperiorAdminPage() {
                 <Button asChild className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
                   <Link href="/superior-admin/profile">
                     <Settings className="mr-2 h-4 w-4" /> Open Profile
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card className="shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-orange-500 hover:scale-105">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-orange-500" />
+                  In Session
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Access committee session management
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                  <Link href="/in-session">
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open In Session
                   </Link>
                 </Button>
               </CardFooter>

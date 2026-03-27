@@ -109,7 +109,9 @@ export interface AdminManagedUser {
   id: string;
   email: string;
   displayName?: string | null;
-  role: 'admin' | string;
+  role: 'admin' | 'session_manager' | string;
+  defaultCommittee?: string;
+  sessionNotes?: string;
   canAccessSuperiorAdmin?: boolean; // New permission flag
   permissions?: {
     canEditParticipants: boolean;

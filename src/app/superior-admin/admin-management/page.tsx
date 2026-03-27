@@ -78,7 +78,7 @@ export default function AdminManagementPage() {
     setIsLoadingAdmins(true);
     try {
       const usersColRef = collection(db, USERS_COLLECTION);
-      const q = query(usersColRef, where('role', '==', 'admin'), orderBy('email'));
+      const q = query(usersColRef, where('role', 'in', ['admin', 'session_manager']), orderBy('email'));
       const querySnapshot = await getDocs(q);
       const admins = querySnapshot.docs.map(docSnap => {
         const data = docSnap.data();
@@ -87,6 +87,7 @@ export default function AdminManagementPage() {
           email: data.email,
           displayName: data.displayName,
           role: data.role,
+          defaultCommittee: data.defaultCommittee,
           imageUrl: data.imageUrl,
           canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
           permissions: data.permissions,
@@ -267,14 +268,14 @@ export default function AdminManagementPage() {
           <CardContent className="space-y-6">
             <div className="flex justify-end">
               <Button onClick={handleOpenAddDialog}>
-                <UserPlus className="mr-2 h-5 w-5" /> Grant Admin Role
+                <UserPlus className="mr-2 h-5 w-5" /> Grant Admin/Manager Role
               </Button>
             </div>
             
             <Separator />
 
             <div>
-              <h3 className="text-xl font-semibold mb-4">Existing Administrators</h3>
+              <h3 className="text-xl font-semibold mb-4">Existing Administrators & Managers</h3>
               {isLoadingAdmins ? (
                 <div className="space-y-4">
                   {[...Array(3)].map((_, i) => (
@@ -295,6 +296,7 @@ export default function AdminManagementPage() {
                       <TableRow>
                         <TableHead className="w-[60px]">Avatar</TableHead>
                         <TableHead>Name/Email</TableHead>
+                        <TableHead>Role / Committee</TableHead>
                         <TableHead>Permissions</TableHead>
                         <TableHead>Granted At</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -312,6 +314,18 @@ export default function AdminManagementPage() {
                           <TableCell>
                             <div className="font-medium">{admin.displayName || admin.email}</div>
                             {admin.displayName && <div className="text-xs text-muted-foreground">{admin.email}</div>}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge variant={admin.role === 'admin' ? 'default' : 'outline'} className="w-fit capitalize">
+                                {admin.role?.replace('_', ' ')}
+                              </Badge>
+                              {admin.role === 'session_manager' && admin.defaultCommittee && (
+                                <span className="text-xs text-muted-foreground">
+                                  Committee: {admin.defaultCommittee}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -361,10 +375,10 @@ export default function AdminManagementPage() {
                 <div className="text-center py-10 border rounded-md">
                   <Users size={48} className="mx-auto text-muted-foreground opacity-50" />
                   <p className="mt-4 text-lg text-muted-foreground">
-                    No administrator accounts found.
+                    No administrator or session manager accounts found.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Click "Grant Admin Role" to assign admin privileges to an existing user who already has a Firebase Authentication account.
+                    Click "Grant Admin/Manager Role" to assign privileges to an existing user who already has a Firebase Authentication account.
                   </p>
                 </div>
               )}

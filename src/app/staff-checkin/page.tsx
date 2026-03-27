@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { quickSetStaffStatusAction, getStaffMemberById } from '@/lib/actions';
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
+import { ClientRedirect } from '@/components/auth/ClientRedirect';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { StaffMemberStatusBadge } from '@/components/staff/StaffMemberStatusBadge';
@@ -297,6 +298,7 @@ function StaffCheckinPageContent() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+      <ClientRedirect />
       <Card className={cn("w-full max-w-lg shadow-xl border-t-8 transition-colors duration-300", cardBorderColor)}>
         <CardHeader className="items-center text-center pt-8">
             <div className="mb-4"><Logo size="lg"/></div>
