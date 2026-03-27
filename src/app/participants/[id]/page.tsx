@@ -147,9 +147,13 @@ export default function ParticipantProfilePage() {
     setIsSubmitting(true);
     try {
       const participantRef = doc(db, 'participants', participant.id);
-      await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+      const updates: any = { status, statusChangedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+      if (status === 'Restroom Break') {
+        updates.restroomBreakOvertaken = false;
+      }
+      await updateDoc(participantRef, updates);
 
-      setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+      setParticipant(prev => prev ? { ...prev, status, statusChangedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), restroomBreakOvertaken: status === 'Restroom Break' ? false : prev.restroomBreakOvertaken } : null);
       
       toast({
         title: 'Attendance Updated',

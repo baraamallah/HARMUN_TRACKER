@@ -37,6 +37,8 @@ export interface Participant {
     day1?: string | FieldValueType | null | undefined;
     day2?: string | FieldValueType | null | undefined;
   };
+  statusChangedAt?: string | FieldValueType | null | undefined;
+  restroomBreakOvertaken?: boolean;
   createdAt?: string | FieldValueType | null | undefined;
   updatedAt?: string | FieldValueType | null | undefined;
 }
@@ -113,6 +115,7 @@ export interface AdminManagedUser {
   defaultCommittee?: string;
   sessionNotes?: string;
   canAccessSuperiorAdmin?: boolean; // New permission flag
+  receiveNotifications?: boolean;
   permissions?: {
     canEditParticipants: boolean;
     canDeleteParticipants: boolean;

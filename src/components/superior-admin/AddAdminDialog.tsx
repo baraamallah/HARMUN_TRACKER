@@ -46,6 +46,7 @@ const addAdminSchema = z.object({
   role: z.enum(['admin', 'session_manager']).default('admin'),
   defaultCommittee: z.string().optional(),
   canAccessSuperiorAdmin: z.boolean().default(false),
+  receiveNotifications: z.boolean().default(false),
   permissions: z.object({
     canEditParticipants: z.boolean().default(false),
     canDeleteParticipants: z.boolean().default(false),
@@ -92,6 +93,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
       role: 'admin',
       defaultCommittee: '',
       canAccessSuperiorAdmin: false,
+      receiveNotifications: false,
       permissions: {
         canEditParticipants: false,
         canDeleteParticipants: false,
@@ -114,6 +116,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           role: (adminToEdit.role as 'admin' | 'session_manager') || 'admin',
           defaultCommittee: adminToEdit.defaultCommittee || '',
           canAccessSuperiorAdmin: adminToEdit.canAccessSuperiorAdmin || false,
+          receiveNotifications: adminToEdit.receiveNotifications || false,
           permissions: {
             canEditParticipants: adminToEdit.permissions?.canEditParticipants || false,
             canDeleteParticipants: adminToEdit.permissions?.canDeleteParticipants || false,
@@ -132,6 +135,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           role: 'admin',
           defaultCommittee: '',
           canAccessSuperiorAdmin: false,
+          receiveNotifications: false,
           permissions: {
             canEditParticipants: false,
             canDeleteParticipants: false,
@@ -148,7 +152,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
 
   const onSubmit = (data: AddAdminFormData) => {
     startTransition(async () => {
-      const { email, displayName, authUid, role, defaultCommittee, canAccessSuperiorAdmin, permissions } = data;
+      const { email, displayName, authUid, role, defaultCommittee, canAccessSuperiorAdmin, receiveNotifications, permissions } = data;
       if (!email || !authUid) {
         toast({ title: 'Error', description: 'Email and Auth UID are required.', variant: 'destructive' });
         return;
@@ -170,6 +174,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           email: currentEmail,
           displayName: currentDisplayName,
           canAccessSuperiorAdmin: canAccessSuperiorAdmin,
+          receiveNotifications: receiveNotifications,
           permissions: permissions,
           role: role,
           defaultCommittee: defaultCommittee || undefined,
@@ -437,6 +442,26 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                 )}
               />
             </div>
+
+            <Separator />
+
+            <FormField
+              control={form.control}
+              name="receiveNotifications"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel>Receive Notifications</FormLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Enable to receive notifications for toilet breaks and other events.
+                    </p>
+                  </div>
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={(v) => requestAnimationFrame(() => field.onChange(v))} disabled={isPending} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             <Separator />
             

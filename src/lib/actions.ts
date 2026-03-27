@@ -83,6 +83,8 @@ function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Par
             day1: toISODateString(data.checkInTimes?.day1),
             day2: toISODateString(data.checkInTimes?.day2),
         },
+        statusChangedAt: toISODateString(data.statusChangedAt),
+        restroomBreakOvertaken: data.restroomBreakOvertaken || false,
         createdAt: toISODateString(data.createdAt),
         updatedAt: toISODateString(data.updatedAt),
     };
@@ -525,8 +527,13 @@ export async function quickSetParticipantStatusAction(
     const participantData = participantSnap.data();
     const updates: { [key: string]: any } = {
       status: newStatus,
+      statusChangedAt: fsServerTimestamp(),
       updatedAt: fsServerTimestamp(),
     };
+
+    if (newStatus === 'Restroom Break') {
+      updates.restroomBreakOvertaken = false;
+    }
 
     // Get current conference day
     const currentDay = await getCurrentConferenceDay();

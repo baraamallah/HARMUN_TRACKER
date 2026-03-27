@@ -66,6 +66,7 @@ export default function SystemSettingsPage() {
   const [currentDefaultParticipantStatus, setCurrentDefaultParticipantStatus] = useState<AttendanceStatus | null>(null);
   const [currentDefaultStaffStatus, setCurrentDefaultStaffStatus] = useState<StaffAttendanceStatus | null>(null);
   const [currentConferenceDay, setCurrentConferenceDay] = useState<'day1' | 'day2'>('day1');
+  const [toiletBreakThreshold, setToiletBreakThreshold] = useState<number>(10);
   
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isUpdatingSetting, startUpdateTransition] = useTransition();
@@ -83,11 +84,17 @@ export default function SystemSettingsPage() {
       setCurrentDefaultParticipantStatus(participantStatus);
       setCurrentDefaultStaffStatus(staffStatus);
       
-      // Fetch current conference day
+      // Fetch current conference day and other settings
       const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
       const docSnap = await getDoc(configDocRef);
-      if (docSnap.exists() && docSnap.data().currentConferenceDay) {
-        setCurrentConferenceDay(docSnap.data().currentConferenceDay as 'day1' | 'day2');
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.currentConferenceDay) {
+          setCurrentConferenceDay(data.currentConferenceDay as 'day1' | 'day2');
+        }
+        if (data.toiletBreakThreshold !== undefined) {
+          setToiletBreakThreshold(data.toiletBreakThreshold);
+        }
       }
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load system settings.', variant: 'destructive' });
@@ -149,7 +156,7 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const handleSettingUpdate = async (settingKey: string, newValue: string | AttendanceStatus | StaffAttendanceStatus) => {
+  const handleSettingUpdate = async (settingKey: string, newValue: string | number | AttendanceStatus | StaffAttendanceStatus) => {
     startUpdateTransition(async () => {
       try {
         const configDocRef = doc(db, SYSTEM_CONFIG_COLLECTION, APP_SETTINGS_DOC_ID);
@@ -157,6 +164,7 @@ export default function SystemSettingsPage() {
         
         if (settingKey === 'defaultAttendanceStatus') setCurrentDefaultParticipantStatus(newValue as AttendanceStatus);
         if (settingKey === 'defaultStaffStatus') setCurrentDefaultStaffStatus(newValue as StaffAttendanceStatus);
+        if (settingKey === 'toiletBreakThreshold') setToiletBreakThreshold(Number(newValue));
 
         toast({ title: 'Setting Updated', description: `Configuration for "${settingKey}" has been saved.` });
       } catch (error: any) {
@@ -318,6 +326,37 @@ export default function SystemSettingsPage() {
                     </Select>
                 )}
                 {isUpdatingSetting && currentDefaultParticipantStatus !== null && <p className="text-xs sm:text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
+            </div>
+
+            {/* Toilet Break Threshold Setting */}
+            <div className="space-y-3 p-3 sm:p-4 border rounded-lg shadow-sm">
+                <Label htmlFor="toiletBreakThresholdInput" className="text-base sm:text-lg font-semibold flex items-center">
+                    <Workflow className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 flex-shrink-0" /> Restroom Break Threshold (Minutes)
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                    Set the duration (in minutes) after which a student on a restroom break will trigger a notification.
+                </p>
+                {isLoadingSettings ? (
+                    <Skeleton className="h-10 w-full" />
+                ) : (
+                    <div className="flex gap-2">
+                      <Input
+                          id="toiletBreakThresholdInput"
+                          type="number"
+                          value={toiletBreakThreshold}
+                          onChange={(e) => setToiletBreakThreshold(Number(e.target.value))}
+                          disabled={isUpdatingSetting}
+                          className="w-full"
+                      />
+                      <Button
+                        onClick={() => handleSettingUpdate('toiletBreakThreshold', toiletBreakThreshold)}
+                        disabled={isUpdatingSetting}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                )}
+                {isUpdatingSetting && <p className="text-xs sm:text-sm text-yellow-500 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</p>}
             </div>
 
             {/* Default Staff Attendance Status Setting */}

@@ -90,6 +90,7 @@ export default function AdminManagementPage() {
           defaultCommittee: data.defaultCommittee,
           imageUrl: data.imageUrl,
           canAccessSuperiorAdmin: data.canAccessSuperiorAdmin === true,
+          receiveNotifications: data.receiveNotifications === true,
           permissions: data.permissions,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
@@ -330,6 +331,7 @@ export default function AdminManagementPage() {
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {admin.canAccessSuperiorAdmin && <Badge variant="destructive">Superior</Badge>}
+                              {admin.receiveNotifications && <Badge variant="outline" className="border-blue-500 text-blue-500">Notifications</Badge>}
                               {admin.permissions?.canEditParticipants && <Badge variant="secondary">Edit Participants</Badge>}
                               {admin.permissions?.canDeleteParticipants && <Badge variant="secondary">Delete Participants</Badge>}
                               {admin.permissions?.canCreateStaff && <Badge variant="secondary">Create Staff</Badge>}

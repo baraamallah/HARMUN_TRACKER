@@ -32,6 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { ThemeToggleButton } from '@/components/shared/theme-toggle-button';
+import { NotificationCenter } from '@/components/layout/NotificationCenter';
 import { useAuth } from '@/hooks/use-auth';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -71,7 +72,7 @@ const publicNavItems: NavItem[] = [
 export function TopNavbar() {
   const pathname = usePathname();
   const { toast } = useToast();
-  const { loggedInUser, userAppRole, permissions, authSessionLoading } = useAuth();
+  const { loggedInUser, userAppRole, permissions, authSessionLoading, adminUser } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const handleLogout = async () => {
@@ -174,6 +175,10 @@ export function TopNavbar() {
 
         <div className="flex items-center space-x-2">
           <ThemeToggleButton />
+
+          {loggedInUser && (userAppRole === 'admin' || userAppRole === 'owner' || userAppRole === 'session_manager') && adminUser?.receiveNotifications && (
+            <NotificationCenter />
+          )}
 
           {authSessionLoading ? (
             <Skeleton className="h-10 w-10 rounded-full" />

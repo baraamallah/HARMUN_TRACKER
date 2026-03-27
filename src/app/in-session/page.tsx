@@ -37,15 +37,24 @@ import {
   Wrench,
   LogOutIcon,
   AlertOctagon,
-  Search
+  Search,
+  Bell,
+  Clock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, writeBatch, serverTimestamp, onSnapshot, query, where, collection } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch, serverTimestamp, onSnapshot, query, where, collection, getDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { formatDistanceToNow, parseISO, format } from 'date-fns';
 
 export default function InSessionPage() {
   const { adminUser, userAppRole, authSessionLoading } = useAuth();
@@ -62,6 +71,8 @@ export default function InSessionPage() {
   const [sessionNotes, setSessionNotes] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [toiletBreakThreshold, setToiletBreakThreshold] = useState<number>(10);
+  const [overtakingIds, setOvertakingIds] = useState<string[]>([]);
 
   // Redirect if not session manager or admin
   useEffect(() => {
@@ -82,17 +93,26 @@ export default function InSessionPage() {
     }
   }, [adminUser, selectedCommittee]);
 
-  // Fetch committees
+  // Fetch committees and threshold
   useEffect(() => {
-    async function fetchCommittees() {
+    async function fetchInitialData() {
       try {
-        const list = await getSystemCommittees();
+        const [list, configSnap] = await Promise.all([
+          getSystemCommittees(),
+          getDoc(doc(db, 'system_config', 'main_settings'))
+        ]);
         setCommittees(list);
+        if (configSnap.exists()) {
+          const configData = configSnap.data();
+          if (configData.toiletBreakThreshold !== undefined) {
+            setToiletBreakThreshold(configData.toiletBreakThreshold);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching committees:", error);
+        console.error("Error fetching initial data:", error);
       }
     }
-    fetchCommittees();
+    fetchInitialData();
   }, []);
 
   // Real-time listener for participants
@@ -164,10 +184,15 @@ export default function InSessionPage() {
     try {
       const batch = writeBatch(db);
       selectedIds.forEach(id => {
-        batch.update(doc(db, "participants", id), {
+        const updates: any = {
           status,
+          statusChangedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        };
+        if (status === 'Restroom Break') {
+          updates.restroomBreakOvertaken = false;
+        }
+        batch.update(doc(db, "participants", id), updates);
       });
       await batch.commit();
       toast({
@@ -197,6 +222,31 @@ export default function InSessionPage() {
     );
   };
 
+  const handleOvertake = async (id: string) => {
+    setOvertakingIds(prev => [...prev, id]);
+    try {
+      await updateDoc(doc(db, "participants", id), {
+        restroomBreakOvertaken: true,
+        updatedAt: serverTimestamp()
+      });
+      toast({ title: "Restroom Break Overtaken", description: "The student will no longer trigger notifications." });
+    } catch (error: any) {
+      console.error("Overtake failed:", error);
+      toast({ title: "Overtake Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setOvertakingIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
+  const overdueParticipants = participants.filter(p => {
+    if (p.status !== 'Restroom Break' || p.restroomBreakOvertaken) return false;
+    if (!p.statusChangedAt) return false;
+
+    const startTime = typeof p.statusChangedAt === 'string' ? parseISO(p.statusChangedAt) : (p.statusChangedAt as any).toDate();
+    const diffInMinutes = (Date.now() - startTime.getTime()) / (1000 * 60);
+    return diffInMinutes >= toiletBreakThreshold;
+  });
+
   const filteredParticipants = participants.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.school.toLowerCase().includes(searchTerm.toLowerCase())
@@ -219,6 +269,40 @@ export default function InSessionPage() {
   return (
     <AppLayoutClientShell>
       <div className="space-y-6">
+        {/* Urgent Notifications Banner - Only for Session Managers */}
+        {userAppRole === 'session_manager' && overdueParticipants.length > 0 && (
+          <div className="bg-destructive/10 border-2 border-destructive rounded-xl p-4 mb-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <Bell className="h-6 w-6 text-destructive animate-bounce" />
+              <h2 className="text-xl font-bold text-destructive">Restroom Break Alerts ({overdueParticipants.length})</h2>
+            </div>
+            <div className="space-y-2">
+              {overdueParticipants.map(p => {
+                const startTime = typeof p.statusChangedAt === 'string' ? parseISO(p.statusChangedAt) : (p.statusChangedAt as any).toDate();
+                return (
+                  <div key={p.id} className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-background rounded-lg border border-destructive/30 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <UserRound className="h-5 w-5 text-destructive" />
+                      <div>
+                        <span className="font-bold">{p.name}</span> has been on a restroom break for <span className="text-destructive font-black underline">{formatDistanceToNow(startTime)}</span>.
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleOvertake(p.id)}
+                      disabled={overtakingIds.includes(p.id)}
+                    >
+                      {overtakingIds.includes(p.id) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Overtake Notification
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">In Session Management</h1>
@@ -312,8 +396,34 @@ export default function InSessionPage() {
                               onCheckedChange={() => toggleSelect(participant.id)}
                             />
                             <div>
-                              <p className="font-semibold text-sm sm:text-base">{participant.name}</p>
-                              <p className="text-xs text-muted-foreground">{participant.school}</p>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className="cursor-pointer"
+                                      onDoubleClick={() => router.push(`/participants/${participant.id}`)}
+                                      onClick={() => {
+                                        toast({
+                                          title: participant.name,
+                                          description: participant.status === 'Restroom Break' && participant.statusChangedAt
+                                            ? `On restroom break since ${format(typeof participant.statusChangedAt === 'string' ? parseISO(participant.statusChangedAt) : (participant.statusChangedAt as any).toDate(), 'p')} (${formatDistanceToNow(typeof participant.statusChangedAt === 'string' ? parseISO(participant.statusChangedAt) : (participant.statusChangedAt as any).toDate())} ago)`
+                                            : `Current status: ${participant.status}`,
+                                        });
+                                      }}
+                                    >
+                                      <p className="font-semibold text-sm sm:text-base hover:text-primary transition-colors">{participant.name}</p>
+                                      <p className="text-xs text-muted-foreground">{participant.school}</p>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {participant.status === 'Restroom Break' && participant.statusChangedAt ? (
+                                      <p>Restroom break: {formatDistanceToNow(typeof participant.statusChangedAt === 'string' ? parseISO(participant.statusChangedAt) : (participant.statusChangedAt as any).toDate())} ago</p>
+                                    ) : (
+                                      <p>Click for details, double-click for profile</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </div>
 
