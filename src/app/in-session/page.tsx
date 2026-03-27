@@ -136,7 +136,7 @@ export default function InSessionPage() {
     if (!adminUser?.id || userAppRole !== 'session_manager') return;
     setIsUpdatingCommittee(true);
     try {
-      await updateDoc(doc(db, 'users', adminUser.id), { defaultCommittee: newCommittee, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'users', adminUser.id), { defaultCommittee: newCommittee || null, updatedAt: serverTimestamp() });
     } catch (err) { console.error(err); }
     finally { setIsUpdatingCommittee(false); }
   };

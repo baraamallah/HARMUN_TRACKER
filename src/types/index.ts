@@ -111,7 +111,7 @@ export interface AdminManagedUser {
   email: string;
   displayName?: string | null;
   role: 'admin' | 'session_manager' | string;
-  defaultCommittee?: string;
+  defaultCommittee?: string | null;
   sessionNotes?: string;
   canAccessSuperiorAdmin?: boolean; // New permission flag
   permissions?: {

@@ -174,7 +174,7 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
           canAccessSuperiorAdmin: canAccessSuperiorAdmin,
           permissions: permissions,
           role: role,
-          defaultCommittee: defaultCommittee || undefined,
+          defaultCommittee: defaultCommittee || null,
           updatedAt: serverTimestamp() as any
         };
 
