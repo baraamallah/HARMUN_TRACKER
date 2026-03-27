@@ -109,5 +109,12 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    font-size: 110%; /* Scale everything up slightly on mobile */
   }
 }
