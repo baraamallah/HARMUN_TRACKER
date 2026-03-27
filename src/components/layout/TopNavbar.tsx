@@ -105,7 +105,6 @@ export function TopNavbar() {
         items.push(adminNavItems[1]);
       }
     }
-    items.push(...publicNavItems);
 
     const uniqueItems = items.filter((item, index, self) =>
       index === self.findIndex((t) => t.href === item.href)
@@ -196,6 +195,13 @@ export function TopNavbar() {
                     </Link>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem asChild>
+                  <Link href="/public">
+                    <Eye className="mr-2 h-4 w-4" />
+                    <span>Public View</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Logout</span>
