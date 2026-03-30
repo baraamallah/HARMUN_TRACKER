@@ -6,9 +6,21 @@ import { TopNavbar } from '@/components/layout/TopNavbar';
 import { Footer } from '@/components/layout/Footer';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 
 export function AppLayoutClientShell({ children }: { children: React.ReactNode }) {
-  const { authSessionLoading } = useAuth();
+  const { authSessionLoading, userAppRole } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  React.useEffect(() => {
+    if (!authSessionLoading && userAppRole === 'session_manager') {
+      // Strict lockdown: session managers only allowed on in-session page
+      if (pathname !== '/in-session') {
+        router.push('/in-session');
+      }
+    }
+  }, [userAppRole, authSessionLoading, pathname, router]);
 
   if (authSessionLoading) {
     return (

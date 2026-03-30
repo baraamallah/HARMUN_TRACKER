@@ -40,6 +40,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { useRestroomAlerts } from '@/hooks/use-restroom-alerts';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { logUserAction, logAuthentication, logError } from '@/lib/logging';
 import type { Participant } from '@/types';
 
 interface NavItem {
@@ -69,7 +70,7 @@ const ownerOnlyNavItems: NavItem[] = [
 export function TopNavbar() {
   const pathname = usePathname();
   const { toast } = useToast();
-  const { loggedInUser, userAppRole, permissions, authSessionLoading } = useAuth();
+  const { loggedInUser, userAppRole, adminUser, permissions, authSessionLoading, sessionState, updateSessionActivity } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   // ── Notification Center: fetch all restroom-break participants ──────────
@@ -78,7 +79,7 @@ export function TopNavbar() {
 
   const showNotifications =
     userAppRole === 'owner' ||
-    (userAppRole === 'admin' && permissions?.canReceiveNotifications === true);
+    ((userAppRole === 'admin' || userAppRole === 'session_manager') && permissions?.canReceiveNotifications === true);
 
   React.useEffect(() => {
     if (!showNotifications) return;
@@ -99,7 +100,13 @@ export function TopNavbar() {
     const participantsRef = collection(db, 'participants');
     const q = query(participantsRef, where('status', '==', 'Restroom Break'));
     const unsubscribe = onSnapshot(q, snapshot => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
+      let data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
+      
+      // Filter for session managers: only show their own committee
+      if (userAppRole === 'session_manager' && adminUser?.defaultCommittee) {
+        data = data.filter(p => p.committee === adminUser.defaultCommittee);
+      }
+      
       setAllParticipants(data);
     });
     return () => unsubscribe();
@@ -109,25 +116,58 @@ export function TopNavbar() {
 
   const handleMarkBack = async (participantId: string) => {
     try {
+      // Update session activity for session managers
+      if (userAppRole === 'session_manager') {
+        await updateSessionActivity();
+      }
+      
       await updateDoc(doc(db, 'participants', participantId), {
         status: 'Present',
         restroomBreakStartTime: null,
         updatedAt: serverTimestamp(),
       });
+      
+      await logUserAction('mark_participant_back_from_notification', 'participant', participantId, {
+        previousStatus: 'Restroom Break',
+        newStatus: 'Present',
+        source: 'notification_center'
+      });
+      
       toast({ title: 'Participant Returned', description: 'Status updated to Present.' });
     } catch (err) {
       console.error(err);
+      await logError('Failed to mark participant back from notification', err, { participantId });
       toast({ title: 'Error', description: 'Could not update status.', variant: 'destructive' });
     }
   };
   // ────────────────────────────────────────────────────────────────────────
 
+  const getTimestamp = (val: any): number => {
+    if (!val) return Date.now();
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') return new Date(val).getTime();
+    if (val && typeof val === 'object' && 'toDate' in val && typeof val.toDate === 'function') {
+      return val.toDate().getTime();
+    }
+    return Date.now();
+  };
+
   const handleLogout = async () => {
     try {
+      await logUserAction('logout_initiated', 'authentication', loggedInUser?.uid);
       await signOut(auth);
+      
+      const lastActivityTime = getTimestamp(sessionState?.lastActivity);
+      
+      await logAuthentication('logout', true, { 
+        userRole: userAppRole,
+        sessionDuration: Date.now() - lastActivityTime
+      });
       toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     } catch (error) {
       console.error("Error signing out: ", error);
+      await logError('Logout failed', error);
+      await logAuthentication('logout', false, { error: String(error) });
       toast({ title: 'Logout Error', description: 'Failed to sign out.', variant: 'destructive' });
     }
   };
@@ -168,7 +208,22 @@ export function TopNavbar() {
                 ? 'bg-primary/10 text-primary shadow-sm'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
-            onClick={() => isMobile && setIsMobileMenuOpen(false)}
+            onClick={async () => {
+              if (isMobile) setIsMobileMenuOpen(false);
+              if (pathname !== item.href) {
+                await logUserAction('navigate', 'page', item.href, {
+                  from: pathname,
+                  to: item.href,
+                  label: item.label,
+                  isMobile
+                });
+                
+                // Update session activity for session managers
+                if (userAppRole === 'session_manager') {
+                  await updateSessionActivity();
+                }
+              }
+            }}
           >
             <item.icon className={cn('h-5 w-5 mr-2', pathname === item.href ? 'text-primary' : '')} />
             <span>{item.label}</span>
@@ -195,9 +250,21 @@ export function TopNavbar() {
         <div className="flex items-center space-x-2">
           <ThemeToggleButton />
 
-          {/* Admin Notification Center */}
+          {/* Enhanced Notification Center */}
           {!authSessionLoading && loggedInUser && showNotifications && (
-            <NotificationCenter alerts={adminAlerts} onMarkBack={handleMarkBack} />
+            <NotificationCenter 
+              alerts={adminAlerts} 
+              onMarkBack={handleMarkBack} 
+              userRole={userAppRole}
+              permissions={permissions}
+              notificationPreferences={{
+                restroomAlerts: true,
+                systemNotifications: !!(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canReceiveNotifications)),
+                userActivityAlerts: userAppRole === 'owner',
+                errorNotifications: !!(userAppRole === 'owner' || (userAppRole === 'admin' && permissions?.canReceiveNotifications)),
+                securityAlerts: userAppRole === 'owner'
+              }}
+            />
           )}
 
           {authSessionLoading ? (

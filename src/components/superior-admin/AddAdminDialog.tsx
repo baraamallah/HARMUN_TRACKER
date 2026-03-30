@@ -56,6 +56,10 @@ const addAdminSchema = z.object({
     canAccessAnalytics: z.boolean().default(false),
     canManageQRCodes: z.boolean().default(false),
     canReceiveNotifications: z.boolean().default(false),
+    canAccessLogs: z.boolean().default(false),
+    canExportData: z.boolean().default(false),
+    canManageSessions: z.boolean().default(false),
+    canViewSystemStatus: z.boolean().default(false),
   }).default({}),
 });
 
@@ -102,6 +106,11 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
         canDeleteStaff: false,
         canAccessAnalytics: false,
         canManageQRCodes: false,
+        canReceiveNotifications: false,
+        canAccessLogs: false,
+        canExportData: false,
+        canManageSessions: false,
+        canViewSystemStatus: false,
       },
     },
   });
@@ -124,6 +133,11 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
             canDeleteStaff: adminToEdit.permissions?.canDeleteStaff || false,
             canAccessAnalytics: adminToEdit.permissions?.canAccessAnalytics || false,
             canManageQRCodes: adminToEdit.permissions?.canManageQRCodes || false,
+            canReceiveNotifications: adminToEdit.permissions?.canReceiveNotifications || false,
+            canAccessLogs: adminToEdit.permissions?.canAccessLogs || false,
+            canExportData: adminToEdit.permissions?.canExportData || false,
+            canManageSessions: adminToEdit.permissions?.canManageSessions || false,
+            canViewSystemStatus: adminToEdit.permissions?.canViewSystemStatus || false,
           },
         });
       } else {
@@ -142,6 +156,11 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
             canDeleteStaff: false,
             canAccessAnalytics: false,
             canManageQRCodes: false,
+            canReceiveNotifications: false,
+            canAccessLogs: false,
+            canExportData: false,
+            canManageSessions: false,
+            canViewSystemStatus: false,
           },
         });
       }
@@ -338,105 +357,108 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
 
             <Separator />
 
-            <div className="space-y-4">
-            <Separator />
-            
             <div className="space-y-6">
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Permission Groups</h4>
-              </div>
+              {form.watch('role') === 'admin' && (
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Permission Groups</h4>
+                </div>
+              )}
               
               {/* Attendance Group */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 px-1">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-bold">Attendance & Participants</span>
+              {form.watch('role') === 'admin' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold">Attendance & Participants</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <FormField
+                      control={form.control}
+                      name="permissions.canEditParticipants"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Edit Participants</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="permissions.canDeleteParticipants"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Delete Participants</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="permissions.canManageQRCodes"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer text-sm">Manage QR Codes</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <FormField
-                    control={form.control}
-                    name="permissions.canEditParticipants"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Edit Participants</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="permissions.canDeleteParticipants"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Delete Participants</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="permissions.canManageQRCodes"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer text-sm">Manage QR Codes</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Staff Group */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 px-1">
-                  <Users2 className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-bold">Staff Management</span>
+              {form.watch('role') === 'admin' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Users2 className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold">Staff Management</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <FormField
+                      control={form.control}
+                      name="permissions.canCreateStaff"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Create Staff</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="permissions.canEditStaff"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Edit Staff</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="permissions.canDeleteStaff"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Delete Staff</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <FormField
-                    control={form.control}
-                    name="permissions.canCreateStaff"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Create Staff</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="permissions.canEditStaff"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Edit Staff</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="permissions.canDeleteStaff"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Delete Staff</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Advanced Group */}
               <div className="space-y-3">
@@ -445,18 +467,20 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                   <span className="text-sm font-bold">Advanced & Analytics</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2">
-                  <FormField
-                    control={form.control}
-                    name="permissions.canAccessAnalytics"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
-                        <FormLabel className="font-medium cursor-pointer">Access Analytics</FormLabel>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                  {form.watch('role') === 'admin' && (
+                    <FormField
+                      control={form.control}
+                      name="permissions.canAccessAnalytics"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                          <FormLabel className="font-medium cursor-pointer">Access Analytics</FormLabel>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v)} disabled={isPending} className="h-5 w-5 rounded-md" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="permissions.canReceiveNotifications"
@@ -474,7 +498,6 @@ export function AddAdminDialog({ isOpen, onOpenChange, adminToEdit, onAdminAdded
                   />
                 </div>
               </div>
-            </div>
             </div>
 
 

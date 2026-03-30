@@ -106,6 +106,38 @@ export interface StaffVisibleColumns {
 }
 
 
+export type UserRole = 'owner' | 'admin' | 'session_manager' | 'user';
+
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
+export type LogCategory = 'authentication' | 'data_change' | 'user_action' | 'system_event' | 'error' | 'security';
+
+export interface SystemLog {
+  id: string;
+  timestamp: string | FieldValueType;
+  level: LogLevel;
+  category: LogCategory;
+  message: string;
+  details?: any;
+  userId?: string;
+  userEmail?: string;
+  userRole?: UserRole;
+  ipAddress?: string;
+  userAgent?: string;
+  action?: string;
+  resourceType?: string;
+  resourceId?: string;
+  sessionId?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationPreferences {
+  restroomAlerts: boolean;
+  systemNotifications: boolean;
+  userActivityAlerts: boolean;
+  errorNotifications: boolean;
+  securityAlerts: boolean;
+}
+
 export interface AdminManagedUser {
   id: string;
   email: string;
@@ -114,6 +146,13 @@ export interface AdminManagedUser {
   defaultCommittee?: string | null;
   sessionNotes?: string;
   canAccessSuperiorAdmin?: boolean; // New permission flag
+  sessionState?: {
+    lastActivity?: string | FieldValueType;
+    currentSession?: string;
+    isActive?: boolean;
+    preferences?: Record<string, any>;
+  };
+  notificationPreferences?: NotificationPreferences;
   permissions?: {
     canEditParticipants: boolean;
     canDeleteParticipants: boolean;
@@ -123,6 +162,10 @@ export interface AdminManagedUser {
     canAccessAnalytics: boolean;
     canManageQRCodes: boolean;
     canReceiveNotifications: boolean;
+    canAccessLogs: boolean;
+    canExportData: boolean;
+    canManageSessions: boolean;
+    canViewSystemStatus: boolean;
   };
   createdAt?: string | FieldValueType | undefined;
   updatedAt?: string | FieldValueType | undefined;
