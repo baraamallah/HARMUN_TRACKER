@@ -10,7 +10,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { 
   AlertTriangle, 
   Info, 
@@ -24,7 +34,9 @@ import {
   Calendar,
   Filter,
   Eye,
-  Settings
+  Settings,
+  Trash2,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SystemLog, LogLevel, LogCategory } from '@/types';
@@ -41,11 +53,18 @@ interface LogFilters {
 
 export default function LogPage() {
   const { userAppRole, permissions, authSessionLoading } = useAuth();
+  const { toast } = useToast();
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<LogFilters>({ limit: 100 });
   const [activeTab, setActiveTab] = useState('recent');
+  const [isLive, setIsLive] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  
+  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearTimeframe, setClearTimeframe] = useState<string>('24h');
   
   // Check if user has permission to access logs
   const canAccessLogs = React.useMemo(() => {
@@ -118,6 +137,50 @@ export default function LogPage() {
     }
   };
 
+  const handleClearLogs = async () => {
+    setIsClearing(true);
+    try {
+      let beforeDate: Date | undefined;
+      const now = new Date();
+      
+      switch (clearTimeframe) {
+        case '24h':
+          beforeDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          beforeDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          beforeDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'all':
+          beforeDate = undefined;
+          break;
+      }
+      
+      const result = await logger.clearLogs(beforeDate);
+      
+      if (result.success) {
+        toast({ 
+          title: 'Logs Cleared', 
+          description: `Successfully deleted ${result.deletedCount} log entries.` 
+        });
+        fetchLogs();
+        setIsClearDialogOpen(false);
+      } else {
+        throw new Error('Deletion process failed');
+      }
+    } catch (err) {
+      toast({ 
+        title: 'Clear Logs Failed', 
+        description: err instanceof Error ? err.message : 'An error occurred while clearing logs.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const convertLogsToCSV = (logs: SystemLog[]): string => {
     const headers = ['Timestamp', 'Level', 'Category', 'Message', 'User ID', 'User Email', 'User Role', 'Action', 'Resource Type', 'Resource ID', 'Session ID'];
     const rows = logs.map(log => [
@@ -139,11 +202,27 @@ export default function LogPage() {
 
   const getLogLevelColor = (level: LogLevel) => {
     switch (level) {
-      case 'error': return 'text-red-600 bg-red-50 border-red-200';
-      case 'warning': return 'text-amber-600 bg-amber-50 border-amber-200';
-      case 'info': return 'text-blue-600 bg-blue-50 border-blue-200';
-      case 'debug': return 'text-gray-600 bg-gray-50 border-gray-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'error': return 'text-red-500 bg-red-500/10 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+      case 'warning': return 'text-amber-500 bg-amber-500/10 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+      case 'info': return 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]';
+      case 'debug': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]';
+      default: return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
+    }
+  };
+
+  const getLogTimestamp = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    try {
+      // Handle Firestore ServerTimestamp object
+      if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().toLocaleString();
+      }
+      // Handle string/number date
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleString();
+    } catch (e) {
+      return 'Timestamp Error';
     }
   };
 
@@ -174,6 +253,18 @@ export default function LogPage() {
       fetchLogs();
     }
   }, [canAccessLogs]);
+
+  // Live Watch Effect
+  useEffect(() => {
+    if (!isLive || !canAccessLogs) return;
+    
+    const interval = setInterval(() => {
+      fetchLogs();
+      setLastRefreshed(new Date());
+    }, 10000); // 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [isLive, canAccessLogs, filters]);
 
   // Redirect or show access denied if user doesn't have permission
   if (authSessionLoading) {
@@ -230,11 +321,44 @@ export default function LogPage() {
             Comprehensive system monitoring and audit trail
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex flex-col items-end mr-2 text-right">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={cn("w-2 h-2 rounded-full", isLive ? "bg-emerald-500 animate-pulse" : "bg-slate-300")} />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {isLive ? 'Live Sync Active' : 'Manual Mode'}
+              </span>
+            </div>
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              Last Check: {lastRefreshed.toLocaleTimeString()}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-full border border-border mr-2">
+            <Button
+              variant={isLive ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setIsLive(true)}
+              className={cn("rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider transition-all", isLive && "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20")}
+            >
+              Live
+            </Button>
+            <Button
+              variant={!isLive ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setIsLive(false)}
+              className={cn("rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider transition-all", !isLive && "bg-slate-600 hover:bg-slate-700 shadow-lg shadow-slate-600/20")}
+            >
+              Manual
+            </Button>
+          </div>
+
           <Button
             variant="outline"
             onClick={() => fetchLogs()}
             disabled={loading}
+            size="sm"
+            className="rounded-xl h-10 border-2"
           >
             <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
             Refresh
@@ -243,10 +367,87 @@ export default function LogPage() {
             variant="outline"
             onClick={exportLogs}
             disabled={loading || logs.length === 0}
+            size="sm"
+            className="rounded-xl h-10 border-2"
           >
             <Download className="h-4 w-4 mr-2" />
-            Export CSV
+            Export
           </Button>
+
+          {userAppRole === 'owner' && (
+            <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl h-10 border-2 border-red-200 hover:bg-red-50 text-red-600 transition-all hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Logs
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600">
+                    <Trash2 className="h-5 w-5" />
+                    Clear System Logs
+                  </DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete log entries from the database. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Select Timeframe</Label>
+                    <Select value={clearTimeframe} onValueChange={setClearTimeframe}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select timeframe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="24h">Older than 24 Hours</SelectItem>
+                        <SelectItem value="7d">Older than 7 Days</SelectItem>
+                        <SelectItem value="30d">Older than 30 Days</SelectItem>
+                        <SelectItem value="all">Clear All Logs</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="p-3 bg-red-50 rounded-lg border border-red-100 space-y-2">
+                    <div className="flex items-center gap-2 text-red-800 text-xs font-bold">
+                      <AlertTriangle className="h-3 w-3" />
+                      WARNING
+                    </div>
+                    <p className="text-[11px] text-red-700 leading-relaxed">
+                      You are about to delete logs starting from {clearTimeframe === 'all' ? 'the beginning of time' : `older than ${clearTimeframe}`}. 
+                      The "Clear Logs" action itself will be recorded in the audit trail.
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsClearDialogOpen(false)} disabled={isClearing}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleClearLogs} 
+                    disabled={isClearing}
+                    className="bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/20"
+                  >
+                    {isClearing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Clearing...
+                      </>
+                    ) : (
+                      'Confirm Deletion'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -263,14 +464,14 @@ export default function LogPage() {
             <div className="space-y-2">
               <Label htmlFor="level">Log Level</Label>
               <Select
-                value={filters.level || ''}
-                onValueChange={(value) => setFilters({ ...filters, level: value as LogLevel || undefined })}
+                value={filters.level || 'all'}
+                onValueChange={(value) => setFilters({ ...filters, level: value === 'all' ? undefined : value as LogLevel })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All levels" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All levels</SelectItem>
+                  <SelectItem value="all">All levels</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                   <SelectItem value="warning">Warning</SelectItem>
                   <SelectItem value="info">Info</SelectItem>
@@ -282,14 +483,14 @@ export default function LogPage() {
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Select
-                value={filters.category || ''}
-                onValueChange={(value) => setFilters({ ...filters, category: value as LogCategory || undefined })}
+                value={filters.category || 'all'}
+                onValueChange={(value) => setFilters({ ...filters, category: value === 'all' ? undefined : value as LogCategory })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All categories</SelectItem>
+                  <SelectItem value="all">All categories</SelectItem>
                   <SelectItem value="authentication">Authentication</SelectItem>
                   <SelectItem value="data_change">Data Changes</SelectItem>
                   <SelectItem value="user_action">User Actions</SelectItem>
@@ -460,11 +661,11 @@ export default function LogPage() {
                           {getCategoryIcon(log.category)}
                           <span className="ml-1">{log.category}</span>
                         </Badge>
-                        <Badge variant="outline" className={cn("text-xs", getLogLevelColor(log.level))}>
+                        <Badge variant="outline" className={cn("text-[10px] font-bold px-1.5 py-0", getLogLevelColor(log.level))}>
                           {log.level.toUpperCase()}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(log.timestamp).toLocaleString()}
+                        <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+                          {getLogTimestamp(log.timestamp)}
                         </span>
                       </div>
                       

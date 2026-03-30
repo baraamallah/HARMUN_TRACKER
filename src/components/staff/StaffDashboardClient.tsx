@@ -40,9 +40,10 @@ import { useToast } from '@/hooks/use-toast';
 import { ImportStaffCsvDialog } from '@/components/staff/ImportStaffCsvDialog';
 import { ExportStaffCsvButton } from '@/components/staff/ExportStaffCsvButton';
 import { ExportStaffExcelButton } from '@/components/staff/ExportStaffExcelButton';
-import { writeBatch, doc, serverTimestamp, query, collection, onSnapshot, orderBy } from 'firebase/firestore';
+import { writeBatch, doc, serverTimestamp, query, collection, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { STAFF_BULK_STATUS_OPTIONS, ALL_STAFF_STATUS_FILTER_OPTIONS } from '@/lib/constants';
+import { transformStaffDoc } from '@/lib/client-transformers';
 
 interface StaffDashboardClientProps {
     initialStaffMembers: StaffMember[];
@@ -120,7 +121,8 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
     if (isAuthLoading || !user) return;
 
     const staffRef = collection(db, 'staff_members');
-    const q = query(staffRef, orderBy('createdAt', 'desc'));
+    // Listen to most recently updated staff members
+    const q = query(staffRef, orderBy('updatedAt', 'desc'), limit(50));
 
     let isFirstSnapshot = true;
 
@@ -134,8 +136,38 @@ export function StaffDashboardClient({ initialStaffMembers, systemStaffTeams }: 
 
         const changes = snapshot.docChanges();
         if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
-          console.log('Staff real-time update detected:', changes.length, 'changes');
-          fetchDataRef.current();
+          console.log('Atomic staff update(s) detected:', changes.length);
+          
+          setStaffMembers(prev => {
+            let next = [...prev];
+            let needsSort = false;
+
+            changes.forEach(change => {
+              const transformed = transformStaffDoc(change.doc.id, change.doc.data());
+              
+              if (change.type === 'added') {
+                if (!next.find(s => s.id === transformed.id)) {
+                  next.push(transformed);
+                  needsSort = true;
+                }
+              } else if (change.type === 'modified') {
+                const index = next.findIndex(s => s.id === transformed.id);
+                if (index > -1) {
+                  next[index] = transformed;
+                } else {
+                  next.push(transformed);
+                  needsSort = true;
+                }
+              } else if (change.type === 'removed') {
+                next = next.filter(s => s.id !== transformed.id);
+              }
+            });
+
+            if (needsSort) {
+              return next.sort((a, b) => a.name.localeCompare(b.name));
+            }
+            return next;
+          });
         }
       },
       (error) => {

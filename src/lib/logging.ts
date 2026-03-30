@@ -9,7 +9,10 @@ import {
   limit,
   getDocs,
   serverTimestamp,
-  Timestamp 
+  Timestamp,
+  writeBatch,
+  deleteDoc,
+  doc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { SystemLog, LogLevel, LogCategory, UserRole } from '@/types';
@@ -270,10 +273,67 @@ class LoggingService {
   async getSystemEvents(limitCount: number = 50): Promise<SystemLog[]> {
     return this.getLogs({ category: 'system_event', limit: limitCount });
   }
+
+  /**
+   * Clears logs older than the specified date.
+   * Handles Firestore batch limits (500) by processing in chunks.
+   */
+  async clearLogs(beforeDate?: Date): Promise<{ success: boolean; deletedCount: number }> {
+    try {
+      let deletedCount = 0;
+      let hasMore = true;
+      let iteration = 0;
+      
+      while (hasMore && iteration < 20) { // Limit to 20 batches (10,000 logs) to avoid infinite loops
+        iteration++;
+        let q = collection(db, LOGS_COLLECTION);
+        const constraints = [];
+        
+        if (beforeDate) {
+          constraints.push(where('timestamp', '<=', Timestamp.fromDate(beforeDate)));
+        }
+        
+        constraints.push(limit(500));
+        
+        const queryRef = query(q, ...constraints);
+        const snapshot = await getDocs(queryRef);
+        
+        if (snapshot.empty) {
+          hasMore = false;
+          break;
+        }
+        
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+          deletedCount++;
+        });
+        
+        await batch.commit();
+        
+        if (snapshot.docs.length < 500) {
+          hasMore = false;
+        }
+      }
+      
+      // Log the clear action itself (Audit Trail)
+      await this.logSecurityEvent(`Audit Trail: System logs cleared${beforeDate ? ` older than ${beforeDate.toISOString()}` : ' (All Logs)'}.`, { 
+        deletedCount,
+        beforeDate: beforeDate?.toISOString() || 'infinity'
+      }, 'warning');
+      
+      return { success: true, deletedCount };
+    } catch (error: any) {
+      console.error('LoggingService.clearLogs failed:', error);
+      throw error; 
+    }
+  }
 }
 
-// Export singleton instance
-export const logger = new LoggingService();
+// Ensure singleton stability during Fast Refresh in Development
+const globalForLogger = global as unknown as { logger: LoggingService };
+export const logger = globalForLogger.logger || new LoggingService();
+if (process.env.NODE_ENV !== "production") globalForLogger.logger = logger;
 
 // Export convenience functions
 export const logInfo = (message: string, details?: any, metadata?: Record<string, any>) => 

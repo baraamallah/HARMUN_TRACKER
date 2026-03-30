@@ -43,8 +43,9 @@ import { isEffectivelyAbsent } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { doc, writeBatch, serverTimestamp, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, writeBatch, serverTimestamp, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
+import { transformParticipantDoc } from '@/lib/client-transformers';
 
 interface ParticipantDashboardClientProps {
   initialParticipants: Participant[];
@@ -129,24 +130,59 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     if (isAuthLoading || !user) return;
 
     const participantsRef = collection(db, 'participants');
-    const q = query(participantsRef, orderBy('createdAt', 'desc'));
+    // We listen to the most recent changes to keep the data fresh
+    // Note: We avoid ordering here specifically if we just want change notifications
+    const q = query(participantsRef, orderBy('updatedAt', 'desc'), limit(50));
 
     let isFirstSnapshot = true;
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        // Skip the first snapshot (initial load)
+        // Skip the first snapshot (initial load handled by fetchData)
         if (isFirstSnapshot) {
           isFirstSnapshot = false;
           return;
         }
 
-        // Only update if there are actual document changes
         const changes = snapshot.docChanges();
         if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
-          console.log('Real-time update detected:', changes.length, 'changes');
-          fetchDataRef.current();
+          console.log('Atomic update(s) detected:', changes.length);
+          
+          setParticipants(prev => {
+            let next = [...prev];
+            let needsSort = false;
+
+            changes.forEach(change => {
+              const transformed = transformParticipantDoc(change.doc.id, change.doc.data());
+              
+              if (change.type === 'added') {
+                // Only add if not already present
+                if (!next.find(p => p.id === transformed.id)) {
+                  next.push(transformed);
+                  needsSort = true;
+                }
+              } else if (change.type === 'modified') {
+                const index = next.findIndex(p => p.id === transformed.id);
+                if (index > -1) {
+                  next[index] = transformed;
+                } else {
+                  // If it's a modification for something we don't have (maybe because of filters),
+                  // we might want to add it if it matches filters, but for now we'll just add it 
+                  // and let useMemo handle visibility.
+                  next.push(transformed);
+                  needsSort = true;
+                }
+              } else if (change.type === 'removed') {
+                next = next.filter(p => p.id !== transformed.id);
+              }
+            });
+
+            if (needsSort) {
+              return next.sort((a, b) => a.name.localeCompare(b.name));
+            }
+            return next;
+          });
         }
       },
       (error) => {
