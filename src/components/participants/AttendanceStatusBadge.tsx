@@ -1,12 +1,15 @@
 import type { AttendanceStatus } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { RestroomTimer } from './RestroomTimer';
 
 interface AttendanceStatusBadgeProps {
   status: AttendanceStatus;
+  restroomBreakStartTime?: string | null;
+  restroomThreshold?: number;
 }
 
-export function AttendanceStatusBadge({ status }: AttendanceStatusBadgeProps) {
+export function AttendanceStatusBadge({ status, restroomBreakStartTime, restroomThreshold }: AttendanceStatusBadgeProps) {
   const statusStyles: Record<AttendanceStatus, string> = {
     Present: 'bg-green-500/20 text-green-700 border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20',
     Absent: 'bg-red-500/20 text-red-700 border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
@@ -18,14 +21,19 @@ export function AttendanceStatusBadge({ status }: AttendanceStatusBadgeProps) {
   };
 
   return (
-    <Badge
-      variant="outline"
-      className={cn(
-        'px-2.5 py-1 text-xs font-medium rounded-full capitalize',
-        statusStyles[status] || 'bg-gray-500/20 text-gray-700 border-gray-500/30' // Fallback style
+    <div className="flex flex-col items-start gap-1">
+      <Badge
+        variant="outline"
+        className={cn(
+          'px-2.5 py-1 text-xs font-medium rounded-full capitalize w-fit',
+          statusStyles[status] || 'bg-gray-500/20 text-gray-700 border-gray-500/30' // Fallback style
+        )}
+      >
+        {status}
+      </Badge>
+      {status === 'Restroom Break' && (
+        <RestroomTimer startTime={restroomBreakStartTime} thresholdMinutes={restroomThreshold} />
       )}
-    >
-      {status}
-    </Badge>
+    </div>
   );
 }

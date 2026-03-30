@@ -31,6 +31,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { ALL_ATTENDANCE_STATUSES_OPTIONS } from '@/lib/constants';
 import { useRestroomAlerts, formatElapsed } from '@/hooks/use-restroom-alerts';
+import { transformParticipantDoc } from '@/lib/client-transformers';
 
 // ─── Restroom Icon ────────────────────────────────────────────────────────────
 function RestroomIcon({ className }: { className?: string }) {
@@ -48,11 +49,21 @@ function RestroomIcon({ className }: { className?: string }) {
 }
 
 // ─── Elapsed label (live) ─────────────────────────────────────────────────────
-function ElapsedLabel({ startTime }: { startTime: string }) {
+function ElapsedLabel({ startTime }: { startTime: string | null | undefined }) {
   const [label, setLabel] = useState('');
   useEffect(() => {
+    if (!startTime) {
+      setLabel('0m 0s');
+      return;
+    }
+
     const update = () => {
-      const ms = Date.now() - new Date(startTime).getTime();
+      const start = new Date(startTime);
+      if (isNaN(start.getTime())) {
+        setLabel('0m 0s');
+        return;
+      }
+      const ms = Date.now() - start.getTime();
       setLabel(formatElapsed(ms));
     };
     update();
@@ -118,7 +129,7 @@ export default function InSessionPage() {
     setIsLoading(true);
     const q = query(collection(db, 'participants'), where('committee', '==', selectedCommittee));
     const unsub = onSnapshot(q, snap => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
+      const data = snap.docs.map(d => transformParticipantDoc(d.id, d.data()));
       data.sort((a, b) => a.name.localeCompare(b.name));
       setParticipants(data);
       setIsLoading(false);
@@ -371,7 +382,12 @@ export default function InSessionPage() {
                                     {participant.name}
                                   </span>
                                   {isInRestroom && (
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] sm:text-xs font-bold ring-1 ring-amber-500/30">
+                                    <div className={cn(
+                                      "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ring-1 transition-colors",
+                                      isOverdue 
+                                        ? "bg-red-500/20 text-red-700 dark:text-red-400 ring-red-500/30 animate-pulse" 
+                                        : "bg-amber-500/20 text-amber-700 dark:text-amber-300 ring-amber-500/30"
+                                    )}>
                                       <Clock className="h-3 w-3" />
                                       <ElapsedLabel startTime={participant.restroomBreakStartTime!} />
                                     </div>

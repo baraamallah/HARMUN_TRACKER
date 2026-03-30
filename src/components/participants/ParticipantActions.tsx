@@ -57,7 +57,12 @@ export function ParticipantActions({ participant, onEdit }: ParticipantActionsPr
     startStatusUpdateTransition(async () => {
       try {
         const participantRef = doc(db, 'participants', participant.id);
-        await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+        const updates: Record<string, any> = { 
+          status, 
+          updatedAt: serverTimestamp(),
+          restroomBreakStartTime: status === 'Restroom Break' ? serverTimestamp() : null
+        };
+        await updateDoc(participantRef, updates);
         toast({
           title: 'Attendance Updated',
           description: `${participant.name}'s status set to ${status}.`,

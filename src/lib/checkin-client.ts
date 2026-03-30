@@ -74,6 +74,7 @@ export async function quickSetParticipantStatusClient(
     const updates: Record<string, any> = {
       status: newStatus,
       updatedAt: serverTimestamp(),
+      restroomBreakStartTime: newStatus === 'Restroom Break' ? serverTimestamp() : null,
     };
 
     if (isEffectivelyPresent) {

@@ -132,7 +132,10 @@ export function PublicAttendanceTable({ participants, isLoading }: PublicAttenda
               <TableCell>{participant.school}</TableCell>
               <TableCell>{participant.committee}</TableCell>
               <TableCell>
-                <AttendanceStatusBadge status={participant.status} />
+                <AttendanceStatusBadge 
+                  status={participant.status} 
+                  restroomBreakStartTime={participant.restroomBreakStartTime} 
+                />
               </TableCell>
             </TableRow>
           ))}

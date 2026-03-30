@@ -14,6 +14,7 @@ export interface RestroomAlert {
 }
 
 function formatElapsed(ms: number): string {
+  if (isNaN(ms) || ms < 0) return "0m 0s";
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;

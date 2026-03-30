@@ -41,17 +41,27 @@ const APP_SETTINGS_DOC_ID = 'main_settings';
  */
 function toISODateString(dateValue: any): string | null {
   if (!dateValue) return null;
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate().toISOString();
-  }
-  if (typeof dateValue === 'string') {
-    // Basic check if it's already an ISO string
-    if (!isNaN(Date.parse(dateValue))) {
-       return new Date(dateValue).toISOString();
+  
+  try {
+    if (dateValue instanceof Timestamp) {
+      return dateValue.toDate().toISOString();
     }
+    
+    // Handle objects from server-side Firestore admin SDK or plain objects
+    if (typeof dateValue === 'object' && dateValue.seconds !== undefined) {
+      return new Date(dateValue.seconds * 1000).toISOString();
+    }
+    
+    if (typeof dateValue === 'string') {
+      const parsed = Date.parse(dateValue);
+      if (!isNaN(parsed)) {
+        return new Date(parsed).toISOString();
+      }
+    }
+  } catch (e) {
+    console.error('[actions.ts:toISODateString] Error parsing date:', e);
   }
-  // For serverTimestamp() on write/update, this might be null on immediate read.
-  // Returning null is a safe default.
+  
   return null;
 }
 
@@ -83,6 +93,7 @@ function transformParticipantDoc(docSnap: { id: string; data: () => any; }): Par
             day1: toISODateString(data.checkInTimes?.day1),
             day2: toISODateString(data.checkInTimes?.day2),
         },
+        restroomBreakStartTime: toISODateString(data.restroomBreakStartTime),
         createdAt: toISODateString(data.createdAt),
         updatedAt: toISODateString(data.updatedAt),
     };
@@ -526,6 +537,7 @@ export async function quickSetParticipantStatusAction(
     const updates: { [key: string]: any } = {
       status: newStatus,
       updatedAt: fsServerTimestamp(),
+      restroomBreakStartTime: newStatus === 'Restroom Break' ? fsServerTimestamp() : null,
     };
 
     // Get current conference day

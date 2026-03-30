@@ -3,7 +3,11 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { PlusCircle, Layers, Trash2, Loader2, Users as UsersIcon, Calendar, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { 
+  PlusCircle, Layers, Trash2, Loader2, Users as UsersIcon, 
+  Calendar, Filter, ChevronLeft, ChevronRight, ChevronsLeft, 
+  ChevronsRight, Bell, Timer 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSkeleton } from '@/components/participants/LoadingSkeleton';
@@ -37,6 +41,7 @@ import { ParticipantForm } from '@/components/participants/ParticipantForm';
 import { ImportCsvDialog } from '@/components/participants/ImportCsvDialog';
 import { ExportCsvButton } from '@/components/participants/ExportCsvButton';
 import { ExportExcelButton } from '@/components/participants/ExportExcelButton';
+import { RestroomTimer } from '@/components/participants/RestroomTimer';
 import type { Participant, VisibleColumns, AttendanceStatus } from '@/types';
 import { getParticipants } from '@/lib/actions';
 import { isEffectivelyAbsent } from '@/lib/utils';
@@ -88,6 +93,24 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
+  const [restroomThreshold, setRestroomThreshold] = React.useState(10);
+
+  // For tracking status changes for notifications
+  const prevStatusesRef = React.useRef<Record<string, AttendanceStatus>>({});
+
+  // Fetch restroom threshold from settings
+  React.useEffect(() => {
+    const configRef = doc(db, 'system_config', 'main_settings');
+    const unsub = onSnapshot(configRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.restroomAlertThresholdMinutes) {
+          setRestroomThreshold(data.restroomAlertThresholdMinutes);
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
 
   React.useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -142,6 +165,11 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
         // Skip the first snapshot (initial load handled by fetchData)
         if (isFirstSnapshot) {
           isFirstSnapshot = false;
+          // Pre-populate the prevStatusesRef with the initial state from current participants
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            prevStatusesRef.current[doc.id] = data.status;
+          });
           return;
         }
 
@@ -149,36 +177,60 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
         if (changes.length > 0 && !snapshot.metadata.hasPendingWrites) {
           console.log('Atomic update(s) detected:', changes.length);
           
+          let needsSort = false;
+          const processedChanges: { type: string, transformed: Participant }[] = [];
+
+          changes.forEach(change => {
+            const data = change.doc.data();
+            const transformed = transformParticipantDoc(change.doc.id, data);
+            const oldStatus = prevStatusesRef.current[change.doc.id];
+            
+            // Trigger notification if status changed to 'Restroom Break'
+            if (change.type === 'modified' && transformed.status === 'Restroom Break' && oldStatus !== 'Restroom Break') {
+               toast({
+                 title: "Restroom Break Started",
+                 description: `${transformed.name} is now on a restroom break.`,
+                 className: "bg-purple-100 border-purple-500 dark:bg-purple-900/50",
+               });
+               
+               // Browser notification if supported and permitted
+               if ("Notification" in window && Notification.permission === "granted") {
+                  new Notification("Restroom Break Started", {
+                    body: `${transformed.name} (${transformed.committee}) just started their break.`,
+                    icon: "/favicon.ico"
+                  });
+               }
+            }
+
+            // Update the ref for next time
+            prevStatusesRef.current[change.doc.id] = transformed.status;
+            processedChanges.push({ type: change.type, transformed });
+          });
+
           setParticipants(prev => {
             let next = [...prev];
-            let needsSort = false;
+            let listNeedsSort = false;
 
-            changes.forEach(change => {
-              const transformed = transformParticipantDoc(change.doc.id, change.doc.data());
-              
-              if (change.type === 'added') {
-                // Only add if not already present
+            processedChanges.forEach(({ type, transformed }) => {
+              if (type === 'added') {
                 if (!next.find(p => p.id === transformed.id)) {
                   next.push(transformed);
-                  needsSort = true;
+                  listNeedsSort = true;
                 }
-              } else if (change.type === 'modified') {
+              } else if (type === 'modified') {
                 const index = next.findIndex(p => p.id === transformed.id);
                 if (index > -1) {
                   next[index] = transformed;
                 } else {
-                  // If it's a modification for something we don't have (maybe because of filters),
-                  // we might want to add it if it matches filters, but for now we'll just add it 
-                  // and let useMemo handle visibility.
                   next.push(transformed);
-                  needsSort = true;
+                  listNeedsSort = true;
                 }
-              } else if (change.type === 'removed') {
+              } else if (type === 'removed') {
                 next = next.filter(p => p.id !== transformed.id);
               }
             });
 
-            if (needsSort) {
+            if (listNeedsSort) {
               return next.sort((a, b) => a.name.localeCompare(b.name));
             }
             return next;
@@ -236,6 +288,19 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredParticipants.length / pageSize);
+
+  const requestNotificationPermission = () => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          toast({ title: "Notifications Enabled", description: "You will now receive alerts for restroom breaks." });
+        }
+      });
+    } else {
+      toast({ title: "Not Supported", description: "This browser does not support desktop notifications.", variant: "destructive" });
+    }
+  };
+
   const displayedParticipants = React.useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
@@ -297,7 +362,11 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     try {
       const batch = writeBatch(db);
       selectedParticipantIds.forEach(id => {
-        batch.update(doc(db, "participants", id), { status, updatedAt: serverTimestamp() });
+        batch.update(doc(db, "participants", id), { 
+          status, 
+          updatedAt: serverTimestamp(),
+          restroomBreakStartTime: status === 'Restroom Break' ? serverTimestamp() : null
+        });
       });
       await batch.commit();
       toast({ title: "Bulk Update Successful", description: `${selectedParticipantIds.length} participant(s) updated to ${status}.` });
@@ -350,9 +419,17 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
     <div className="flex flex-col gap-4 sm:gap-6 pb-4">
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Attendance Dashboard</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">Manage and track participant attendance.</p>
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={requestNotificationPermission}
+                className="h-8 px-3 text-[10px] font-bold uppercase tracking-wider border-2 hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-950/30"
+              >
+                <Bell className="mr-1.5 h-3.5 w-3.5" />
+                Enable Alerts
+            </Button>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700">
             <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
@@ -501,6 +578,7 @@ export function ParticipantDashboardClient({ initialParticipants, systemSchools,
         onSelectParticipant={handleSelectParticipant}
         onSelectAll={handleSelectAll}
         isAllSelected={isAllSelected}
+        restroomThreshold={restroomThreshold}
       />
 
       {/* Pagination Controls */}

@@ -7,18 +7,34 @@ import type { Participant, StaffMember } from '@/types';
  */
 export function toISODateString(dateValue: any): string | null {
   if (!dateValue) return null;
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate().toISOString();
-  }
-  if (typeof dateValue === 'object' && dateValue.seconds !== undefined) {
-    // Handle plain objects that look like Timestamps (sometimes happens in HMR)
-    return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate().toISOString();
-  }
-  if (typeof dateValue === 'string') {
-    if (!isNaN(Date.parse(dateValue))) {
-       return new Date(dateValue).toISOString();
+  
+  try {
+    // Handle Firestore Timestamp instances
+    if (dateValue instanceof Timestamp) {
+      return dateValue.toDate().toISOString();
     }
+    
+    // Handle plain objects that look like Timestamps (common in HMR or serialization)
+    if (typeof dateValue === 'object' && dateValue.seconds !== undefined) {
+      return new Timestamp(dateValue.seconds, dateValue.nanoseconds).toDate().toISOString();
+    }
+    
+    // Handle existing strings
+    if (typeof dateValue === 'string') {
+      const parsed = Date.parse(dateValue);
+      if (!isNaN(parsed)) {
+        return new Date(parsed).toISOString();
+      }
+    }
+    
+    // Handle Date objects
+    if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+      return dateValue.toISOString();
+    }
+  } catch (e) {
+    console.warn('[toISODateString] Failed to parse date value:', dateValue, e);
   }
+
   return null;
 }
 
@@ -46,6 +62,7 @@ export function transformParticipantDoc(docId: string, data: any): Participant {
             day1: toISODateString(data.checkInTimes?.day1),
             day2: toISODateString(data.checkInTimes?.day2),
         },
+        restroomBreakStartTime: toISODateString(data.restroomBreakStartTime),
         createdAt: toISODateString(data.createdAt),
         updatedAt: toISODateString(data.updatedAt),
     };

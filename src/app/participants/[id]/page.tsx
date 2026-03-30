@@ -40,6 +40,7 @@ export default function ParticipantProfilePage() {
   const [isParticipantFormOpen, setIsParticipantFormOpen] = React.useState(false);
   const [schools, setSchools] = React.useState<string[]>([]);
   const [committees, setCommittees] = React.useState<string[]>([]);
+  const [restroomThreshold, setRestroomThreshold] = React.useState(10);
 
 
   const fetchParticipantData = React.useCallback(async (isInitialLoad = true) => {
@@ -73,6 +74,7 @@ export default function ParticipantProfilePage() {
             phone: data.phone,
             attended: data.attended || false,
             checkInTime: data.checkInTime instanceof FirestoreTimestampType ? data.checkInTime.toDate().toISOString() : (data.checkInTime || null),
+            restroomBreakStartTime: data.restroomBreakStartTime instanceof FirestoreTimestampType ? data.restroomBreakStartTime.toDate().toISOString() : (data.restroomBreakStartTime || null),
             createdAt: data.createdAt instanceof FirestoreTimestampType ? data.createdAt.toDate().toISOString() : data.createdAt,
             updatedAt: data.updatedAt instanceof FirestoreTimestampType ? data.updatedAt.toDate().toISOString() : data.updatedAt,
           } as Participant;
@@ -87,14 +89,24 @@ export default function ParticipantProfilePage() {
         setCommittees(systemCommittees.filter(c => c !== 'All Committees'));
       }
 
-      if (participantData) {
-        setParticipant(participantData);
-      } else {
-        toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
-        router.push('/');
-      }
+        if (participantData) {
+          setParticipant(participantData);
+        } else {
+          toast({ title: "Not Found", description: "Participant data could not be found.", variant: "destructive" });
+          router.push('/');
+        }
 
-    } catch (error: any) {
+        // Fetch restroom threshold
+        const configRef = doc(db, 'system_config', 'main_settings');
+        const configSnap = await getDoc(configRef);
+        if (configSnap.exists()) {
+          const configData = configSnap.data();
+          if (configData.restroomAlertThresholdMinutes) {
+            setRestroomThreshold(configData.restroomAlertThresholdMinutes);
+          }
+        }
+
+      } catch (error: any) {
       console.error("Failed to fetch participant data:", error);
       toast({ title: "Error Fetching Data", description: error.message || "Failed to load participant data.", variant: "destructive" });
     } finally {
@@ -147,9 +159,19 @@ export default function ParticipantProfilePage() {
     setIsSubmitting(true);
     try {
       const participantRef = doc(db, 'participants', participant.id);
-      await updateDoc(participantRef, { status, updatedAt: serverTimestamp() });
+      const updates: Record<string, any> = { 
+        status, 
+        updatedAt: serverTimestamp(),
+        restroomBreakStartTime: status === 'Restroom Break' ? serverTimestamp() : null
+      };
+      await updateDoc(participantRef, updates);
 
-      setParticipant(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : null);
+      setParticipant(prev => prev ? { 
+        ...prev, 
+        status, 
+        updatedAt: new Date().toISOString(),
+        restroomBreakStartTime: status === 'Restroom Break' ? new Date().toISOString() : null
+      } : null);
       
       toast({
         title: 'Attendance Updated',
@@ -226,7 +248,11 @@ export default function ParticipantProfilePage() {
               </Avatar>
               <CardTitle id="participant-info-heading" className="text-3xl font-bold">{participant.name}</CardTitle>
               <div className="mt-2">
-                <AttendanceStatusBadge status={participant.status} />
+                <AttendanceStatusBadge 
+                  status={participant.status} 
+                  restroomBreakStartTime={participant.restroomBreakStartTime} 
+                  restroomThreshold={restroomThreshold}
+                />
               </div>
             </CardHeader>
             <CardContent className="text-sm space-y-3 px-6 pb-6">

@@ -30,6 +30,7 @@ interface ParticipantTableProps {
   onSelectParticipant: (participantId: string, isSelected: boolean) => void;
   onSelectAll: (isSelected: boolean) => void;
   isAllSelected: boolean;
+  restroomThreshold?: number;
 }
 
 type SortKey = keyof Pick<Participant, 'name' | 'school' | 'committee' | 'country' | 'status'>;
@@ -42,13 +43,15 @@ const ParticipantRow = React.memo(({
   visibleColumns,
   isSelected,
   onSelectParticipant,
-  onEditParticipant
+  onEditParticipant,
+  restroomThreshold
 }: {
   participant: Participant;
   visibleColumns: VisibleColumns;
   isSelected: boolean;
   onSelectParticipant: (id: string, checked: boolean) => void;
   onEditParticipant: (p: Participant) => void;
+  restroomThreshold?: number;
 }) => {
   return (
     <TableRow
@@ -90,7 +93,11 @@ const ParticipantRow = React.memo(({
       {visibleColumns.country && <TableCell className="hidden md:table-cell text-muted-foreground">{participant.country || 'N/A'}</TableCell>}
       {visibleColumns.status && (
         <TableCell>
-          <AttendanceStatusBadge status={participant.status} />
+          <AttendanceStatusBadge 
+            status={participant.status} 
+            restroomBreakStartTime={participant.restroomBreakStartTime} 
+            restroomThreshold={restroomThreshold}
+          />
         </TableCell>
       )}
       {visibleColumns.actions && (
@@ -112,7 +119,8 @@ export const ParticipantTable = React.memo(({
   selectedParticipants,
   onSelectParticipant,
   onSelectAll,
-  isAllSelected
+  isAllSelected,
+  restroomThreshold = 10
 }: ParticipantTableProps) => {
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
   const [sortOrder, setSortOrder] = React.useState<SortOrder>('asc');
@@ -278,6 +286,7 @@ export const ParticipantTable = React.memo(({
               isSelected={selectedParticipants.includes(participant.id)}
               onSelectParticipant={onSelectParticipant}
               onEditParticipant={onEditParticipant}
+              restroomThreshold={restroomThreshold}
             />
           ))}
         </TableBody>
