@@ -26,7 +26,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Logo } from '@/components/shared/Logo';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { quickSetStaffStatusAction, getStaffMemberById } from '@/lib/actions';
+import { getStaffMemberById } from '@/lib/actions';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import type { StaffMember, StaffAttendanceStatus } from '@/types';
 import { ClientRedirect } from '@/components/auth/ClientRedirect';
 import { cn } from '@/lib/utils';
@@ -100,26 +102,40 @@ function StaffCheckinPageContent() {
   }, [effectiveStaffId, fetchStaffMemberData]);
 
   const handleStatusUpdate = async (newStatus: StaffAttendanceStatus) => {
-    if (!staffMember) return;
+    if (!staffMember || !loggedInUser) return;
     setPageError(null);
 
     startTransition(async () => {
-      const result = await quickSetStaffStatusAction(staffMember.id, newStatus);
-      if (result.success && result.staffMember) {
-        setStaffMember(result.staffMember);
+      try {
+        const staffRef = doc(db, 'staff_members', staffMember.id);
+        const updates = { 
+          status: newStatus, 
+          updatedAt: serverTimestamp() 
+        };
+        
+        await updateDoc(staffRef, updates);
+        
+        // Optimistic/Local state update
+        setStaffMember({
+          ...staffMember,
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+        
         toast({
           title: 'Status Updated Successfully',
-          description: result.message,
+          description: `Status for ${staffMember.name} updated to ${newStatus}.`,
           className: 'bg-green-100 dark:bg-green-900 border-green-500'
         });
-      } else {
-        setPageError(result.message);
+      } catch (error: any) {
+        console.error("Client-side update error:", error);
+        setPageError(error.message || "Failed to update status.");
         toast({
           title: 'Update Failed',
-          description: result.message,
+          description: error.message || "Permission Denied or Network Error.",
           variant: 'destructive',
         });
-        if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId); // Refresh data on error
+        if (effectiveStaffId) fetchStaffMemberData(effectiveStaffId);
       }
     });
   };

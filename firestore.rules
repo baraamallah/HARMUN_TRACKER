@@ -3,52 +3,66 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- Core Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
 
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Safely check for a permission flag in the user's permissions map
+    function hasPermission(perm) {
+      return isSignedIn() && hasUserDoc() && getUserData().get('permissions', {}).get(perm, false) == true;
+    }
+
+    // Check for high-level owner access (static UID or explicit flag)
     function isOwner() {
       return isSignedIn() && (
         request.auth.uid == 'JZgMG6xdwAYInXsdciaGj6qNAsG2' || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('canAccessSuperiorAdmin', false) == true)
+        (hasUserDoc() && getUserData().get('canAccessSuperiorAdmin', false) == true)
       );
     }
 
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && hasUserDoc() && getUserData().role == 'admin';
     }
 
     function isSessionManager() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'session_manager';
+      return isSignedIn() && hasUserDoc() && getUserData().role == 'session_manager';
     }
 
     function isSameCommittee(committee) {
-      return committee == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.defaultCommittee;
+      return isSignedIn() && hasUserDoc() && committee == getUserData().get('defaultCommittee', '');
     }
 
-    // WARNING:
-    // Some rules are intentionally relaxed to facilitate development.
-    // In a production environment, 'allow read/write: if true' should be replaced 
-    // with strict owner/admin-only checks.
+    // --- Collection Rules ---
 
     // Participants
     match /participants/{participantId} {
       allow read: if true;
       allow create: if isOwner() || isAdmin();
-      allow update: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canEditParticipants', false) == true) || (isSessionManager() && isSameCommittee(resource.data.committee));
-      allow delete: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canDeleteParticipants', false) == true);
+      allow update: if isOwner() 
+                    || hasPermission('canEditParticipants') 
+                    || hasPermission('canEditParticipantStatus')
+                    || (isSessionManager() && isSameCommittee(resource.data.committee));
+      allow delete: if isOwner() || hasPermission('canDeleteParticipants');
     }
 
     // Staff members
     match /staff_members/{staffMemberId} {
       allow read: if true;
-      allow create: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canCreateStaff', false) == true);
-      allow update: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canEditStaff', false) == true);
-      allow delete: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canDeleteStaff', false) == true);
+      allow create: if isOwner() || hasPermission('canCreateStaff');
+      allow update: if isOwner() || hasPermission('canEditStaff') || hasPermission('canEditStaffStatus');
+      allow delete: if isOwner() || hasPermission('canDeleteStaff');
     }
 
-    // System collections (read-only for most, write for owner/admin)
+    // System collections
     match /system_schools/{schoolId} { allow read: if true; allow write: if isOwner() || isAdmin(); }
     match /system_committees/{committeeId} { allow read: if true; allow write: if isOwner() || isAdmin(); }
     match /system_staff_teams/{teamId} { allow read: if true; allow write: if isOwner() || isAdmin(); }
@@ -59,9 +73,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && (request.auth.uid == userId || isOwner() || isAdmin());
       allow update: if isSignedIn() && (
         isOwner() ||
-        // Allow users (including Session Managers) to update ONLY their own session data and notes
-        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionNotes', 'sessionState', 'updatedAt'])) ||
-        // Allow admins to update user data if they are not the same user (standard admin management)
+        // Allow users to update ONLY their own session data and notes
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionNotes', 'sessionState', 'updatedAt', 'notificationPreferences'])) ||
+        // Allow admins to update user data if they are not the same user
         (isAdmin() && request.auth.uid != userId) 
       );
       allow create, delete: if isOwner();
@@ -69,11 +83,10 @@ service cloud.firestore {
 
     // System logs
     match /system_logs/{logId} {
-      allow read: if isOwner() || (isAdmin() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get('canAccessLogs', false) == true);
+      allow read: if isOwner() || hasPermission('canAccessLogs');
       allow create: if isSignedIn();
       allow update: if false;
       allow delete: if isOwner();
     }
   }
 }
-
