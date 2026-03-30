@@ -84,7 +84,7 @@ service cloud.firestore {
     // System logs
     match /system_logs/{logId} {
       allow read: if isOwner() || hasPermission('canAccessLogs');
-      allow create: if isSignedIn();
+      allow create: if true;
       allow update: if false;
       allow delete: if isOwner();
     }
